@@ -1570,41 +1570,42 @@ function viewInstrumen(view) {
     }, 100);
   }
 
-  // Wire edit buttons
-  $$('[data-edit-komp]').forEach(btn => {
-    btn.addEventListener('click', (ev) => {
+  // Wire edit buttons via delegation (more robust against re-renders/collapse interference)
+  view.addEventListener('click', (ev) => {
+    const editKompBtn = ev.target.closest('[data-edit-komp]');
+    if (editKompBtn) {
       ev.stopPropagation();
       ev.preventDefault();
       openEditKompetensiDialog({
-        roleCode: btn.dataset.editKomp,
-        kompNo: parseInt(btn.dataset.kompNo),
-        currentText: btn.dataset.kompNama,
-        origText: btn.dataset.kompOrig,
+        roleCode: editKompBtn.dataset.editKomp,
+        kompNo: parseInt(editKompBtn.dataset.kompNo),
+        currentText: editKompBtn.dataset.kompNama,
+        origText: editKompBtn.dataset.kompOrig,
         onSaved: () => viewInstrumen(view),
       });
-    });
-  });
-  $$('[data-edit-ind]').forEach(btn => {
-    btn.addEventListener('click', (ev) => {
+      return;
+    }
+    const editIndBtn = ev.target.closest('[data-edit-ind]');
+    if (editIndBtn) {
       ev.stopPropagation();
       ev.preventDefault();
       openEditIndikatorDialog({
-        id: btn.dataset.editInd,
-        currentText: btn.dataset.indText,
-        origText: btn.dataset.indOrig,
+        id: editIndBtn.dataset.editInd,
+        currentText: editIndBtn.dataset.indText,
+        origText: editIndBtn.dataset.indOrig,
         onSaved: () => viewInstrumen(view),
       });
-    });
-  });
-
-  if (overCount.total > 0) {
-    $('#btn-reset-all')?.addEventListener('click', () => {
+      return;
+    }
+    if (ev.target.closest('#btn-reset-all') && overCount.total > 0) {
+      ev.stopPropagation();
+      ev.preventDefault();
       if (!confirm(`Hapus SEMUA override editan (${overCount.total} item)? Indikator & kompetensi akan kembali ke teks bawaan dari Master PKG.`)) return;
       PKGDB.resetAllOverrides();
       toast('Semua override direset');
       viewInstrumen(view);
-    });
-  }
+    }
+  }, { capture: true });
 }
 
 function openEditIndikatorDialog(opts) {
