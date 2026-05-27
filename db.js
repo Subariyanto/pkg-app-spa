@@ -284,6 +284,19 @@ function listPenilaianByGuru(guruId) {
   return load(KEYS.penilaian, []).filter(p => p.guru_id === guruId);
 }
 
+function deletePenilaian(penId) {
+  penId = Number(penId);
+  save(KEYS.penilaian, load(KEYS.penilaian, []).filter(p => p.id !== penId));
+  // Cascade hapus skor terkait
+  save(KEYS.skor, load(KEYS.skor, []).filter(s => s.penilaian_id !== penId));
+}
+
+function deletePenilaianMany(ids) {
+  const idSet = new Set(ids.map(Number));
+  save(KEYS.penilaian, load(KEYS.penilaian, []).filter(p => !idSet.has(p.id)));
+  save(KEYS.skor, load(KEYS.skor, []).filter(s => !idSet.has(s.penilaian_id)));
+}
+
 function getOrCreatePenilaian(guruId, role, jenis) {
   guruId = Number(guruId);
   const all = load(KEYS.penilaian, []);
@@ -556,7 +569,7 @@ window.PKGDB = {
   getPenggalian, setPenggalian, listPenggalian, countPenggalian,
   listGuru, getGuru, findGuruByNIP, saveGuru, deleteGuru, deleteAllGuru,
   listKamad, getKamad, saveKamad, deleteKamad, syncKamadFromGuru,
-  listPenilaianByGuru, getOrCreatePenilaian, updatePenilaianMeta,
+  listPenilaianByGuru, getOrCreatePenilaian, updatePenilaianMeta, deletePenilaian, deletePenilaianMany,
   getSkorMap, setSkor, countSkor,
   hitungNilai,
   listKehadiran, upsertKehadiran, deleteKehadiran,

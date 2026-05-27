@@ -1348,7 +1348,10 @@ function viewPenilaianHub(view) {
   view.innerHTML = `
   <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
     <h4 class="mb-0"><i class="bi bi-clipboard-check"></i> Penilaian PKG <span class="badge bg-secondary">${counts.total}</span></h4>
-    <button id="btn-pn-new" class="btn btn-primary btn-sm"><i class="bi bi-plus-lg"></i> Mulai Penilaian Baru</button>
+    <div class="d-flex gap-2 flex-wrap">
+      ${counts.selesai > 0 ? `<button id="btn-pn-clean" class="btn btn-outline-warning btn-sm" title="Hapus semua sesi penilaian yang sudah SELESAI (sudah disupervisi)"><i class="bi bi-broom"></i> Hapus yang Selesai (${counts.selesai})</button>` : ''}
+      <button id="btn-pn-new" class="btn btn-primary btn-sm"><i class="bi bi-plus-lg"></i> Mulai Penilaian Baru</button>
+    </div>
   </div>
 
   <div class="row g-2 mb-3">
@@ -1424,6 +1427,7 @@ function viewPenilaianHub(view) {
               <td class="text-end">
                 <a class="btn btn-sm btn-primary" href="#/guru/${p.guru.id}/nilai/${p.role_code}?jenis=${p.jenis}">Lanjutkan</a>
                 <a class="btn btn-sm btn-outline-secondary" href="#/guru/${p.guru.id}/cetak/${p.role_code}?jenis=${p.jenis}" title="Cetak"><i class="bi bi-printer"></i></a>
+                <button class="btn btn-sm btn-outline-danger" data-del-pen="${p.id}" data-del-guru-name="${e(p.guru.nama)}" data-del-role="${e(p.role_label)}" data-del-jenis="${e(p.jenis)}" data-del-terisi="${p.terisi}" title="Hapus penilaian ini"><i class="bi bi-trash"></i></button>
               </td>
             </tr>`;
           }).join('')}
@@ -1452,6 +1456,43 @@ function viewPenilaianHub(view) {
   $('#f-madrasah').addEventListener('change', applyFilters);
 
   $('#btn-pn-new').addEventListener('click', () => openPenilaianBaruDialog());
+
+  // Hapus per-baris
+  $$('[data-del-pen]').forEach(b => {
+    b.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      const id = b.dataset.delPen;
+      const nm = b.dataset.delGuruName;
+      const role = b.dataset.delRole;
+      const jenis = b.dataset.delJenis;
+      const terisi = parseInt(b.dataset.delTerisi || '0');
+      const warn = terisi > 0 ? `\n\n⚠️ Sesi ini sudah punya ${terisi} skor terisi. Skor akan ikut TERHAPUS.` : '';
+      if (!confirm(`Hapus sesi penilaian:\n${nm} - ${role} (${jenis})${warn}\n\nAksi tidak bisa dibatalkan.`)) return;
+      PKGDB.deletePenilaian(id);
+      toast('Sesi penilaian dihapus');
+      viewPenilaianHub(view);
+    });
+  });
+
+  // Hapus semua yg selesai (sudah disupervisi)
+  $('#btn-pn-clean')?.addEventListener('click', () => {
+    const selesaiList = filtered.filter(p => p.status === 'selesai');
+    const selesaiAll = allPen.filter(p => p.status === 'selesai');
+    // Pakai filtered kalau ada filter aktif, kalau tidak pakai semua
+    const isFiltered = filterRole || filterJenis || filterStatus || filterMadrasah || q;
+    const target = isFiltered ? selesaiList : selesaiAll;
+    const scope = isFiltered ? 'sesuai filter aktif' : 'di seluruh data';
+    if (target.length === 0) { toast('Tidak ada sesi yang berstatus Selesai pada cakupan ini', 'warning'); return; }
+    const sample = target.slice(0, 5).map(p => `• ${p.guru.nama} - ${p.role_label} (${p.jenis})`).join('\n');
+    const more = target.length > 5 ? `\n… dan ${target.length - 5} sesi lainnya` : '';
+    const msg = `Hapus ${target.length} sesi penilaian SELESAI ${scope}?\n\n${sample}${more}\n\nData skor untuk sesi-sesi ini akan ikut TERHAPUS. Aksi tidak bisa dibatalkan.`;
+    if (!confirm(msg)) return;
+    const typed = prompt('Untuk konfirmasi, ketik: HAPUS SELESAI');
+    if (typed !== 'HAPUS SELESAI') { toast('Dibatalkan, teks konfirmasi tidak cocok', 'warning'); return; }
+    PKGDB.deletePenilaianMany(target.map(p => p.id));
+    toast(`${target.length} sesi penilaian dihapus`);
+    viewPenilaianHub(view);
+  });
 }
 
 function openPenilaianBaruDialog() {
