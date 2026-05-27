@@ -57,6 +57,7 @@ function renderShell() {
           <li class="nav-item"><a class="nav-link" href="#/"><i class="bi bi-house"></i> Beranda</a></li>
           <li class="nav-item"><a class="nav-link" href="#/guru"><i class="bi bi-people"></i> Data Guru</a></li>
           <li class="nav-item"><a class="nav-link" href="#/kamad"><i class="bi bi-person-badge"></i> Data Kamad</a></li>
+          <li class="nav-item"><a class="nav-link" href="#/penilaian"><i class="bi bi-clipboard-check"></i> Penilaian</a></li>
           <li class="nav-item"><a class="nav-link" href="#/rekap"><i class="bi bi-table"></i> Rekap</a></li>
           <li class="nav-item"><a class="nav-link" href="#/import"><i class="bi bi-cloud-upload"></i> Import</a></li>
           <li class="nav-item"><a class="nav-link" href="#/instrumen"><i class="bi bi-list-check"></i> Instrumen</a></li>
@@ -96,6 +97,7 @@ function render() {
   if (s0 === 'guru' && s1) return viewGuruDetail(view, s1);
 
   if (s0 === 'rekap') return viewRekap(view);
+  if (s0 === 'penilaian') return viewPenilaianHub(view);
   if (s0 === 'instrumen') return viewInstrumen(view);
   if (s0 === 'import') return viewImport(view);
   if (s0 === 'backup') return viewBackup(view);
