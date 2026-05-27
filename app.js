@@ -1712,18 +1712,65 @@ function openPenilaianBaruDialog() {
 
 // === REKAP ==============================================================
 function viewRekap(view) {
+  const { query } = parseHash();
+  const tab = query.tab || 'pkg';
   const data = PKGDB.getRekap();
-  // Helper: tugas dari data guru (tugas tambahan jika ada, kalau ngga ada fallback ke 'Guru Mapel'/'Guru')
+  // Helper: tugas dari data guru
   function tugasGuru(g) {
     const t = [g.tugas_tambahan_1, g.tugas_tambahan_2, g.tugas_tambahan_3].filter(s => s && String(s).trim()).map(s => String(s).trim());
     if (t.length > 0) return t.join(', ');
     return g.mapel_kelas ? 'Guru Mapel' : 'Guru';
   }
+
   view.innerHTML = `
   <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-    <h4 class="mb-0"><i class="bi bi-table"></i> Rekap PKG</h4>
-    <button id="btn-csv" class="btn btn-sm btn-outline-success"><i class="bi bi-file-earmark-spreadsheet"></i> Export CSV</button>
+    <h4 class="mb-0"><i class="bi bi-table"></i> Rekap</h4>
+    <div class="d-flex gap-2 flex-wrap">
+      <button id="btn-print" class="btn btn-sm btn-outline-secondary"><i class="bi bi-printer"></i> Cetak</button>
+      <button id="btn-xlsx" class="btn btn-sm btn-success"><i class="bi bi-file-earmark-excel"></i> Export Excel</button>
+      <button id="btn-csv" class="btn btn-sm btn-outline-success"><i class="bi bi-file-earmark-spreadsheet"></i> CSV</button>
+    </div>
   </div>
+
+  <ul class="nav nav-tabs mb-3">
+    <li class="nav-item"><a class="nav-link ${tab === 'pkg' ? 'active' : ''}" href="#/rekap?tab=pkg"><i class="bi bi-clipboard-check"></i> Penilaian PKG</a></li>
+    <li class="nav-item"><a class="nav-link ${tab === 'pkb' ? 'active' : ''}" href="#/rekap?tab=pkb"><i class="bi bi-mortarboard"></i> PKB</a></li>
+    <li class="nav-item"><a class="nav-link ${tab === 'absen' ? 'active' : ''}" href="#/rekap?tab=absen"><i class="bi bi-calendar-check"></i> Absensi</a></li>
+  </ul>
+
+  <div id="rekap-content"></div>`;
+
+  // Render tab body
+  const content = document.getElementById('rekap-content');
+  if (tab === 'pkb') renderRekapPKB(content, data);
+  else if (tab === 'absen') renderRekapAbsen(content, data);
+  else renderRekapPKG(content, data, tugasGuru);
+
+  $('#btn-csv').addEventListener('click', () => {
+    if (tab === 'pkb') exportRekapPKBCSV(data);
+    else if (tab === 'absen') exportRekapAbsenCSV(data);
+    else exportRekapPKGCSV(data, tugasGuru);
+  });
+  $('#btn-xlsx').addEventListener('click', async () => {
+    try {
+      if (tab === 'pkb') await exportRekapPKBXLSX(data);
+      else if (tab === 'absen') await exportRekapAbsenXLSX(data);
+      else await exportRekapPKGXLSX(data, tugasGuru);
+      toast('Excel terdownload');
+    } catch (err) {
+      console.error(err);
+      toast('Gagal export Excel: ' + err.message, 'danger');
+    }
+  });
+  $('#btn-print').addEventListener('click', () => {
+    const titleMap = { pkg: 'Rekap Penilaian PKG', pkb: 'Rekap PKB', absen: 'Rekap Absensi Guru' };
+    printRekapTab(titleMap[tab] || 'Rekap', content.innerHTML);
+  });
+}
+
+// === RENDER TAB BODIES ==================================================
+function renderRekapPKG(target, data, tugasGuru) {
+  target.innerHTML = `
   <div class="card"><div class="table-responsive">
     <table class="table table-sm table-hover mb-0 align-middle">
       <thead class="table-light"><tr>
@@ -1770,35 +1817,293 @@ function viewRekap(view) {
       </tbody>
     </table>
   </div></div>`;
+}
 
-  $('#btn-csv').addEventListener('click', () => {
-    const lines = ['No;Nama;NIP;Madrasah;Mapel/Kelas;Peran/Tugas;Instrumen;Jenis;Nilai;Sebutan;Tanggal'];
-    const esc = (v) => {
-      if (v === null || v === undefined) return '';
-      const s = String(v).replace(/"/g, '""');
-      return /[;"\n\r]/.test(s) ? `"${s}"` : s;
-    };
-    let i = 0;
-    for (const g of data) {
-      const peranGuru = tugasGuru(g);
-      if (g.peran.length === 0) {
+function renderRekapPKB(target, data) {
+  // Build PKB rows: 1 row per guru per prioritas (1..3)
+  let rowsHtml = '';
+  let n = 0;
+  let totalPKB = 0;
+  for (const g of data) {
+    const pkb = (PKGDB.listPKB(g.id) || []).sort((a, b) => (a.prioritas || 0) - (b.prioritas || 0));
+    if (pkb.length === 0) {
+      n++;
+      rowsHtml += `<tr><td>${n}</td>
+        <td><a href="#/guru/${g.id}">${e(g.nama)}</a><div class="small text-muted">${e(g.nip || '')}</div></td>
+        <td class="small">${e(g.nama_madrasah || '-')}</td>
+        <td colspan="4" class="text-muted">Belum ada PKB</td>
+      </tr>`;
+    } else {
+      pkb.forEach((p, j) => {
+        if (!p.kompetensi && !p.rencana && !p.target) return; // skip empty
+        n++; totalPKB++;
+        rowsHtml += `<tr>
+          <td>${n}</td>
+          ${j === 0 ? `
+            <td rowspan="${pkb.length}"><a href="#/guru/${g.id}">${e(g.nama)}</a><div class="small text-muted">${e(g.nip || '')}</div></td>
+            <td rowspan="${pkb.length}" class="small">${e(g.nama_madrasah || '-')}</td>
+          ` : ''}
+          <td class="text-center"><span class="badge bg-primary">P${p.prioritas}</span></td>
+          <td class="small" style="max-width:280px; white-space:pre-wrap">${e(p.kompetensi || '-')}</td>
+          <td class="small" style="max-width:280px; white-space:pre-wrap">${e(p.rencana || '-')}</td>
+          <td class="small" style="max-width:280px; white-space:pre-wrap">${e(p.target || '-')}</td>
+        </tr>`;
+      });
+    }
+  }
+  target.innerHTML = `
+  <div class="alert alert-info py-2 small"><i class="bi bi-info-circle"></i> Total ${totalPKB} prioritas PKB tercatat dari ${data.length} guru.</div>
+  <div class="card"><div class="table-responsive">
+    <table class="table table-sm table-hover mb-0 align-middle">
+      <thead class="table-light"><tr>
+        <th>#</th><th>Nama / NIP</th><th>Madrasah</th><th>Prioritas</th><th>Kompetensi</th><th>Rencana Kegiatan</th><th>Target</th>
+      </tr></thead>
+      <tbody>
+        ${rowsHtml || '<tr><td colspan="7" class="text-center text-muted py-4">Belum ada data PKB</td></tr>'}
+      </tbody>
+    </table>
+  </div></div>`;
+}
+
+function renderRekapAbsen(target, data) {
+  let rowsHtml = '';
+  let n = 0;
+  let totalRows = 0;
+  for (const g of data) {
+    const kh = (PKGDB.listKehadiran(g.id) || []).sort((a, b) => (a.tahun - b.tahun) || (a.bulan - b.bulan));
+    if (kh.length === 0) {
+      n++;
+      rowsHtml += `<tr><td>${n}</td>
+        <td><a href="#/guru/${g.id}">${e(g.nama)}</a><div class="small text-muted">${e(g.nip || '')}</div></td>
+        <td class="small">${e(g.nama_madrasah || '-')}</td>
+        <td colspan="9" class="text-muted">Belum ada data absensi</td>
+      </tr>`;
+    } else {
+      kh.forEach((k, j) => {
+        n++; totalRows++;
+        const pct = k.hari_efektif ? ((k.hadir / k.hari_efektif) * 100).toFixed(1) : '-';
+        rowsHtml += `<tr>
+          <td>${n}</td>
+          ${j === 0 ? `
+            <td rowspan="${kh.length}"><a href="#/guru/${g.id}">${e(g.nama)}</a><div class="small text-muted">${e(g.nip || '')}</div></td>
+            <td rowspan="${kh.length}" class="small">${e(g.nama_madrasah || '-')}</td>
+          ` : ''}
+          <td class="text-center">${NAMA_BLN_SHORT[k.bulan] || k.bulan}</td>
+          <td class="text-center">${k.tahun}</td>
+          <td class="text-center">${k.hari_efektif || 0}</td>
+          <td class="text-center">${k.hadir || 0}</td>
+          <td class="text-center">${k.sakit || 0}</td>
+          <td class="text-center">${k.izin || 0}</td>
+          <td class="text-center">${k.alpa || 0}</td>
+          <td class="text-center">${k.cuti || 0}</td>
+          <td class="text-center">${k.dinas || 0}</td>
+          <td class="text-end fw-semibold">${pct === '-' ? '-' : pct + '%'}</td>
+        </tr>`;
+      });
+    }
+  }
+  target.innerHTML = `
+  <div class="alert alert-info py-2 small"><i class="bi bi-info-circle"></i> Total ${totalRows} baris data kehadiran dari ${data.length} guru.</div>
+  <div class="card"><div class="table-responsive">
+    <table class="table table-sm table-hover mb-0 align-middle">
+      <thead class="table-light"><tr>
+        <th>#</th><th>Nama / NIP</th><th>Madrasah</th><th>Bulan</th><th>Tahun</th><th>Efektif</th><th>Hadir</th><th>Sakit</th><th>Izin</th><th>Alpa</th><th>Cuti</th><th>Dinas</th><th class="text-end">%</th>
+      </tr></thead>
+      <tbody>
+        ${rowsHtml || '<tr><td colspan="13" class="text-center text-muted py-4">Belum ada data absensi</td></tr>'}
+      </tbody>
+    </table>
+  </div></div>`;
+}
+
+// === EXPORT CSV =========================================================
+function csvEsc(v) {
+  if (v === null || v === undefined) return '';
+  const s = String(v).replace(/"/g, '""');
+  return /[;"\n\r]/.test(s) ? `"${s}"` : s;
+}
+function downloadCSV(filename, lines) {
+  const blob = new Blob(['\ufeff' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+  toast('CSV diunduh');
+}
+function exportRekapPKGCSV(data, tugasGuru) {
+  const lines = ['No;Nama;NIP;Madrasah;Mapel/Kelas;Peran/Tugas;Instrumen;Jenis;Nilai;Sebutan;Tanggal'];
+  let i = 0;
+  for (const g of data) {
+    const peranGuru = tugasGuru(g);
+    if (g.peran.length === 0) {
+      i++;
+      lines.push([i, g.nama, g.nip, g.nama_madrasah, g.mapel_kelas, peranGuru, '', '', '', '', ''].map(csvEsc).join(';'));
+    } else {
+      for (const p of g.peran) {
         i++;
-        lines.push([i, g.nama, g.nip, g.nama_madrasah, g.mapel_kelas, peranGuru, '', '', '', '', ''].map(esc).join(';'));
-      } else {
-        for (const p of g.peran) {
-          i++;
-          lines.push([i, g.nama, g.nip, g.nama_madrasah, g.mapel_kelas, peranGuru, p.role_label, p.jenis, p.nilai, p.sebutan, p.tanggal].map(esc).join(';'));
-        }
+        lines.push([i, g.nama, g.nip, g.nama_madrasah, g.mapel_kelas, peranGuru, p.role_label, p.jenis, p.nilai, p.sebutan, p.tanggal].map(csvEsc).join(';'));
       }
     }
-    const blob = new Blob(['\ufeff' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = `rekap-pkg-${new Date().toISOString().slice(0,10)}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-    toast('CSV diunduh');
+  }
+  downloadCSV(`rekap-pkg-${new Date().toISOString().slice(0, 10)}.csv`, lines);
+}
+function exportRekapPKBCSV(data) {
+  const lines = ['No;Nama;NIP;Madrasah;Prioritas;Kompetensi;Rencana Kegiatan;Target'];
+  let i = 0;
+  for (const g of data) {
+    const pkb = (PKGDB.listPKB(g.id) || []).sort((a, b) => (a.prioritas || 0) - (b.prioritas || 0));
+    if (pkb.length === 0 || !pkb.some(p => p.kompetensi || p.rencana || p.target)) {
+      i++;
+      lines.push([i, g.nama, g.nip, g.nama_madrasah, '', '', '', ''].map(csvEsc).join(';'));
+      continue;
+    }
+    for (const p of pkb) {
+      if (!p.kompetensi && !p.rencana && !p.target) continue;
+      i++;
+      lines.push([i, g.nama, g.nip, g.nama_madrasah, p.prioritas, p.kompetensi, p.rencana, p.target].map(csvEsc).join(';'));
+    }
+  }
+  downloadCSV(`rekap-pkb-${new Date().toISOString().slice(0, 10)}.csv`, lines);
+}
+function exportRekapAbsenCSV(data) {
+  const lines = ['No;Nama;NIP;Madrasah;Bulan;Tahun;Efektif;Hadir;Sakit;Izin;Alpa;Cuti;Dinas;Persentase'];
+  let i = 0;
+  for (const g of data) {
+    const kh = (PKGDB.listKehadiran(g.id) || []).sort((a, b) => (a.tahun - b.tahun) || (a.bulan - b.bulan));
+    if (kh.length === 0) {
+      i++;
+      lines.push([i, g.nama, g.nip, g.nama_madrasah, '', '', '', '', '', '', '', '', '', ''].map(csvEsc).join(';'));
+      continue;
+    }
+    for (const k of kh) {
+      i++;
+      const pct = k.hari_efektif ? ((k.hadir / k.hari_efektif) * 100).toFixed(2) + '%' : '';
+      lines.push([i, g.nama, g.nip, g.nama_madrasah, NAMA_BLN_SHORT[k.bulan] || k.bulan, k.tahun, k.hari_efektif, k.hadir, k.sakit, k.izin, k.alpa, k.cuti, k.dinas, pct].map(csvEsc).join(';'));
+    }
+  }
+  downloadCSV(`rekap-absen-${new Date().toISOString().slice(0, 10)}.csv`, lines);
+}
+
+// === EXPORT XLSX (ExcelJS) ==============================================
+async function buildXLSX(filename, sheetName, headers, rows, colWidths) {
+  if (typeof ExcelJS === 'undefined') throw new Error('Library Excel belum termuat');
+  const wb = new ExcelJS.Workbook();
+  wb.creator = 'PKG App';
+  wb.created = new Date();
+  const ws = wb.addWorksheet(sheetName);
+  ws.columns = headers.map((h, i) => ({ header: h, key: 'c' + i, width: colWidths?.[i] || 15 }));
+  // Header style
+  ws.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+  ws.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF047A3A' } };
+  ws.getRow(1).alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+  ws.getRow(1).height = 22;
+  // Data
+  for (const row of rows) {
+    const obj = {};
+    headers.forEach((_, i) => { obj['c' + i] = row[i] != null ? row[i] : ''; });
+    ws.addRow(obj);
+  }
+  // Borders
+  ws.eachRow((row) => {
+    row.eachCell((cell) => {
+      cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+      cell.alignment = cell.alignment || { vertical: 'top', wrapText: true };
+    });
   });
+  ws.views = [{ state: 'frozen', ySplit: 1 }];
+  const buf = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+async function exportRekapPKGXLSX(data, tugasGuru) {
+  const headers = ['No', 'Nama', 'NIP', 'Madrasah', 'Mapel/Kelas', 'Peran/Tugas', 'Instrumen PKG', 'Jenis', 'Nilai', 'Sebutan', 'Tanggal'];
+  const widths = [5, 28, 22, 25, 22, 22, 22, 12, 10, 14, 12];
+  const rows = [];
+  let i = 0;
+  for (const g of data) {
+    const peranGuru = tugasGuru(g);
+    if (g.peran.length === 0) {
+      i++;
+      rows.push([i, g.nama, g.nip || '', g.nama_madrasah || '', g.mapel_kelas || '', peranGuru, '', '', '', '', '']);
+    } else {
+      for (const p of g.peran) {
+        i++;
+        rows.push([i, g.nama, g.nip || '', g.nama_madrasah || '', g.mapel_kelas || '', peranGuru, p.role_label || '', (p.jenis || '').toUpperCase(), Number(p.nilai.toFixed(2)), p.sebutan || '', p.tanggal || '']);
+      }
+    }
+  }
+  await buildXLSX(`rekap-pkg-${new Date().toISOString().slice(0, 10)}.xlsx`, 'Rekap PKG', headers, rows, widths);
+}
+async function exportRekapPKBXLSX(data) {
+  const headers = ['No', 'Nama', 'NIP', 'Madrasah', 'Prioritas', 'Kompetensi', 'Rencana Kegiatan', 'Target'];
+  const widths = [5, 28, 22, 25, 10, 40, 40, 40];
+  const rows = [];
+  let i = 0;
+  for (const g of data) {
+    const pkb = (PKGDB.listPKB(g.id) || []).sort((a, b) => (a.prioritas || 0) - (b.prioritas || 0));
+    const filled = pkb.filter(p => p.kompetensi || p.rencana || p.target);
+    if (filled.length === 0) {
+      i++;
+      rows.push([i, g.nama, g.nip || '', g.nama_madrasah || '', '', '', '', '']);
+      continue;
+    }
+    for (const p of filled) {
+      i++;
+      rows.push([i, g.nama, g.nip || '', g.nama_madrasah || '', p.prioritas || '', p.kompetensi || '', p.rencana || '', p.target || '']);
+    }
+  }
+  await buildXLSX(`rekap-pkb-${new Date().toISOString().slice(0, 10)}.xlsx`, 'Rekap PKB', headers, rows, widths);
+}
+async function exportRekapAbsenXLSX(data) {
+  const headers = ['No', 'Nama', 'NIP', 'Madrasah', 'Bulan', 'Tahun', 'Hari Efektif', 'Hadir', 'Sakit', 'Izin', 'Alpa', 'Cuti', 'Dinas', '% Hadir'];
+  const widths = [5, 28, 22, 25, 10, 8, 12, 8, 8, 8, 8, 8, 8, 10];
+  const rows = [];
+  let i = 0;
+  for (const g of data) {
+    const kh = (PKGDB.listKehadiran(g.id) || []).sort((a, b) => (a.tahun - b.tahun) || (a.bulan - b.bulan));
+    if (kh.length === 0) {
+      i++;
+      rows.push([i, g.nama, g.nip || '', g.nama_madrasah || '', '', '', '', '', '', '', '', '', '', '']);
+      continue;
+    }
+    for (const k of kh) {
+      i++;
+      const pct = k.hari_efektif ? Number(((k.hadir / k.hari_efektif) * 100).toFixed(2)) : '';
+      rows.push([i, g.nama, g.nip || '', g.nama_madrasah || '', NAMA_BLN_SHORT[k.bulan] || k.bulan, k.tahun, k.hari_efektif || 0, k.hadir || 0, k.sakit || 0, k.izin || 0, k.alpa || 0, k.cuti || 0, k.dinas || 0, pct]);
+    }
+  }
+  await buildXLSX(`rekap-absen-${new Date().toISOString().slice(0, 10)}.xlsx`, 'Rekap Absensi', headers, rows, widths);
+}
+
+// === PRINT ==============================================================
+function printRekapTab(title, html) {
+  const w = window.open('', '_blank');
+  if (!w) { toast('Pop-up diblokir. Izinkan pop-up untuk cetak.', 'danger'); return; }
+  const today = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+  w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${title}</title>
+  <style>
+    body{font-family:'Times New Roman',serif;font-size:10pt;color:#000;margin:1.2cm;}
+    h2{text-align:center;margin:0 0 4px;}
+    .meta{text-align:center;margin-bottom:14px;font-size:10pt;color:#444;}
+    table{width:100%;border-collapse:collapse;margin-bottom:6px;}
+    th,td{border:1px solid #333;padding:4px 6px;vertical-align:top;text-align:left;font-size:9pt;}
+    th{background:#e8f5e9;}
+    .badge{display:inline-block;padding:1px 5px;border:1px solid #888;border-radius:3px;font-size:8pt;}
+    .small,.text-muted{color:#555;font-size:8pt;}
+    .alert{display:none;}
+    @media print{ button{display:none;} }
+  </style></head><body>
+  <h2>${title}</h2>
+  <div class="meta">Dicetak: ${today}</div>
+  ${html}
+  <script>window.onload=()=>{setTimeout(()=>window.print(),200);}<\/script>
+  </body></html>`);
+  w.document.close();
 }
 
 // === INSTRUMEN VIEWER ===================================================
