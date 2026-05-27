@@ -541,6 +541,166 @@ function clearAll() {
   for (const k of Object.values(KEYS)) localStorage.removeItem(k);
 }
 
+// === MERGE MULTIPLE BACKUPS (for KKM/Kabupaten aggregation) ============
+// Takes array of backup JSONs, merges into current data with full id remap.
+// Dedup by NIP for guru/kamad. All children (penilaian, skor, kehadiran, pkb)
+// get new ids and pointers updated. Returns stats.
+function mergeBackups(backups, opts) {
+  opts = opts || {};
+  const tagSource = opts.tagSource !== false; // tag asal madrasah/kkm di catatan?
+  let stats = { files: 0, guru_added: 0, guru_dedup: 0, penilaian_added: 0, skor_added: 0, kehadiran_added: 0, pkb_added: 0, kamad_added: 0, errors: [] };
+
+  let curGuru = load(KEYS.guru, []);
+  let curKamad = load(KEYS.kamad, []);
+  let curPen = load(KEYS.penilaian, []);
+  let curSkor = load(KEYS.skor, []);
+  let curKehadiran = load(KEYS.kehadiran, []);
+  let curPkb = load(KEYS.pkb, []);
+  let curPenggalian = load(KEYS.penggalian, {});
+
+  for (const bk of backups) {
+    if (!bk || bk.schema !== 'pkg_v1' || !bk.data) {
+      stats.errors.push('File bukan format pkg_v1, dilewati');
+      continue;
+    }
+    stats.files++;
+    const d = bk.data;
+    const sourceLabel = bk._source_label || ''; // injected by caller
+
+    // GURU: dedup by NIP, fallback by (nama+nama_madrasah) when NIP empty
+    const guruIdMap = new Map();
+    const byNip = new Map(curGuru.filter(g => g.nip).map(g => [String(g.nip).trim(), g]));
+    const byKey = new Map(curGuru.filter(g => !g.nip).map(g => [(g.nama || '').toLowerCase().trim() + '|' + (g.nama_madrasah || '').toLowerCase().trim(), g]));
+    for (const g of (d.guru || [])) {
+      const nip = g.nip ? String(g.nip).trim() : '';
+      const altKey = (g.nama || '').toLowerCase().trim() + '|' + (g.nama_madrasah || '').toLowerCase().trim();
+      let exist = nip ? byNip.get(nip) : byKey.get(altKey);
+      if (exist) {
+        guruIdMap.set(g.id, exist.id);
+        // Update field yang masih kosong di existing dari incoming
+        for (const k of ['kkm', 'kabupaten', 'nama_madrasah', 'alamat_madrasah']) {
+          if (!exist[k] && g[k]) exist[k] = g[k];
+        }
+        stats.guru_dedup++;
+      } else {
+        const newId = nextId('guru');
+        guruIdMap.set(g.id, newId);
+        const newG = { ...g, id: newId };
+        if (sourceLabel && !newG._source) newG._source = sourceLabel;
+        curGuru.push(newG);
+        if (nip) byNip.set(nip, newG);
+        else byKey.set(altKey, newG);
+        stats.guru_added++;
+      }
+    }
+    save(KEYS.guru, curGuru);
+
+    // KAMAD: dedup by (nama_madrasah)
+    const kamadByMad = new Map(curKamad.map(k => [(k.nama_madrasah || '').toLowerCase().trim(), k]));
+    for (const k of (d.kamad || [])) {
+      const key = (k.nama_madrasah || '').toLowerCase().trim();
+      if (!key) continue;
+      if (!kamadByMad.has(key)) {
+        const newK = { ...k, id: nextId('kamad') };
+        if (sourceLabel) newK._source = sourceLabel;
+        curKamad.push(newK);
+        kamadByMad.set(key, newK);
+        stats.kamad_added++;
+      }
+    }
+    save(KEYS.kamad, curKamad);
+
+    // PENILAIAN: dedup by (guru_id_new, role_code, jenis, tanggal). Add or skip.
+    const penIdMap = new Map();
+    const penKey = (p) => `${p.guru_id}|${p.role_code}|${p.jenis}|${p.tanggal || ''}`;
+    const existingPenKeys = new Set(curPen.map(penKey));
+    for (const p of (d.penilaian || [])) {
+      const newGuruId = guruIdMap.get(p.guru_id);
+      if (!newGuruId) continue;
+      const candidate = { ...p, guru_id: newGuruId };
+      if (existingPenKeys.has(penKey(candidate))) {
+        // pakai existing id (skip add, tapi map old id ke existing yang match)
+        const exist = curPen.find(x => penKey(x) === penKey(candidate));
+        if (exist) penIdMap.set(p.id, exist.id);
+        continue;
+      }
+      const newId = nextId('penilaian');
+      penIdMap.set(p.id, newId);
+      candidate.id = newId;
+      if (sourceLabel) candidate._source = sourceLabel;
+      curPen.push(candidate);
+      existingPenKeys.add(penKey(candidate));
+      stats.penilaian_added++;
+    }
+    save(KEYS.penilaian, curPen);
+
+    // SKOR: remap by penIdMap
+    const skorExist = new Set(curSkor.map(s => `${s.penilaian_id}|${s.indikator_id}`));
+    for (const s of (d.skor || [])) {
+      const newPenId = penIdMap.get(s.penilaian_id);
+      if (!newPenId) continue;
+      const k = `${newPenId}|${s.indikator_id}`;
+      if (skorExist.has(k)) continue;
+      curSkor.push({ ...s, id: nextId('skor'), penilaian_id: newPenId });
+      skorExist.add(k);
+      stats.skor_added++;
+    }
+    save(KEYS.skor, curSkor);
+
+    // KEHADIRAN: dedup by (guru_id_new, bulan, tahun)
+    const khKey = (x) => `${x.guru_id}|${x.bulan}|${x.tahun}`;
+    const khExist = new Set(curKehadiran.map(khKey));
+    for (const k of (d.kehadiran || [])) {
+      const newGuruId = guruIdMap.get(k.guru_id);
+      if (!newGuruId) continue;
+      const cand = { ...k, guru_id: newGuruId };
+      if (khExist.has(khKey(cand))) continue;
+      cand.id = nextId('kehadiran');
+      curKehadiran.push(cand);
+      khExist.add(khKey(cand));
+      stats.kehadiran_added++;
+    }
+    save(KEYS.kehadiran, curKehadiran);
+
+    // PKB: replace per guru bila incoming punya entries lebih banyak
+    const pkbByGuru = new Map();
+    for (const p of curPkb) {
+      if (!pkbByGuru.has(p.guru_id)) pkbByGuru.set(p.guru_id, []);
+      pkbByGuru.get(p.guru_id).push(p);
+    }
+    const incomingPkbByGuru = new Map();
+    for (const p of (d.pkb || [])) {
+      const newGuruId = guruIdMap.get(p.guru_id);
+      if (!newGuruId) continue;
+      if (!incomingPkbByGuru.has(newGuruId)) incomingPkbByGuru.set(newGuruId, []);
+      incomingPkbByGuru.get(newGuruId).push({ ...p, guru_id: newGuruId });
+    }
+    for (const [guruId, items] of incomingPkbByGuru) {
+      const cur = pkbByGuru.get(guruId) || [];
+      if (items.length > cur.length) {
+        // hapus pkb existing untuk guru ini, ganti dengan incoming
+        curPkb = curPkb.filter(p => p.guru_id !== guruId);
+        for (const it of items) {
+          curPkb.push({ ...it, id: nextId('pkb') });
+          stats.pkb_added++;
+        }
+      }
+    }
+    save(KEYS.pkb, curPkb);
+
+    // PENGGALIAN: merge object (key by indikator_id), incoming wins kalau lebih lengkap
+    if (d.penggalian && typeof d.penggalian === 'object') {
+      for (const [k, v] of Object.entries(d.penggalian)) {
+        if (!curPenggalian[k] || (v && v.catatan && (!curPenggalian[k].catatan || curPenggalian[k].catatan.length < v.catatan.length))) {
+          curPenggalian[k] = v;
+        }
+      }
+      save(KEYS.penggalian, curPenggalian);
+    }
+  }
+  return stats;
+}
+
 // === REKAP ==============================================================
 function getRekap() {
   const gurus = load(KEYS.guru, []).sort((a, b) => (a.nama || '').localeCompare(b.nama || ''));
@@ -575,6 +735,6 @@ window.PKGDB = {
   listKehadiran, upsertKehadiran, deleteKehadiran,
   listPKB, replacePKB,
   getStats, getRecentGuru,
-  exportAll, importAll, clearAll,
+  exportAll, importAll, mergeBackups, clearAll,
   getRekap,
 };

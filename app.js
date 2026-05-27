@@ -281,6 +281,8 @@ function viewKamadForm(view, editId) {
         <div class="col-md-8">${field('nama_madrasah', 'Nama Madrasah', 'text', { required: true })}</div>
         <div class="col-md-4">${field('jenjang', 'Jenjang', 'select', { options: ['RA', 'MI', 'MTs', 'MA', 'MAK'] })}</div>
         <div class="col-md-12">${field('alamat_madrasah', 'Alamat Madrasah', 'text')}</div>
+        <div class="col-md-6">${field('kkm', 'KKM (Kelompok Kerja Madrasah)', 'text')}</div>
+        <div class="col-md-6">${field('kabupaten', 'Kabupaten/Kota', 'text')}</div>
         <div class="col-md-4">${field('nsm', 'NSM', 'text')}</div>
         <div class="col-md-4">${field('npsn', 'NPSN', 'text')}</div>
         <div class="col-md-4">${field('akreditasi', 'Akreditasi', 'select', { options: ['A', 'B', 'C', 'Belum'] })}</div>
@@ -433,6 +435,8 @@ const GURU_COLUMNS = [
   { key: 'tugas_tambahan_3', label: 'Tugas Tambahan 3', width: 22 },
   { key: 'nama_madrasah', label: 'Nama Madrasah', width: 30 },
   { key: 'alamat_madrasah', label: 'Alamat Madrasah', width: 30 },
+  { key: 'kkm', label: 'KKM (Kelompok Kerja Madrasah)', width: 22 },
+  { key: 'kabupaten', label: 'Kabupaten/Kota', width: 18 },
   { key: 'tahun_pelajaran', label: 'Tahun Pelajaran', width: 14 },
   { key: 'semester', label: 'Semester (Ganjil/Genap)', width: 14 },
   { key: 'nama_kamad', label: 'Nama Kamad', width: 24 },
@@ -448,6 +452,8 @@ const KAMAD_COLUMNS = [
   { key: 'nsm', label: 'NSM', width: 16 },
   { key: 'npsn', label: 'NPSN', width: 14 },
   { key: 'akreditasi', label: 'Akreditasi (A/B/C)', width: 12 },
+  { key: 'kkm', label: 'KKM (Kelompok Kerja Madrasah)', width: 22 },
+  { key: 'kabupaten', label: 'Kabupaten/Kota', width: 18 },
   { key: 'alamat_madrasah', label: 'Alamat Madrasah', width: 30 },
   { key: 'nama', label: 'Nama Kepala Madrasah', width: 28, required: true },
   { key: 'gelar', label: 'Gelar', width: 12 },
@@ -833,6 +839,8 @@ function viewGuruForm(view, editId) {
         <div class="col-md-4">${field('tahun_pelajaran', 'Tahun Pelajaran', 'text', { default: '2025/2026' })}</div>
         <div class="col-md-9">${field('alamat_madrasah', 'Alamat Madrasah', 'text')}</div>
         <div class="col-md-3">${field('semester', 'Semester', 'select', { options: ['Ganjil', 'Genap'] })}</div>
+        <div class="col-md-6">${field('kkm', 'KKM (Kelompok Kerja Madrasah)', 'text')}</div>
+        <div class="col-md-6">${field('kabupaten', 'Kabupaten/Kota', 'text')}</div>
         <div class="col-md-6">${field('nama_kamad', 'Kepala Madrasah', 'text')}</div>
         <div class="col-md-6">${field('nip_kamad', 'NIP Kamad', 'text')}</div>
         <div class="col-md-5">${field('nama_penilai', 'Nama Penilai', 'text')}</div>
@@ -1904,18 +1912,25 @@ function renderRekapPKB(target, data) {
 }
 
 // === PKB MADRASAH (3 prioritas terlemah agregat per madrasah) ===========
-function computePKBMadrasah(data) {
+function computePKBMadrasah(data, scope) {
+  // scope: 'madrasah' (default) | 'kkm' | 'kabupaten'
+  scope = scope || 'madrasah';
   // data = list guru dengan field peran (penilaian summary)
-  // Group by madrasah
-  const byMadrasah = {};
+  // Group by scope
+  const groupKey = (g) => {
+    if (scope === 'kkm') return (g.kkm || '').trim() || '(Tanpa KKM)';
+    if (scope === 'kabupaten') return (g.kabupaten || '').trim() || '(Tanpa Kabupaten)';
+    return (g.nama_madrasah || '').trim() || '(Tidak ada madrasah)';
+  };
+  const byGroup = {};
   for (const g of data) {
-    const m = (g.nama_madrasah || '').trim() || '(Tidak ada madrasah)';
-    if (!byMadrasah[m]) byMadrasah[m] = [];
-    byMadrasah[m].push(g);
+    const key = groupKey(g);
+    if (!byGroup[key]) byGroup[key] = [];
+    byGroup[key].push(g);
   }
   const result = [];
-  for (const madrasah of Object.keys(byMadrasah).sort()) {
-    const gurus = byMadrasah[madrasah];
+  for (const groupName of Object.keys(byGroup).sort()) {
+    const gurus = byGroup[groupName];
     // Agregat skor per kompetensi (role+komp_no) across all guru di madrasah
     const kompAgg = {}; // key: role_code|komp_no -> { role_code, role_label, komp_no, komp_nama, sumPct, count }
     for (const g of gurus) {
@@ -1970,7 +1985,7 @@ function computePKBMadrasah(data) {
       .sort((a, b) => a.avgPct - b.avgPct)
       .slice(0, 3);
     result.push({
-      madrasah,
+      madrasah: groupName,
       jumlahGuru: gurus.length,
       jumlahDinilai: gurus.filter(g => PKGDB.listPenilaianByGuru(g.id).some(p => PKGDB.countSkor(p.id) > 0)).length,
       prioritas: stats,
@@ -1980,9 +1995,13 @@ function computePKBMadrasah(data) {
 }
 
 function renderRekapPKBMadrasah(target, data) {
-  const list = computePKBMadrasah(data);
-  const totalMadrasah = list.length;
+  const params = new URLSearchParams(location.hash.split('?')[1] || '');
+  const scope = params.get('scope') || 'madrasah';
+  const list = computePKBMadrasah(data, scope);
+  const totalGroup = list.length;
   const totalAdaPrioritas = list.filter(m => m.prioritas.length > 0).length;
+  const scopeLabel = { madrasah: 'Madrasah', kkm: 'KKM', kabupaten: 'Kabupaten' }[scope] || 'Madrasah';
+  const scopeIcon = { madrasah: 'bi-building', kkm: 'bi-diagram-3', kabupaten: 'bi-geo-alt-fill' }[scope] || 'bi-building';
   let html = '';
   let n = 0;
   for (const m of list) {
@@ -2016,11 +2035,19 @@ function renderRekapPKBMadrasah(target, data) {
     });
   }
   target.innerHTML = `
-  <div class="alert alert-info py-2 small"><i class="bi bi-info-circle"></i> Rekomendasi PKB tingkat madrasah: 3 kompetensi terlemah agregat dari semua guru. Total ${totalAdaPrioritas} dari ${totalMadrasah} madrasah punya prioritas tergenerate.</div>
+  <div class="d-flex flex-wrap gap-2 align-items-center mb-3">
+    <div class="btn-group btn-group-sm" role="group">
+      <a class="btn ${scope === 'madrasah' ? 'btn-success' : 'btn-outline-success'}" href="#/rekap?tab=pkb-madrasah&scope=madrasah"><i class="bi bi-building"></i> Per Madrasah</a>
+      <a class="btn ${scope === 'kkm' ? 'btn-success' : 'btn-outline-success'}" href="#/rekap?tab=pkb-madrasah&scope=kkm"><i class="bi bi-diagram-3"></i> Per KKM</a>
+      <a class="btn ${scope === 'kabupaten' ? 'btn-success' : 'btn-outline-success'}" href="#/rekap?tab=pkb-madrasah&scope=kabupaten"><i class="bi bi-geo-alt-fill"></i> Per Kabupaten</a>
+    </div>
+    <div class="small text-muted ms-auto">Scope: <strong>${scopeLabel}</strong> &middot; ${totalAdaPrioritas} dari ${totalGroup} group punya prioritas</div>
+  </div>
+  <div class="alert alert-info py-2 small"><i class="bi ${scopeIcon}"></i> Rekomendasi PKB tingkat <strong>${scopeLabel}</strong>: 3 kompetensi terlemah agregat dari semua guru dalam scope ini. Isi field <code>${scope === 'madrasah' ? 'nama_madrasah' : scope}</code> di data Guru untuk grouping yang benar.</div>
   <div class="card"><div class="table-responsive">
     <table class="table table-sm table-hover mb-0 align-middle">
       <thead class="table-light"><tr>
-        <th>#</th><th>Madrasah</th><th>Prioritas</th><th>Kompetensi</th><th>Rencana Kegiatan</th><th>Target</th><th class="small">Jml Guru</th>
+        <th>#</th><th>${scopeLabel}</th><th>Prioritas</th><th>Kompetensi</th><th>Rencana Kegiatan</th><th>Target</th><th class="small">Jml Guru</th>
       </tr></thead>
       <tbody>
         ${html || '<tr><td colspan="7" class="text-center text-muted py-4">Belum ada data penilaian. Isi penilaian guru dulu untuk dapat rekomendasi.</td></tr>'}
@@ -2068,8 +2095,11 @@ function showGuruListDialog(title, names) {
 }
 
 function exportRekapPKBMadrasahCSV(data) {
-  const list = computePKBMadrasah(data);
-  const lines = ['No;Madrasah;Jml Guru;Jml Dinilai;Prioritas;Peran;No Kompetensi;Nama Kompetensi;Rata2 Skor (%);Rencana Kegiatan;Target;Jml Guru Terlibat;Daftar Guru'];
+  const params = new URLSearchParams(location.hash.split('?')[1] || '');
+  const scope = params.get('scope') || 'madrasah';
+  const scopeLabel = { madrasah: 'Madrasah', kkm: 'KKM', kabupaten: 'Kabupaten' }[scope] || 'Madrasah';
+  const list = computePKBMadrasah(data, scope);
+  const lines = [`No;${scopeLabel};Jml Guru;Jml Dinilai;Prioritas;Peran;No Kompetensi;Nama Kompetensi;Rata2 Skor (%);Rencana Kegiatan;Target;Jml Guru Terlibat;Daftar Guru`];
   let i = 0;
   for (const m of list) {
     if (m.prioritas.length === 0) {
@@ -2086,12 +2116,15 @@ function exportRekapPKBMadrasahCSV(data) {
       lines.push([i, m.madrasah, m.jumlahGuru, m.jumlahDinilai, j + 1, p.role_label, p.komp_no, p.komp_nama, p.avgPct.toFixed(2), rencana, target_text, p.guruCount, guruStr].map(csvEsc).join(';'));
     });
   }
-  downloadCSV(`rekap-pkb-madrasah-${new Date().toISOString().slice(0, 10)}.csv`, lines);
+  downloadCSV(`rekap-pkb-${scope}-${new Date().toISOString().slice(0, 10)}.csv`, lines);
 }
 
 async function exportRekapPKBMadrasahXLSX(data) {
-  const list = computePKBMadrasah(data);
-  const headers = ['No', 'Madrasah', 'Jml Guru', 'Jml Dinilai', 'Prioritas', 'Peran', 'No Komp', 'Nama Kompetensi', 'Rata2 (%)', 'Rencana Kegiatan', 'Target', 'Guru Terlibat', 'Daftar Guru'];
+  const params = new URLSearchParams(location.hash.split('?')[1] || '');
+  const scope = params.get('scope') || 'madrasah';
+  const scopeLabel = { madrasah: 'Madrasah', kkm: 'KKM', kabupaten: 'Kabupaten' }[scope] || 'Madrasah';
+  const list = computePKBMadrasah(data, scope);
+  const headers = ['No', scopeLabel, 'Jml Guru', 'Jml Dinilai', 'Prioritas', 'Peran', 'No Komp', 'Nama Kompetensi', 'Rata2 (%)', 'Rencana Kegiatan', 'Target', 'Guru Terlibat', 'Daftar Guru'];
   const widths = [5, 30, 8, 10, 9, 22, 8, 35, 9, 40, 40, 10, 50];
   const rows = [];
   let i = 0;
@@ -2110,7 +2143,7 @@ async function exportRekapPKBMadrasahXLSX(data) {
       rows.push([i, m.madrasah, m.jumlahGuru, m.jumlahDinilai, j + 1, p.role_label, p.komp_no, p.komp_nama, Number(p.avgPct.toFixed(2)), rencana, target_text, p.guruCount, guruStr]);
     });
   }
-  await buildXLSX(`rekap-pkb-madrasah-${new Date().toISOString().slice(0, 10)}.xlsx`, 'PKB Madrasah', headers, rows, widths);
+  await buildXLSX(`rekap-pkb-${scope}-${new Date().toISOString().slice(0, 10)}.xlsx`, `PKB ${scopeLabel}`, headers, rows, widths);
 }
 
 function renderRekapAbsen(target, data) {
@@ -2856,6 +2889,24 @@ function viewBackup(view) {
       </div>
     </div>
     <div class="col-12">
+      <div class="card border-success">
+        <div class="card-header bg-success text-white"><i class="bi bi-files"></i> Gabung Backup dari Banyak Madrasah (untuk KKM/Kabupaten)</div>
+        <div class="card-body">
+          <p class="small text-muted mb-2">
+            <strong>Mode pengawas / ketua KKM / ketua Pokjawas Kabupaten:</strong> upload <strong>banyak file backup</strong> JSON sekaligus dari madrasah/KKM binaan. Sistem akan gabung semua data ke browser ini, dedup guru by NIP, lalu rekap bisa dilihat di menu Rekap (filter & grouping by KKM / Kabupaten tersedia di tab PKB Madrasah). Aman: data yang sudah ada tidak dihapus, hanya ditambah.
+          </p>
+          <div class="alert alert-light small mb-2">Tip: kumpulkan file <code>pkg-backup-*.json</code> dari semua kamad/pengawas, taruh di 1 folder, lalu pilih semuanya di sini (<code>Ctrl+A</code> di dialog file).</div>
+          <input type="file" id="merge-files" class="form-control mb-2" accept=".json" multiple>
+          <div class="form-check mb-2">
+            <input class="form-check-input" type="checkbox" id="merge-tag-source" checked>
+            <label class="form-check-label small" for="merge-tag-source">Tandai data dengan asal file (untuk audit trail)</label>
+          </div>
+          <button id="btn-merge" class="btn btn-success"><i class="bi bi-files"></i> Gabung Backup Terpilih</button>
+          <div id="merge-result" class="mt-3"></div>
+        </div>
+      </div>
+    </div>
+    <div class="col-12">
       <div class="card border-danger">
         <div class="card-header text-danger"><i class="bi bi-trash"></i> Hapus Semua Data</div>
         <div class="card-body">
@@ -2890,6 +2941,44 @@ function viewBackup(view) {
       navigate('/');
     } catch (err) {
       toast('Gagal restore: ' + err.message, 'danger');
+    }
+  });
+
+  $('#btn-merge').addEventListener('click', async () => {
+    const files = Array.from($('#merge-files').files || []);
+    if (files.length === 0) { toast('Pilih minimal 1 file backup', 'danger'); return; }
+    const tagSource = $('#merge-tag-source').checked;
+    const resultEl = document.getElementById('merge-result');
+    resultEl.innerHTML = '<div class="alert alert-info small"><i class="bi bi-hourglass-split"></i> Memproses ' + files.length + ' file...</div>';
+    try {
+      const backups = [];
+      for (const f of files) {
+        try {
+          const text = await f.text();
+          const json = JSON.parse(text);
+          if (tagSource) json._source_label = f.name;
+          backups.push(json);
+        } catch (err) {
+          backups.push(null); // tag invalid
+        }
+      }
+      const stats = PKGDB.mergeBackups(backups, { tagSource });
+      resultEl.innerHTML = `
+        <div class="alert alert-success">
+          <strong><i class="bi bi-check-circle"></i> Berhasil gabung ${stats.files} file</strong>
+          <ul class="mb-0 mt-2 small">
+            <li>Guru ditambahkan: <strong>${stats.guru_added}</strong>, dedup (sudah ada): <strong>${stats.guru_dedup}</strong></li>
+            <li>Kamad ditambahkan: <strong>${stats.kamad_added}</strong></li>
+            <li>Penilaian: <strong>${stats.penilaian_added}</strong>, Skor: <strong>${stats.skor_added}</strong></li>
+            <li>Kehadiran: <strong>${stats.kehadiran_added}</strong>, PKB: <strong>${stats.pkb_added}</strong></li>
+            ${stats.errors.length ? `<li class="text-danger">Error: ${stats.errors.join(', ')}</li>` : ''}
+          </ul>
+          <div class="mt-2"><a href="#/rekap?tab=pkb-madrasah" class="btn btn-sm btn-success"><i class="bi bi-arrow-right-circle"></i> Lihat Rekap PKB Madrasah</a> <a href="#/rekap?tab=pkg" class="btn btn-sm btn-outline-success">Rekap PKG</a></div>
+        </div>`;
+      toast(`Gabung ${stats.files} file berhasil`);
+    } catch (err) {
+      console.error(err);
+      resultEl.innerHTML = '<div class="alert alert-danger small">Gagal gabung: ' + e(err.message) + '</div>';
     }
   });
 
