@@ -689,6 +689,8 @@ function viewGuruList(view) {
   <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
     <h4 class="mb-0"><i class="bi bi-people"></i> Data Guru <span class="badge bg-secondary">${rows.length}</span></h4>
     <div class="d-flex gap-2 flex-wrap">
+      <button id="btn-tpl-guru" class="btn btn-outline-secondary btn-sm" title="Download template Excel"><i class="bi bi-file-earmark-excel"></i> Template</button>
+      <button id="btn-imp-guru" class="btn btn-outline-success btn-sm" title="Import dari Excel"><i class="bi bi-upload"></i> Import</button>
       ${rows.length > 0 ? `<button id="btn-del-all-guru" class="btn btn-outline-danger btn-sm" title="Hapus semua data guru"><i class="bi bi-trash3"></i> Hapus Semua</button>` : ''}
       <a href="#/guru/new" class="btn btn-primary"><i class="bi bi-plus-lg"></i> Tambah Guru</a>
     </div>
@@ -757,6 +759,19 @@ function viewGuruList(view) {
     PKGDB.deleteAllGuru();
     toast(`${total} guru dan semua data terkait dihapus`);
     viewGuruList(view);
+  });
+
+  $('#btn-tpl-guru').addEventListener('click', () => {
+    downloadTemplateExcel('guru', GURU_COLUMNS, {
+      nama: 'Budi Santoso, S.Pd.', nip: '198501012010011001', nuptk: '1234567890123456',
+      nama_madrasah: 'MA Negeri 1 Jember', jenjang: 'MA', mapel_kelas: 'Matematika - X IPA 1',
+      tahun_pelajaran: '2025/2026',
+    });
+  });
+  $('#btn-imp-guru').addEventListener('click', () => {
+    openImportDialog('Import Data Guru dari Excel', GURU_COLUMNS, bulkImportGuru, () => {
+      viewGuruList(view);
+    });
   });
 }
 
