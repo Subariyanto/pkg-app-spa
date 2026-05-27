@@ -1587,7 +1587,8 @@ function viewInstrumen(view) {
   </div>
   <div class="alert alert-info small">
     Total ${window.INSTRUMEN.length} indikator dari ${PKGDB.ROLES.length} peran. Klik kepala kartu untuk lihat detail.
-    Klik tombol <i class="bi bi-pencil"></i> untuk edit nama kompetensi atau teks indikator (override per device, ngga merubah data master).
+    <strong>Klik teks indikator</strong> untuk lihat/isi <strong>Catatan Penggalian Data</strong> (metode, sumber, tips).
+    Tombol <i class="bi bi-pencil"></i> untuk edit nama kompetensi atau teks indikator (override per device).
     ${overCount.total > 0 ? `<br><strong>Editan aktif:</strong> ${overCount.kompetensi} kompetensi, ${overCount.indikator} indikator.` : ''}
   </div>
   ${PKGDB.ROLES.map(r => {
@@ -1621,12 +1622,19 @@ function viewInstrumen(view) {
                 </div>
                 <button class="btn btn-sm btn-outline-primary flex-shrink-0" data-edit-komp="${e(r.role_code)}" data-komp-no="${k.no}" data-komp-nama="${e(k.nama)}" data-komp-orig="${e(k.items[0]?._origKompetensi || k.nama)}" title="Edit nama kompetensi"><i class="bi bi-pencil"></i></button>
               </div>
-              <ol class="mb-0 small" style="padding-left: 1.5rem;">${k.items.map(it => `
+              <ol class="mb-0 small" style="padding-left: 1.5rem;">${k.items.map(it => {
+                const pg = PKGDB.getPenggalian(it.id);
+                const hasPg = !!pg;
+                return `
                 <li class="mb-1 d-flex align-items-start gap-2">
-                  <span class="flex-grow-1">${e(it.indikator)}${it.indikator !== it._origIndikator ? ' <span class="badge bg-warning text-dark" title="Sudah diedit" style="font-size:.65rem">edited</span>' : ''}</span>
+                  <span class="flex-grow-1">
+                    <a href="#" class="text-decoration-none text-body" data-pg-ind="${e(it.id)}" data-pg-text="${e(it.indikator)}" data-pg-role="${e(r.role_label)}" data-pg-komp="${e(k.nama)}" title="Klik untuk lihat catatan penggalian data">${e(it.indikator)}</a>
+                    ${hasPg ? ' <span class="badge bg-info text-dark" title="Ada catatan penggalian data" style="font-size:.65rem">📋 catatan</span>' : ''}
+                    ${it.indikator !== it._origIndikator ? ' <span class="badge bg-warning text-dark" title="Sudah diedit" style="font-size:.65rem">edited</span>' : ''}
+                  </span>
                   <button class="btn btn-sm btn-link p-0 text-secondary" data-edit-ind="${e(it.id)}" data-ind-text="${e(it.indikator)}" data-ind-orig="${e(it._origIndikator)}" title="Edit indikator"><i class="bi bi-pencil"></i></button>
-                </li>
-              `).join('')}</ol>
+                </li>`;
+              }).join('')}</ol>
             </div>`;
           }).join('')}
         </div>
@@ -1664,6 +1672,19 @@ function viewInstrumen(view) {
         id: editIndBtn.dataset.editInd,
         currentText: editIndBtn.dataset.indText,
         origText: editIndBtn.dataset.indOrig,
+        onSaved: () => viewInstrumen(view),
+      });
+      return;
+    }
+    const pgBtn = ev.target.closest('[data-pg-ind]');
+    if (pgBtn) {
+      ev.stopPropagation();
+      ev.preventDefault();
+      openPenggalianDialog({
+        id: pgBtn.dataset.pgInd,
+        indikator: pgBtn.dataset.pgText,
+        roleLabel: pgBtn.dataset.pgRole,
+        kompNama: pgBtn.dataset.pgKomp,
         onSaved: () => viewInstrumen(view),
       });
       return;
@@ -1777,6 +1798,84 @@ function openEditKompetensiDialog(opts) {
     if (!confirm('Kembalikan nama kompetensi ke bawaan?')) return;
     PKGDB.setKompetensiOverride(opts.roleCode, opts.kompNo, null);
     toast('Kompetensi dikembalikan');
+    modal.hide();
+    if (typeof opts.onSaved === 'function') opts.onSaved();
+  });
+}
+
+function openPenggalianDialog(opts) {
+  document.getElementById('pg-modal')?.remove();
+  const existing = PKGDB.getPenggalian(opts.id) || {};
+  const metode = Array.isArray(existing.metode) ? existing.metode : [];
+  const has = (k) => metode.includes(k);
+  const modalHtml = `
+  <div class="modal fade" id="pg-modal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title"><i class="bi bi-clipboard-data"></i> Catatan Penggalian Data</h5>
+          <button class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-2 small text-muted">${e(opts.roleLabel)} &middot; ${e(opts.kompNama)}</div>
+          <div class="alert alert-light border mb-3">
+            <div class="small text-muted mb-1">Indikator</div>
+            <div class="fw-semibold">${e(opts.indikator)}</div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Metode Penggalian Data</label>
+            <div class="d-flex flex-wrap gap-3">
+              <div class="form-check"><input class="form-check-input" type="checkbox" id="pg-m-obs" value="observasi" ${has('observasi') ? 'checked' : ''}><label class="form-check-label" for="pg-m-obs">👁️ Observasi</label></div>
+              <div class="form-check"><input class="form-check-input" type="checkbox" id="pg-m-doc" value="dokumen" ${has('dokumen') ? 'checked' : ''}><label class="form-check-label" for="pg-m-doc">📄 Studi Dokumen</label></div>
+              <div class="form-check"><input class="form-check-input" type="checkbox" id="pg-m-wwc" value="wawancara" ${has('wawancara') ? 'checked' : ''}><label class="form-check-label" for="pg-m-wwc">🗣️ Wawancara</label></div>
+              <div class="form-check"><input class="form-check-input" type="checkbox" id="pg-m-ang" value="angket" ${has('angket') ? 'checked' : ''}><label class="form-check-label" for="pg-m-ang">✍️ Angket</label></div>
+            </div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Sumber Data</label>
+            <textarea id="pg-sumber" class="form-control" rows="2" placeholder="Mis. RPP, jurnal mengajar, hasil supervisi, dokumen kurikulum...">${e(existing.sumber || '')}</textarea>
+          </div>
+          <div class="mb-2">
+            <label class="form-label">Catatan Penggalian Data</label>
+            <textarea id="pg-catatan" class="form-control" rows="6" placeholder="Tulis tips/petunjuk teknis: apa yang dicari, bukti yang diperlukan, pertanyaan kunci wawancara, dst.">${e(existing.catatan || '')}</textarea>
+          </div>
+          ${existing.updated_at ? `<div class="small text-muted mt-2"><i class="bi bi-clock-history"></i> Terakhir diubah: ${fmtDate(existing.updated_at)}</div>` : ''}
+        </div>
+        <div class="modal-footer d-flex justify-content-between">
+          ${existing.updated_at ? '<button class="btn btn-outline-danger btn-sm" id="pg-clear"><i class="bi bi-trash"></i> Hapus Catatan</button>' : '<span></span>'}
+          <div>
+            <button class="btn btn-light" data-bs-dismiss="modal">Tutup</button>
+            <button class="btn btn-primary" id="pg-save"><i class="bi bi-check-lg"></i> Simpan</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>`;
+  document.body.insertAdjacentHTML('beforeend', modalHtml);
+  const modalEl = document.getElementById('pg-modal');
+  const modal = new bootstrap.Modal(modalEl);
+  modal.show();
+  modalEl.addEventListener('hidden.bs.modal', () => modalEl.remove(), { once: true });
+  document.getElementById('pg-save').addEventListener('click', () => {
+    const m = [];
+    if (document.getElementById('pg-m-obs').checked) m.push('observasi');
+    if (document.getElementById('pg-m-doc').checked) m.push('dokumen');
+    if (document.getElementById('pg-m-wwc').checked) m.push('wawancara');
+    if (document.getElementById('pg-m-ang').checked) m.push('angket');
+    const data = {
+      metode: m,
+      sumber: document.getElementById('pg-sumber').value.trim(),
+      catatan: document.getElementById('pg-catatan').value.trim(),
+    };
+    PKGDB.setPenggalian(opts.id, data);
+    toast('Catatan penggalian disimpan');
+    modal.hide();
+    if (typeof opts.onSaved === 'function') opts.onSaved();
+  });
+  document.getElementById('pg-clear')?.addEventListener('click', () => {
+    if (!confirm('Hapus catatan penggalian untuk indikator ini?')) return;
+    PKGDB.setPenggalian(opts.id, null);
+    toast('Catatan dihapus');
     modal.hide();
     if (typeof opts.onSaved === 'function') opts.onSaved();
   });

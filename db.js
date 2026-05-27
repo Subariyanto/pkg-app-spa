@@ -11,6 +11,7 @@ const KEYS = {
   meta: 'pkg_v1_meta',
   instrumen_overrides: 'pkg_v1_instrumen_overrides',
   kompetensi_overrides: 'pkg_v1_kompetensi_overrides',
+  penggalian: 'pkg_v1_penggalian_data',
 };
 
 function load(key, def) {
@@ -114,6 +115,28 @@ function countOverrides() {
   const a = Object.keys(load(KEYS.instrumen_overrides, {})).length;
   const b = Object.keys(load(KEYS.kompetensi_overrides, {})).length;
   return { indikator: a, kompetensi: b, total: a + b };
+}
+
+// Catatan Penggalian Data per indikator
+// Stored as { [indikator_id]: { metode: ['observasi','dokumen','wawancara'], sumber: string, catatan: string, updated_at: ISO } }
+function getPenggalian(id) {
+  const all = load(KEYS.penggalian, {});
+  return all[id] || null;
+}
+function setPenggalian(id, data) {
+  const all = load(KEYS.penggalian, {});
+  if (!data || (!data.catatan && !data.sumber && (!data.metode || data.metode.length === 0))) {
+    delete all[id];
+  } else {
+    all[id] = { ...data, updated_at: new Date().toISOString() };
+  }
+  save(KEYS.penggalian, all);
+}
+function listPenggalian() {
+  return load(KEYS.penggalian, {});
+}
+function countPenggalian() {
+  return Object.keys(load(KEYS.penggalian, {})).length;
 }
 
 // === GURU ===============================================================
@@ -442,6 +465,7 @@ function exportAll() {
       meta: load(KEYS.meta, {}),
       instrumen_overrides: load(KEYS.instrumen_overrides, {}),
       kompetensi_overrides: load(KEYS.kompetensi_overrides, {}),
+      penggalian: load(KEYS.penggalian, {}),
     },
   };
 }
@@ -496,6 +520,7 @@ function importAll(json, mode) {
   save(KEYS.meta, d.meta || {});
   save(KEYS.instrumen_overrides, d.instrumen_overrides || {});
   save(KEYS.kompetensi_overrides, d.kompetensi_overrides || {});
+  save(KEYS.penggalian, d.penggalian || {});
   return { mode: 'replace', count: (d.guru || []).length };
 }
 
@@ -528,6 +553,7 @@ window.PKGDB = {
   KEYS, ROLES,
   getRoleMeta, getInstrumen,
   setIndikatorOverride, setKompetensiOverride, resetAllOverrides, countOverrides,
+  getPenggalian, setPenggalian, listPenggalian, countPenggalian,
   listGuru, getGuru, findGuruByNIP, saveGuru, deleteGuru, deleteAllGuru,
   listKamad, getKamad, saveKamad, deleteKamad, syncKamadFromGuru,
   listPenilaianByGuru, getOrCreatePenilaian, updatePenilaianMeta,
