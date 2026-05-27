@@ -174,6 +174,16 @@ function deleteGuru(id) {
   save(KEYS.pkb, load(KEYS.pkb, []).filter(p => p.guru_id !== id));
 }
 
+function deleteAllGuru() {
+  // Hapus semua guru + semua data turunannya (penilaian, skor, kehadiran, pkb).
+  // Data kamad TIDAK ikut terhapus.
+  save(KEYS.guru, []);
+  save(KEYS.penilaian, []);
+  save(KEYS.skor, []);
+  save(KEYS.kehadiran, []);
+  save(KEYS.pkb, []);
+}
+
 // === KAMAD (Kepala Madrasah) ===========================================
 function listKamad(query) {
   const all = load(KEYS.kamad, []);
@@ -518,7 +528,7 @@ window.PKGDB = {
   KEYS, ROLES,
   getRoleMeta, getInstrumen,
   setIndikatorOverride, setKompetensiOverride, resetAllOverrides, countOverrides,
-  listGuru, getGuru, findGuruByNIP, saveGuru, deleteGuru,
+  listGuru, getGuru, findGuruByNIP, saveGuru, deleteGuru, deleteAllGuru,
   listKamad, getKamad, saveKamad, deleteKamad, syncKamadFromGuru,
   listPenilaianByGuru, getOrCreatePenilaian, updatePenilaianMeta,
   getSkorMap, setSkor, countSkor,

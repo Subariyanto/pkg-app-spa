@@ -688,7 +688,10 @@ function viewGuruList(view) {
   view.innerHTML = `
   <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
     <h4 class="mb-0"><i class="bi bi-people"></i> Data Guru <span class="badge bg-secondary">${rows.length}</span></h4>
-    <a href="#/guru/new" class="btn btn-primary"><i class="bi bi-plus-lg"></i> Tambah Guru</a>
+    <div class="d-flex gap-2 flex-wrap">
+      ${rows.length > 0 ? `<button id="btn-del-all-guru" class="btn btn-outline-danger btn-sm" title="Hapus semua data guru"><i class="bi bi-trash3"></i> Hapus Semua</button>` : ''}
+      <a href="#/guru/new" class="btn btn-primary"><i class="bi bi-plus-lg"></i> Tambah Guru</a>
+    </div>
   </div>
   <div class="card mb-3"><div class="card-body py-2">
     <input id="search" class="form-control form-control-sm" placeholder="Cari nama, NIP, atau madrasah..." value="${e(q)}">
@@ -742,6 +745,18 @@ function viewGuruList(view) {
       toast('Guru dihapus');
       viewGuruList(view);
     });
+  });
+
+  $('#btn-del-all-guru')?.addEventListener('click', () => {
+    const total = rows.length;
+    const stats = PKGDB.getStats();
+    const msg = `⚠️ HAPUS SEMUA DATA GURU?\n\nAkan menghapus:\n- ${total} guru\n- ${stats.penilaian || 0} penilaian (semua skor & data terkait)\n- Data kehadiran & PKB seluruh guru\n\nData kepala madrasah TIDAK terhapus.\nAksi ini TIDAK BISA DIBATALKAN.\n\nKlik OK untuk lanjut, lalu konfirmasi sekali lagi.`;
+    if (!confirm(msg)) return;
+    const typed = prompt(`Untuk konfirmasi, ketik: HAPUS SEMUA`);
+    if (typed !== 'HAPUS SEMUA') { toast('Dibatalkan, teks konfirmasi tidak cocok', 'warning'); return; }
+    PKGDB.deleteAllGuru();
+    toast(`${total} guru dan semua data terkait dihapus`);
+    viewGuruList(view);
   });
 }
 
