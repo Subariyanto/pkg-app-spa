@@ -729,7 +729,10 @@ function viewInstrumen(view) {
   const { query } = parseHash();
   const focusRole = query.role || null;
   view.innerHTML = `
-  <h4 class="mb-3"><i class="bi bi-list-check"></i> Instrumen PKG</h4>
+  <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <h4 class="mb-0"><i class="bi bi-list-check"></i> Instrumen PKG</h4>
+    <a href="#/" class="btn btn-sm btn-outline-secondary"><i class="bi bi-arrow-left"></i> Kembali ke Beranda</a>
+  </div>
   <div class="alert alert-info small">Total ${window.INSTRUMEN.length} indikator dari ${PKGDB.ROLES.length} peran. Klik kepala kartu untuk lihat detail.</div>
   ${PKGDB.ROLES.map(r => {
     const items = PKGDB.getInstrumen(r.role_code);
