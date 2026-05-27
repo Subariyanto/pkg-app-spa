@@ -1768,7 +1768,8 @@ function viewRekap(view) {
 
   <ul class="nav nav-tabs mb-3">
     <li class="nav-item"><a class="nav-link ${tab === 'pkg' ? 'active' : ''}" href="#/rekap?tab=pkg"><i class="bi bi-clipboard-check"></i> Penilaian PKG</a></li>
-    <li class="nav-item"><a class="nav-link ${tab === 'pkb' ? 'active' : ''}" href="#/rekap?tab=pkb"><i class="bi bi-mortarboard"></i> PKB</a></li>
+    <li class="nav-item"><a class="nav-link ${tab === 'pkb' ? 'active' : ''}" href="#/rekap?tab=pkb"><i class="bi bi-mortarboard"></i> PKB Guru</a></li>
+    <li class="nav-item"><a class="nav-link ${tab === 'pkb-madrasah' ? 'active' : ''}" href="#/rekap?tab=pkb-madrasah"><i class="bi bi-building"></i> PKB Madrasah</a></li>
     <li class="nav-item"><a class="nav-link ${tab === 'absen' ? 'active' : ''}" href="#/rekap?tab=absen"><i class="bi bi-calendar-check"></i> Absensi</a></li>
   </ul>
 
@@ -1777,17 +1778,20 @@ function viewRekap(view) {
   // Render tab body
   const content = document.getElementById('rekap-content');
   if (tab === 'pkb') renderRekapPKB(content, data);
+  else if (tab === 'pkb-madrasah') renderRekapPKBMadrasah(content, data);
   else if (tab === 'absen') renderRekapAbsen(content, data);
   else renderRekapPKG(content, data, tugasGuru);
 
   $('#btn-csv').addEventListener('click', () => {
     if (tab === 'pkb') exportRekapPKBCSV(data);
+    else if (tab === 'pkb-madrasah') exportRekapPKBMadrasahCSV(data);
     else if (tab === 'absen') exportRekapAbsenCSV(data);
     else exportRekapPKGCSV(data, tugasGuru);
   });
   $('#btn-xlsx').addEventListener('click', async () => {
     try {
       if (tab === 'pkb') await exportRekapPKBXLSX(data);
+      else if (tab === 'pkb-madrasah') await exportRekapPKBMadrasahXLSX(data);
       else if (tab === 'absen') await exportRekapAbsenXLSX(data);
       else await exportRekapPKGXLSX(data, tugasGuru);
       toast('Excel terdownload');
@@ -1797,7 +1801,7 @@ function viewRekap(view) {
     }
   });
   $('#btn-print').addEventListener('click', () => {
-    const titleMap = { pkg: 'Rekap Penilaian PKG', pkb: 'Rekap PKB', absen: 'Rekap Absensi Guru' };
+    const titleMap = { pkg: 'Rekap Penilaian PKG', pkb: 'Rekap PKB Guru', 'pkb-madrasah': 'Rekap PKB Madrasah', absen: 'Rekap Absensi Guru' };
     printRekapTab(titleMap[tab] || 'Rekap', content.innerHTML);
   });
 }
@@ -1897,6 +1901,173 @@ function renderRekapPKB(target, data) {
       </tbody>
     </table>
   </div></div>`;
+}
+
+// === PKB MADRASAH (3 prioritas terlemah agregat per madrasah) ===========
+function computePKBMadrasah(data) {
+  // data = list guru dengan field peran (penilaian summary)
+  // Group by madrasah
+  const byMadrasah = {};
+  for (const g of data) {
+    const m = (g.nama_madrasah || '').trim() || '(Tidak ada madrasah)';
+    if (!byMadrasah[m]) byMadrasah[m] = [];
+    byMadrasah[m].push(g);
+  }
+  const result = [];
+  for (const madrasah of Object.keys(byMadrasah).sort()) {
+    const gurus = byMadrasah[madrasah];
+    // Agregat skor per kompetensi (role+komp_no) across all guru di madrasah
+    const kompAgg = {}; // key: role_code|komp_no -> { role_code, role_label, komp_no, komp_nama, sumPct, count }
+    for (const g of gurus) {
+      const pens = PKGDB.listPenilaianByGuru(g.id);
+      for (const pen of pens) {
+        const meta = PKGDB.getRoleMeta(pen.role_code);
+        if (!meta) continue;
+        const instrumen = PKGDB.getInstrumen(pen.role_code);
+        const skorMap = PKGDB.getSkorMap(pen.id);
+        const groupedKomp = {};
+        for (const it of instrumen) {
+          if (!groupedKomp[it.kompetensi_no]) {
+            groupedKomp[it.kompetensi_no] = { komp_no: it.kompetensi_no, komp_nama: it.kompetensi_nama, items: [] };
+          }
+          groupedKomp[it.kompetensi_no].items.push(it);
+        }
+        for (const k of Object.values(groupedKomp)) {
+          let sum = 0, count = 0;
+          for (const it of k.items) {
+            const s = skorMap[it.id];
+            if (typeof s === 'number') { sum += s; count++; }
+          }
+          if (count === 0) continue;
+          const maks = k.items.length * meta.max_score;
+          const pct = maks ? (sum / maks) * 100 : 0;
+          const key = `${pen.role_code}|${k.komp_no}`;
+          if (!kompAgg[key]) {
+            kompAgg[key] = {
+              role_code: pen.role_code,
+              role_label: meta.role_label,
+              komp_no: k.komp_no,
+              komp_nama: k.komp_nama,
+              sumPct: 0,
+              count: 0,
+              guruNames: new Set(),
+            };
+          }
+          kompAgg[key].sumPct += pct;
+          kompAgg[key].count += 1;
+          kompAgg[key].guruNames.add(g.nama);
+        }
+      }
+    }
+    const stats = Object.values(kompAgg)
+      .map(k => ({
+        ...k,
+        avgPct: k.count ? k.sumPct / k.count : 0,
+        guruCount: k.guruNames.size,
+      }))
+      .filter(k => k.count > 0)
+      .sort((a, b) => a.avgPct - b.avgPct)
+      .slice(0, 3);
+    result.push({
+      madrasah,
+      jumlahGuru: gurus.length,
+      jumlahDinilai: gurus.filter(g => PKGDB.listPenilaianByGuru(g.id).some(p => PKGDB.countSkor(p.id) > 0)).length,
+      prioritas: stats,
+    });
+  }
+  return result;
+}
+
+function renderRekapPKBMadrasah(target, data) {
+  const list = computePKBMadrasah(data);
+  const totalMadrasah = list.length;
+  const totalAdaPrioritas = list.filter(m => m.prioritas.length > 0).length;
+  let html = '';
+  let n = 0;
+  for (const m of list) {
+    if (m.prioritas.length === 0) {
+      n++;
+      html += `<tr>
+        <td>${n}</td>
+        <td><strong>${e(m.madrasah)}</strong><div class="small text-muted">${m.jumlahGuru} guru</div></td>
+        <td colspan="5" class="text-muted small">Belum ada hasil penilaian guru di madrasah ini</td>
+      </tr>`;
+      continue;
+    }
+    m.prioritas.forEach((p, j) => {
+      n++;
+      const rencana = pkbRencanaFor({ role_code: p.role_code, role_label: p.role_label, komp_no: p.komp_no, komp_nama: p.komp_nama, pct: p.avgPct });
+      const targetPct = Math.min(100, Math.ceil((p.avgPct + 15) / 5) * 5);
+      const target_text = `Skor rata-rata madrasah naik ke ≥ ${targetPct}% (saat ini ${p.avgPct.toFixed(1)}%). Pelibatan ${p.guruCount} guru.`;
+      html += `<tr>
+        <td>${n}</td>
+        ${j === 0 ? `
+          <td rowspan="${m.prioritas.length}"><strong>${e(m.madrasah)}</strong><div class="small text-muted">${m.jumlahGuru} guru &middot; ${m.jumlahDinilai} dinilai</div></td>
+        ` : ''}
+        <td class="text-center"><span class="badge bg-primary">P${j + 1}</span></td>
+        <td class="small" style="max-width:280px; white-space:pre-wrap">${e(p.role_label)} - K${p.komp_no}: ${e(p.komp_nama)} (${p.avgPct.toFixed(1)}%)</td>
+        <td class="small" style="max-width:280px; white-space:pre-wrap">${e(rencana)}</td>
+        <td class="small" style="max-width:280px; white-space:pre-wrap">${e(target_text)}</td>
+        <td class="small text-center">${p.guruCount}</td>
+      </tr>`;
+    });
+  }
+  target.innerHTML = `
+  <div class="alert alert-info py-2 small"><i class="bi bi-info-circle"></i> Rekomendasi PKB tingkat madrasah: 3 kompetensi terlemah agregat dari semua guru. Total ${totalAdaPrioritas} dari ${totalMadrasah} madrasah punya prioritas tergenerate.</div>
+  <div class="card"><div class="table-responsive">
+    <table class="table table-sm table-hover mb-0 align-middle">
+      <thead class="table-light"><tr>
+        <th>#</th><th>Madrasah</th><th>Prioritas</th><th>Kompetensi</th><th>Rencana Kegiatan</th><th>Target</th><th class="small">Jml Guru</th>
+      </tr></thead>
+      <tbody>
+        ${html || '<tr><td colspan="7" class="text-center text-muted py-4">Belum ada data penilaian. Isi penilaian guru dulu untuk dapat rekomendasi.</td></tr>'}
+      </tbody>
+    </table>
+  </div></div>`;
+}
+
+function exportRekapPKBMadrasahCSV(data) {
+  const list = computePKBMadrasah(data);
+  const lines = ['No;Madrasah;Jml Guru;Jml Dinilai;Prioritas;Peran;No Kompetensi;Nama Kompetensi;Rata2 Skor (%);Rencana Kegiatan;Target;Jml Guru Terlibat'];
+  let i = 0;
+  for (const m of list) {
+    if (m.prioritas.length === 0) {
+      i++;
+      lines.push([i, m.madrasah, m.jumlahGuru, m.jumlahDinilai, '', '', '', '', '', '', '', ''].map(csvEsc).join(';'));
+      continue;
+    }
+    m.prioritas.forEach((p, j) => {
+      i++;
+      const rencana = pkbRencanaFor({ role_code: p.role_code, role_label: p.role_label, komp_no: p.komp_no, komp_nama: p.komp_nama, pct: p.avgPct });
+      const targetPct = Math.min(100, Math.ceil((p.avgPct + 15) / 5) * 5);
+      const target_text = `Skor rata-rata madrasah naik ke >= ${targetPct}% (saat ini ${p.avgPct.toFixed(1)}%)`;
+      lines.push([i, m.madrasah, m.jumlahGuru, m.jumlahDinilai, j + 1, p.role_label, p.komp_no, p.komp_nama, p.avgPct.toFixed(2), rencana, target_text, p.guruCount].map(csvEsc).join(';'));
+    });
+  }
+  downloadCSV(`rekap-pkb-madrasah-${new Date().toISOString().slice(0, 10)}.csv`, lines);
+}
+
+async function exportRekapPKBMadrasahXLSX(data) {
+  const list = computePKBMadrasah(data);
+  const headers = ['No', 'Madrasah', 'Jml Guru', 'Jml Dinilai', 'Prioritas', 'Peran', 'No Komp', 'Nama Kompetensi', 'Rata2 (%)', 'Rencana Kegiatan', 'Target', 'Guru Terlibat'];
+  const widths = [5, 30, 8, 10, 9, 22, 8, 35, 9, 40, 40, 10];
+  const rows = [];
+  let i = 0;
+  for (const m of list) {
+    if (m.prioritas.length === 0) {
+      i++;
+      rows.push([i, m.madrasah, m.jumlahGuru, m.jumlahDinilai, '', '', '', '', '', '', '', '']);
+      continue;
+    }
+    m.prioritas.forEach((p, j) => {
+      i++;
+      const rencana = pkbRencanaFor({ role_code: p.role_code, role_label: p.role_label, komp_no: p.komp_no, komp_nama: p.komp_nama, pct: p.avgPct });
+      const targetPct = Math.min(100, Math.ceil((p.avgPct + 15) / 5) * 5);
+      const target_text = `Skor rata-rata naik ke >= ${targetPct}% (saat ini ${p.avgPct.toFixed(1)}%)`;
+      rows.push([i, m.madrasah, m.jumlahGuru, m.jumlahDinilai, j + 1, p.role_label, p.komp_no, p.komp_nama, Number(p.avgPct.toFixed(2)), rencana, target_text, p.guruCount]);
+    });
+  }
+  await buildXLSX(`rekap-pkb-madrasah-${new Date().toISOString().slice(0, 10)}.xlsx`, 'PKB Madrasah', headers, rows, widths);
 }
 
 function renderRekapAbsen(target, data) {
