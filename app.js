@@ -61,7 +61,15 @@ function renderShell() {
           <li class="nav-item"><a class="nav-link" href="#/rekap"><i class="bi bi-table"></i> Rekap</a></li>
           <li class="nav-item"><a class="nav-link" href="#/import"><i class="bi bi-cloud-upload"></i> Import</a></li>
           <li class="nav-item"><a class="nav-link" href="#/instrumen"><i class="bi bi-list-check"></i> Instrumen</a></li>
-          <li class="nav-item"><a class="nav-link" href="#/backup"><i class="bi bi-shield-check"></i> Backup</a></li>
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown"><i class="bi bi-shield-check"></i> Backup</a>
+            <ul class="dropdown-menu">
+              <li><a class="dropdown-item" href="#/backup"><i class="bi bi-building"></i> Backup Madrasah</a></li>
+              <li><a class="dropdown-item" href="#/backup-kabupaten"><i class="bi bi-geo-alt-fill"></i> Backup Kabupaten / KKM</a></li>
+              <li><hr class="dropdown-divider"></li>
+              <li><a class="dropdown-item text-danger" href="#/backup-clear"><i class="bi bi-trash"></i> Hapus Semua Data</a></li>
+            </ul>
+          </li>
         </ul>
         <span class="navbar-text small text-white-50">Kemenag Jember &middot; Pokjawas</span>
       </div>
@@ -100,7 +108,9 @@ function render() {
   if (s0 === 'penilaian') return viewPenilaianHub(view);
   if (s0 === 'instrumen') return viewInstrumen(view);
   if (s0 === 'import') return viewImport(view);
-  if (s0 === 'backup') return viewBackup(view);
+  if (s0 === 'backup') return viewBackupMadrasah(view);
+  if (s0 === 'backup-kabupaten') return viewBackupKabupaten(view);
+  if (s0 === 'backup-clear') return viewBackupClear(view);
 
   view.innerHTML = `<div class="alert alert-warning">Halaman tidak ditemukan. <a href="#/">Beranda</a></div>`;
 }
@@ -2851,30 +2861,31 @@ function viewImport(view) {
 }
 
 // === BACKUP / RESTORE ===================================================
-function viewBackup(view) {
+function viewBackupMadrasah(view) {
   const stats = PKGDB.getStats();
   view.innerHTML = `
-  <h4 class="mb-3"><i class="bi bi-shield-check"></i> Backup &amp; Restore</h4>
+  <h4 class="mb-1"><i class="bi bi-building"></i> Backup Madrasah</h4>
+  <p class="text-muted small mb-3">Untuk kamad / pengawas: backup data PKG <strong>1 madrasah</strong> dari device ini, lalu kirim file ke pengawas KKM/Kabupaten.</p>
   <div class="alert alert-warning small">
     <i class="bi bi-exclamation-triangle"></i>
-    <strong>Penting:</strong> Data tersimpan di browser ini saja. Kalau Bapak ganti device atau clear browser, data hilang. Backup berkala &amp; restore di device lain pakai fitur ini.
+    <strong>Penting:</strong> Data tersimpan di browser ini saja. Kalau ganti device atau clear browser, data hilang. Backup berkala &amp; restore di device lain pakai fitur ini.
   </div>
 
   <div class="row g-3">
     <div class="col-md-6">
       <div class="card h-100">
-        <div class="card-header"><i class="bi bi-download"></i> Export (Backup)</div>
+        <div class="card-header bg-primary text-white"><i class="bi bi-download"></i> Export (Backup) Madrasah</div>
         <div class="card-body">
-          <p class="small text-muted">Download seluruh data PKG (${stats.guru} guru, ${stats.penilaian} penilaian) sebagai 1 file JSON. Simpan di Google Drive / WhatsApp / email untuk arsip.</p>
+          <p class="small text-muted">Download seluruh data PKG di browser ini (${stats.guru} guru, ${stats.penilaian} penilaian) sebagai 1 file JSON. Simpan di Google Drive / WhatsApp / email untuk arsip atau kirim ke pengawas KKM.</p>
           <button id="btn-export" class="btn btn-primary"><i class="bi bi-download"></i> Download Backup</button>
         </div>
       </div>
     </div>
     <div class="col-md-6">
       <div class="card h-100">
-        <div class="card-header"><i class="bi bi-upload"></i> Import (Restore)</div>
+        <div class="card-header bg-success text-white"><i class="bi bi-upload"></i> Import (Restore) Madrasah</div>
         <div class="card-body">
-          <p class="small text-muted">Upload file backup JSON. Mode <strong>Replace</strong> = ganti seluruh data. Mode <strong>Merge</strong> = gabung dengan data sekarang (dedup by NIP).</p>
+          <p class="small text-muted">Upload <strong>1 file</strong> backup JSON. Mode <strong>Replace</strong> = ganti seluruh data. Mode <strong>Merge</strong> = gabung dengan data sekarang (dedup by NIP).</p>
           <input type="file" id="restore-file" class="form-control mb-2" accept=".json">
           <div class="form-check mb-2">
             <input class="form-check-input" type="radio" name="mode" value="replace" id="mode-replace" checked>
@@ -2889,30 +2900,9 @@ function viewBackup(view) {
       </div>
     </div>
     <div class="col-12">
-      <div class="card border-success">
-        <div class="card-header bg-success text-white"><i class="bi bi-files"></i> Gabung Backup dari Banyak Madrasah (untuk KKM/Kabupaten)</div>
-        <div class="card-body">
-          <p class="small text-muted mb-2">
-            <strong>Mode pengawas / ketua KKM / ketua Pokjawas Kabupaten:</strong> upload <strong>banyak file backup</strong> JSON sekaligus dari madrasah/KKM binaan. Sistem akan gabung semua data ke browser ini, dedup guru by NIP, lalu rekap bisa dilihat di menu Rekap (filter & grouping by KKM / Kabupaten tersedia di tab PKB Madrasah). Aman: data yang sudah ada tidak dihapus, hanya ditambah.
-          </p>
-          <div class="alert alert-light small mb-2">Tip: kumpulkan file <code>pkg-backup-*.json</code> dari semua kamad/pengawas, taruh di 1 folder, lalu pilih semuanya di sini (<code>Ctrl+A</code> di dialog file).</div>
-          <input type="file" id="merge-files" class="form-control mb-2" accept=".json" multiple>
-          <div class="form-check mb-2">
-            <input class="form-check-input" type="checkbox" id="merge-tag-source" checked>
-            <label class="form-check-label small" for="merge-tag-source">Tandai data dengan asal file (untuk audit trail)</label>
-          </div>
-          <button id="btn-merge" class="btn btn-success"><i class="bi bi-files"></i> Gabung Backup Terpilih</button>
-          <div id="merge-result" class="mt-3"></div>
-        </div>
-      </div>
-    </div>
-    <div class="col-12">
-      <div class="card border-danger">
-        <div class="card-header text-danger"><i class="bi bi-trash"></i> Hapus Semua Data</div>
-        <div class="card-body">
-          <p class="small text-muted">Hapus seluruh data PKG di browser ini. Pastikan sudah backup dulu!</p>
-          <button id="btn-clear" class="btn btn-outline-danger"><i class="bi bi-trash"></i> Hapus Semua</button>
-        </div>
+      <div class="alert alert-info small mb-0">
+        <i class="bi bi-info-circle"></i>
+        Untuk <strong>menggabungkan banyak backup</strong> dari beberapa madrasah jadi rekap KKM/Kabupaten, gunakan menu <a href="#/backup-kabupaten" class="alert-link"><i class="bi bi-geo-alt-fill"></i> Backup Kabupaten / KKM</a>.
       </div>
     </div>
   </div>`;
@@ -2922,7 +2912,8 @@ function viewBackup(view) {
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    a.href = url; a.download = `pkg-backup-${new Date().toISOString().slice(0,10)}.json`;
+    const namaFile = (PKGDB.listKamad()[0]?.nama_madrasah || 'madrasah').replace(/[^a-z0-9]+/gi, '-').toLowerCase();
+    a.href = url; a.download = `pkg-backup-${namaFile}-${new Date().toISOString().slice(0, 10)}.json`;
     a.click();
     URL.revokeObjectURL(url);
     toast('Backup didownload');
@@ -2943,6 +2934,66 @@ function viewBackup(view) {
       toast('Gagal restore: ' + err.message, 'danger');
     }
   });
+}
+
+function viewBackupKabupaten(view) {
+  const stats = PKGDB.getStats();
+  // Hitung scope info
+  const allGuru = PKGDB.listGuru();
+  const madrasahSet = new Set(allGuru.map(g => (g.nama_madrasah || '').trim()).filter(Boolean));
+  const kkmSet = new Set(allGuru.map(g => (g.kkm || '').trim()).filter(Boolean));
+  const kabSet = new Set(allGuru.map(g => (g.kabupaten || '').trim()).filter(Boolean));
+
+  view.innerHTML = `
+  <h4 class="mb-1"><i class="bi bi-geo-alt-fill"></i> Backup Kabupaten / KKM</h4>
+  <p class="text-muted small mb-3">Untuk pengawas KKM / Ketua Pokjawas Kabupaten: gabung <strong>banyak file backup</strong> dari beberapa madrasah jadi 1 rekap KKM atau Kabupaten.</p>
+
+  <div class="alert alert-info small">
+    <i class="bi bi-info-circle"></i>
+    Status data sekarang di browser ini: <strong>${madrasahSet.size}</strong> madrasah, <strong>${kkmSet.size}</strong> KKM, <strong>${kabSet.size}</strong> kabupaten, total ${stats.guru} guru.
+  </div>
+
+  <div class="row g-3">
+    <div class="col-12">
+      <div class="card border-success">
+        <div class="card-header bg-success text-white"><i class="bi bi-files"></i> Gabung Backup dari Banyak Madrasah</div>
+        <div class="card-body">
+          <p class="small text-muted mb-2">
+            Upload <strong>banyak file backup</strong> JSON sekaligus dari madrasah/KKM binaan. Sistem dedup guru by NIP, semua penilaian/skor/PKB ID di-remap. Aman: data yang sudah ada tidak dihapus.
+          </p>
+          <div class="alert alert-light small mb-2">Tip: kumpulkan file <code>pkg-backup-*.json</code> dari semua kamad/pengawas, taruh di 1 folder, lalu pilih semuanya di sini (<code>Ctrl+A</code> di dialog file).</div>
+          <input type="file" id="merge-files" class="form-control mb-2" accept=".json" multiple>
+          <div class="form-check mb-2">
+            <input class="form-check-input" type="checkbox" id="merge-tag-source" checked>
+            <label class="form-check-label small" for="merge-tag-source">Tandai data dengan asal file (audit trail)</label>
+          </div>
+          <button id="btn-merge" class="btn btn-success"><i class="bi bi-files"></i> Gabung Backup Terpilih</button>
+          <div id="merge-result" class="mt-3"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-6">
+      <div class="card h-100">
+        <div class="card-header"><i class="bi bi-download"></i> Export Agregat (KKM / Kabupaten)</div>
+        <div class="card-body">
+          <p class="small text-muted">Setelah gabung dari banyak madrasah, download backup agregat untuk arsip pengawas KKM/Kabupaten. Filename otomatis pakai label scope.</p>
+          <button id="btn-export-agg" class="btn btn-outline-primary"><i class="bi bi-download"></i> Download Backup Agregat</button>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-6">
+      <div class="card h-100">
+        <div class="card-header"><i class="bi bi-arrow-right-circle"></i> Lanjut ke Rekap</div>
+        <div class="card-body">
+          <p class="small text-muted">Setelah gabung backup, buka menu Rekap untuk lihat 3 prioritas PKB per madrasah / KKM / kabupaten.</p>
+          <a href="#/rekap?tab=pkb-madrasah&scope=madrasah" class="btn btn-sm btn-outline-success"><i class="bi bi-building"></i> Per Madrasah</a>
+          <a href="#/rekap?tab=pkb-madrasah&scope=kkm" class="btn btn-sm btn-outline-success"><i class="bi bi-diagram-3"></i> Per KKM</a>
+          <a href="#/rekap?tab=pkb-madrasah&scope=kabupaten" class="btn btn-sm btn-outline-success"><i class="bi bi-geo-alt-fill"></i> Per Kabupaten</a>
+        </div>
+      </div>
+    </div>
+  </div>`;
 
   $('#btn-merge').addEventListener('click', async () => {
     const files = Array.from($('#merge-files').files || []);
@@ -2959,28 +3010,72 @@ function viewBackup(view) {
           if (tagSource) json._source_label = f.name;
           backups.push(json);
         } catch (err) {
-          backups.push(null); // tag invalid
+          backups.push(null);
         }
       }
-      const stats = PKGDB.mergeBackups(backups, { tagSource });
+      const result = PKGDB.mergeBackups(backups, { tagSource });
       resultEl.innerHTML = `
         <div class="alert alert-success">
-          <strong><i class="bi bi-check-circle"></i> Berhasil gabung ${stats.files} file</strong>
+          <strong><i class="bi bi-check-circle"></i> Berhasil gabung ${result.files} file</strong>
           <ul class="mb-0 mt-2 small">
-            <li>Guru ditambahkan: <strong>${stats.guru_added}</strong>, dedup (sudah ada): <strong>${stats.guru_dedup}</strong></li>
-            <li>Kamad ditambahkan: <strong>${stats.kamad_added}</strong></li>
-            <li>Penilaian: <strong>${stats.penilaian_added}</strong>, Skor: <strong>${stats.skor_added}</strong></li>
-            <li>Kehadiran: <strong>${stats.kehadiran_added}</strong>, PKB: <strong>${stats.pkb_added}</strong></li>
-            ${stats.errors.length ? `<li class="text-danger">Error: ${stats.errors.join(', ')}</li>` : ''}
+            <li>Guru ditambahkan: <strong>${result.guru_added}</strong>, dedup (sudah ada): <strong>${result.guru_dedup}</strong></li>
+            <li>Kamad ditambahkan: <strong>${result.kamad_added}</strong></li>
+            <li>Penilaian: <strong>${result.penilaian_added}</strong>, Skor: <strong>${result.skor_added}</strong></li>
+            <li>Kehadiran: <strong>${result.kehadiran_added}</strong>, PKB: <strong>${result.pkb_added}</strong></li>
+            ${result.errors.length ? `<li class="text-danger">Error: ${result.errors.join(', ')}</li>` : ''}
           </ul>
-          <div class="mt-2"><a href="#/rekap?tab=pkb-madrasah" class="btn btn-sm btn-success"><i class="bi bi-arrow-right-circle"></i> Lihat Rekap PKB Madrasah</a> <a href="#/rekap?tab=pkg" class="btn btn-sm btn-outline-success">Rekap PKG</a></div>
+          <div class="mt-2">
+            <a href="#/rekap?tab=pkb-madrasah&scope=madrasah" class="btn btn-sm btn-success"><i class="bi bi-building"></i> Rekap Per Madrasah</a>
+            <a href="#/rekap?tab=pkb-madrasah&scope=kkm" class="btn btn-sm btn-success"><i class="bi bi-diagram-3"></i> Rekap Per KKM</a>
+            <a href="#/rekap?tab=pkb-madrasah&scope=kabupaten" class="btn btn-sm btn-success"><i class="bi bi-geo-alt-fill"></i> Rekap Per Kabupaten</a>
+          </div>
         </div>`;
-      toast(`Gabung ${stats.files} file berhasil`);
+      toast(`Gabung ${result.files} file berhasil`);
     } catch (err) {
       console.error(err);
       resultEl.innerHTML = '<div class="alert alert-danger small">Gagal gabung: ' + e(err.message) + '</div>';
     }
   });
+
+  $('#btn-export-agg').addEventListener('click', () => {
+    const data = PKGDB.exportAll();
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const allGuru = PKGDB.listGuru();
+    const kabSet = new Set(allGuru.map(g => (g.kabupaten || '').trim()).filter(Boolean));
+    const kkmSet = new Set(allGuru.map(g => (g.kkm || '').trim()).filter(Boolean));
+    let label = 'agregat';
+    if (kabSet.size === 1) label = 'kab-' + Array.from(kabSet)[0].replace(/[^a-z0-9]+/gi, '-').toLowerCase();
+    else if (kkmSet.size === 1) label = 'kkm-' + Array.from(kkmSet)[0].replace(/[^a-z0-9]+/gi, '-').toLowerCase();
+    a.href = url; a.download = `pkg-backup-${label}-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast('Backup agregat didownload');
+  });
+}
+
+function viewBackupClear(view) {
+  const stats = PKGDB.getStats();
+  view.innerHTML = `
+  <h4 class="mb-1 text-danger"><i class="bi bi-trash"></i> Hapus Semua Data</h4>
+  <p class="text-muted small mb-3">Tindakan ini akan menghapus seluruh data PKG di browser ini.</p>
+
+  <div class="alert alert-danger">
+    <h5 class="alert-heading"><i class="bi bi-exclamation-triangle"></i> Bahaya!</h5>
+    <p class="mb-2">Akan dihapus permanen:</p>
+    <ul class="mb-2">
+      <li><strong>${stats.guru}</strong> data guru</li>
+      <li><strong>${stats.penilaian}</strong> hasil penilaian + skor</li>
+      <li>Data kamad, kehadiran, PKB, override instrumen, catatan penggalian</li>
+    </ul>
+    <p class="mb-0"><strong>Pastikan Bapak sudah download Backup dulu!</strong> Tindakan ini tidak bisa di-undo.</p>
+  </div>
+
+  <div class="d-flex gap-2">
+    <a href="#/backup" class="btn btn-outline-primary"><i class="bi bi-download"></i> Download Backup Dulu</a>
+    <button id="btn-clear" class="btn btn-danger"><i class="bi bi-trash"></i> Hapus Semua Data</button>
+  </div>`;
 
   $('#btn-clear').addEventListener('click', () => {
     if (!confirm('YAKIN hapus semua data? Pastikan sudah backup. Tindakan ini tidak bisa dibatalkan.')) return;

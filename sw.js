@@ -1,6 +1,6 @@
 // sw.js - Service worker for PKG app
 // Strategy: network-first for app code (instant updates), cache-first for static assets.
-const CACHE_VERSION = 'pkg-v1-2026-05-27-r27';
+const CACHE_VERSION = 'pkg-v1-2026-05-27-r28';
 
 const NETWORK_FIRST = [
   // Same-origin app code: always try network first so updates show immediately
