@@ -1964,6 +1964,7 @@ function computePKBMadrasah(data) {
         ...k,
         avgPct: k.count ? k.sumPct / k.count : 0,
         guruCount: k.guruNames.size,
+        guruList: Array.from(k.guruNames).sort(),
       }))
       .filter(k => k.count > 0)
       .sort((a, b) => a.avgPct - b.avgPct)
@@ -1999,6 +2000,8 @@ function renderRekapPKBMadrasah(target, data) {
       const rencana = pkbRencanaFor({ role_code: p.role_code, role_label: p.role_label, komp_no: p.komp_no, komp_nama: p.komp_nama, pct: p.avgPct });
       const targetPct = Math.min(100, Math.ceil((p.avgPct + 15) / 5) * 5);
       const target_text = `Skor rata-rata madrasah naik ke ≥ ${targetPct}% (saat ini ${p.avgPct.toFixed(1)}%). Pelibatan ${p.guruCount} guru.`;
+      const guruListAttr = e((p.guruList || []).join('\n'));
+      const ctxLabel = `${m.madrasah} · P${j + 1} · ${p.role_label} K${p.komp_no}`;
       html += `<tr>
         <td>${n}</td>
         ${j === 0 ? `
@@ -2008,7 +2011,7 @@ function renderRekapPKBMadrasah(target, data) {
         <td class="small" style="max-width:280px; white-space:pre-wrap">${e(p.role_label)} - K${p.komp_no}: ${e(p.komp_nama)} (${p.avgPct.toFixed(1)}%)</td>
         <td class="small" style="max-width:280px; white-space:pre-wrap">${e(rencana)}</td>
         <td class="small" style="max-width:280px; white-space:pre-wrap">${e(target_text)}</td>
-        <td class="small text-center">${p.guruCount}</td>
+        <td class="small text-center"><a href="#" class="text-decoration-none" data-show-guru="${guruListAttr}" data-show-ctx="${e(ctxLabel)}" title="Klik untuk lihat daftar nama guru">${p.guruCount} <i class="bi bi-people"></i></a></td>
       </tr>`;
     });
   }
@@ -2024,16 +2027,54 @@ function renderRekapPKBMadrasah(target, data) {
       </tbody>
     </table>
   </div></div>`;
+
+  // Wire click on Jml Guru -> popup nama guru
+  target.addEventListener('click', (ev) => {
+    const link = ev.target.closest('[data-show-guru]');
+    if (!link) return;
+    ev.preventDefault();
+    const names = (link.dataset.showGuru || '').split('\n').filter(Boolean);
+    const ctx = link.dataset.showCtx || '';
+    showGuruListDialog(ctx, names);
+  });
+}
+
+function showGuruListDialog(title, names) {
+  document.getElementById('gl-modal')?.remove();
+  const modalHtml = `
+  <div class="modal fade" id="gl-modal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title"><i class="bi bi-people"></i> Daftar Guru Terlibat</h5>
+          <button class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="small text-muted mb-2">${e(title)}</div>
+          <div class="alert alert-light border"><strong>${names.length}</strong> guru terlibat di kompetensi ini:</div>
+          <ol class="mb-0 small">${names.map(n => `<li class="mb-1">${e(n)}</li>`).join('')}</ol>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-light" data-bs-dismiss="modal">Tutup</button>
+        </div>
+      </div>
+    </div>
+  </div>`;
+  document.body.insertAdjacentHTML('beforeend', modalHtml);
+  const modalEl = document.getElementById('gl-modal');
+  const modal = new bootstrap.Modal(modalEl);
+  modal.show();
+  modalEl.addEventListener('hidden.bs.modal', () => modalEl.remove(), { once: true });
 }
 
 function exportRekapPKBMadrasahCSV(data) {
   const list = computePKBMadrasah(data);
-  const lines = ['No;Madrasah;Jml Guru;Jml Dinilai;Prioritas;Peran;No Kompetensi;Nama Kompetensi;Rata2 Skor (%);Rencana Kegiatan;Target;Jml Guru Terlibat'];
+  const lines = ['No;Madrasah;Jml Guru;Jml Dinilai;Prioritas;Peran;No Kompetensi;Nama Kompetensi;Rata2 Skor (%);Rencana Kegiatan;Target;Jml Guru Terlibat;Daftar Guru'];
   let i = 0;
   for (const m of list) {
     if (m.prioritas.length === 0) {
       i++;
-      lines.push([i, m.madrasah, m.jumlahGuru, m.jumlahDinilai, '', '', '', '', '', '', '', ''].map(csvEsc).join(';'));
+      lines.push([i, m.madrasah, m.jumlahGuru, m.jumlahDinilai, '', '', '', '', '', '', '', '', ''].map(csvEsc).join(';'));
       continue;
     }
     m.prioritas.forEach((p, j) => {
@@ -2041,7 +2082,8 @@ function exportRekapPKBMadrasahCSV(data) {
       const rencana = pkbRencanaFor({ role_code: p.role_code, role_label: p.role_label, komp_no: p.komp_no, komp_nama: p.komp_nama, pct: p.avgPct });
       const targetPct = Math.min(100, Math.ceil((p.avgPct + 15) / 5) * 5);
       const target_text = `Skor rata-rata madrasah naik ke >= ${targetPct}% (saat ini ${p.avgPct.toFixed(1)}%)`;
-      lines.push([i, m.madrasah, m.jumlahGuru, m.jumlahDinilai, j + 1, p.role_label, p.komp_no, p.komp_nama, p.avgPct.toFixed(2), rencana, target_text, p.guruCount].map(csvEsc).join(';'));
+      const guruStr = (p.guruList || []).join(', ');
+      lines.push([i, m.madrasah, m.jumlahGuru, m.jumlahDinilai, j + 1, p.role_label, p.komp_no, p.komp_nama, p.avgPct.toFixed(2), rencana, target_text, p.guruCount, guruStr].map(csvEsc).join(';'));
     });
   }
   downloadCSV(`rekap-pkb-madrasah-${new Date().toISOString().slice(0, 10)}.csv`, lines);
@@ -2049,14 +2091,14 @@ function exportRekapPKBMadrasahCSV(data) {
 
 async function exportRekapPKBMadrasahXLSX(data) {
   const list = computePKBMadrasah(data);
-  const headers = ['No', 'Madrasah', 'Jml Guru', 'Jml Dinilai', 'Prioritas', 'Peran', 'No Komp', 'Nama Kompetensi', 'Rata2 (%)', 'Rencana Kegiatan', 'Target', 'Guru Terlibat'];
-  const widths = [5, 30, 8, 10, 9, 22, 8, 35, 9, 40, 40, 10];
+  const headers = ['No', 'Madrasah', 'Jml Guru', 'Jml Dinilai', 'Prioritas', 'Peran', 'No Komp', 'Nama Kompetensi', 'Rata2 (%)', 'Rencana Kegiatan', 'Target', 'Guru Terlibat', 'Daftar Guru'];
+  const widths = [5, 30, 8, 10, 9, 22, 8, 35, 9, 40, 40, 10, 50];
   const rows = [];
   let i = 0;
   for (const m of list) {
     if (m.prioritas.length === 0) {
       i++;
-      rows.push([i, m.madrasah, m.jumlahGuru, m.jumlahDinilai, '', '', '', '', '', '', '', '']);
+      rows.push([i, m.madrasah, m.jumlahGuru, m.jumlahDinilai, '', '', '', '', '', '', '', '', '']);
       continue;
     }
     m.prioritas.forEach((p, j) => {
@@ -2064,7 +2106,8 @@ async function exportRekapPKBMadrasahXLSX(data) {
       const rencana = pkbRencanaFor({ role_code: p.role_code, role_label: p.role_label, komp_no: p.komp_no, komp_nama: p.komp_nama, pct: p.avgPct });
       const targetPct = Math.min(100, Math.ceil((p.avgPct + 15) / 5) * 5);
       const target_text = `Skor rata-rata naik ke >= ${targetPct}% (saat ini ${p.avgPct.toFixed(1)}%)`;
-      rows.push([i, m.madrasah, m.jumlahGuru, m.jumlahDinilai, j + 1, p.role_label, p.komp_no, p.komp_nama, Number(p.avgPct.toFixed(2)), rencana, target_text, p.guruCount]);
+      const guruStr = (p.guruList || []).join(', ');
+      rows.push([i, m.madrasah, m.jumlahGuru, m.jumlahDinilai, j + 1, p.role_label, p.komp_no, p.komp_nama, Number(p.avgPct.toFixed(2)), rencana, target_text, p.guruCount, guruStr]);
     });
   }
   await buildXLSX(`rekap-pkb-madrasah-${new Date().toISOString().slice(0, 10)}.xlsx`, 'PKB Madrasah', headers, rows, widths);
