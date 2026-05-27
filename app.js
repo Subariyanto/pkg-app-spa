@@ -50,7 +50,10 @@ function renderShell() {
   const html = `
   <nav class="navbar navbar-expand-lg navbar-dark bg-primary mb-3 no-print">
     <div class="container-fluid">
-      <a class="navbar-brand fw-bold" href="#/"><i class="bi bi-clipboard-check"></i> PKG 2025</a>
+      <a class="navbar-brand fw-bold d-flex flex-column lh-1" href="#/" style="line-height:1.1;">
+        <span><i class="bi bi-clipboard-check"></i> Aplikasi PKG</span>
+        <small class="text-white-50 fw-normal" style="font-size:.7rem;">Kemenag Jember &middot; Pokjawas</small>
+      </a>
       <button class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#nav"><span class="navbar-toggler-icon"></span></button>
       <div class="collapse navbar-collapse" id="nav">
         <ul class="navbar-nav me-auto">
@@ -87,7 +90,6 @@ function renderShell() {
             </ul>
           </li>
         </ul>
-        <span class="navbar-text small text-white-50">Kemenag Jember &middot; Pokjawas</span>
       </div>
     </div>
   </nav>
