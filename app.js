@@ -977,7 +977,10 @@ function viewGuruDetail(view, id) {
                 const pct = k.hari_efektif ? ((k.hadir / k.hari_efektif) * 100).toFixed(1) + '%' : '-';
                 return `<tr>
                   <td>${NAMA_BLN_SHORT[k.bulan]}</td><td>${k.tahun}</td><td>${k.hari_efektif}</td><td>${k.hadir}</td><td>${k.sakit}</td><td>${k.izin}</td><td>${k.alpa}</td><td>${k.cuti}</td><td>${k.dinas}</td><td>${pct}</td>
-                  <td><button class="btn btn-sm btn-link text-danger p-0" data-del-kh="${k.id}"><i class="bi bi-trash"></i></button></td>
+                  <td class="text-end">
+                    <button class="btn btn-sm btn-link text-primary p-0 me-2" data-edit-kh='${e(JSON.stringify(k))}' title="Edit"><i class="bi bi-pencil"></i></button>
+                    <button class="btn btn-sm btn-link text-danger p-0" data-del-kh="${k.id}" title="Hapus"><i class="bi bi-trash"></i></button>
+                  </td>
                 </tr>`;
               }).join('')}
             </tbody>
@@ -1053,6 +1056,37 @@ function viewGuruDetail(view, id) {
         PKGDB.deleteKehadiran(b.dataset.delKh);
         viewGuruDetail(view, id);
         setTimeout(() => $('#tabs button[data-bs-target="#t-kehadiran"]').click(), 0);
+      }
+    });
+  });
+
+  $$('[data-edit-kh]').forEach(b => {
+    b.addEventListener('click', () => {
+      try {
+        const k = JSON.parse(b.dataset.editKh);
+        const form = document.getElementById('form-kehadiran');
+        form.querySelector('[name="bulan"]').value = k.bulan;
+        form.querySelector('[name="tahun"]').value = k.tahun;
+        form.querySelector('[name="hari_efektif"]').value = k.hari_efektif || 0;
+        form.querySelector('[name="hadir"]').value = k.hadir || 0;
+        form.querySelector('[name="sakit"]').value = k.sakit || 0;
+        form.querySelector('[name="izin"]').value = k.izin || 0;
+        form.querySelector('[name="alpa"]').value = k.alpa || 0;
+        form.querySelector('[name="cuti"]').value = k.cuti || 0;
+        form.querySelector('[name="dinas"]').value = k.dinas || 0;
+        // Tombol simpan diubah label-nya supaya jelas mode edit
+        const submitBtn = form.querySelector('button[type="submit"], button:not([type])');
+        if (submitBtn) {
+          submitBtn.innerHTML = '<i class="bi bi-check-lg"></i>';
+          submitBtn.classList.remove('btn-primary');
+          submitBtn.classList.add('btn-success');
+          submitBtn.title = 'Simpan perubahan';
+        }
+        // Scroll ke form & focus
+        form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        toast(`Edit data ${NAMA_BLN_SHORT[k.bulan]} ${k.tahun} — ubah lalu klik Simpan`);
+      } catch (err) {
+        toast('Gagal load data', 'danger');
       }
     });
   });
