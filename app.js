@@ -1144,6 +1144,226 @@ function viewNilai(view, guruId, role, jenis) {
 }
 
 // === REKAP ==============================================================
+// === PENILAIAN HUB ======================================================
+function viewPenilaianHub(view) {
+  const { query } = parseHash();
+  const filterRole = query.role || '';
+  const filterJenis = query.jenis || '';
+  const filterStatus = query.status || '';
+  const filterMadrasah = (query.madrasah || '').toLowerCase();
+  const q = (query.q || '').toLowerCase();
+
+  const allGuru = PKGDB.listGuru();
+  const allPen = [];
+  for (const g of allGuru) {
+    const pens = PKGDB.listPenilaianByGuru(g.id);
+    for (const p of pens) {
+      const total = PKGDB.getInstrumen(p.role_code).length;
+      const terisi = PKGDB.countSkor(p.id);
+      const n = PKGDB.hitungNilai(p.id, p.role_code);
+      const meta = PKGDB.getRoleMeta(p.role_code) || {};
+      let status = 'belum';
+      if (terisi > 0 && terisi < total) status = 'sebagian';
+      else if (terisi >= total && total > 0) status = 'selesai';
+      allPen.push({
+        ...p,
+        guru: g,
+        role_label: meta.role_label || p.role_code,
+        total, terisi, status,
+        nilai: n.nilaiAkhir, sebutan: n.sebutan,
+      });
+    }
+  }
+
+  let filtered = allPen;
+  if (filterRole) filtered = filtered.filter(p => p.role_code === filterRole);
+  if (filterJenis) filtered = filtered.filter(p => p.jenis === filterJenis);
+  if (filterStatus) filtered = filtered.filter(p => p.status === filterStatus);
+  if (filterMadrasah) filtered = filtered.filter(p => (p.guru.nama_madrasah || '').toLowerCase().includes(filterMadrasah));
+  if (q) filtered = filtered.filter(p =>
+    (p.guru.nama || '').toLowerCase().includes(q) ||
+    (p.guru.nip || '').toLowerCase().includes(q) ||
+    (p.role_label || '').toLowerCase().includes(q)
+  );
+  filtered.sort((a, b) => (b.updated_at || '').localeCompare(a.updated_at || ''));
+
+  const counts = {
+    total: allPen.length,
+    belum: allPen.filter(p => p.status === 'belum').length,
+    sebagian: allPen.filter(p => p.status === 'sebagian').length,
+    selesai: allPen.filter(p => p.status === 'selesai').length,
+  };
+
+  const madrasahList = Array.from(new Set(allGuru.map(g => g.nama_madrasah).filter(Boolean))).sort();
+
+  view.innerHTML = `
+  <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <h4 class="mb-0"><i class="bi bi-clipboard-check"></i> Penilaian PKG <span class="badge bg-secondary">${counts.total}</span></h4>
+    <button id="btn-pn-new" class="btn btn-primary btn-sm"><i class="bi bi-plus-lg"></i> Mulai Penilaian Baru</button>
+  </div>
+
+  <div class="row g-2 mb-3">
+    <div class="col-md-3 col-6"><div class="card text-center"><div class="card-body py-2">
+      <div class="small text-muted">Total Sesi</div><div class="h4 mb-0">${counts.total}</div>
+    </div></div></div>
+    <div class="col-md-3 col-6"><div class="card text-center"><div class="card-body py-2">
+      <div class="small text-muted">Belum Diisi</div><div class="h4 mb-0 text-secondary">${counts.belum}</div>
+    </div></div></div>
+    <div class="col-md-3 col-6"><div class="card text-center"><div class="card-body py-2">
+      <div class="small text-muted">Sebagian</div><div class="h4 mb-0 text-warning">${counts.sebagian}</div>
+    </div></div></div>
+    <div class="col-md-3 col-6"><div class="card text-center"><div class="card-body py-2">
+      <div class="small text-muted">Selesai</div><div class="h4 mb-0 text-success">${counts.selesai}</div>
+    </div></div></div>
+  </div>
+
+  <div class="card mb-3"><div class="card-body py-2">
+    <div class="row g-2">
+      <div class="col-md-3 col-6">
+        <input id="f-q" class="form-control form-control-sm" placeholder="Cari guru / NIP / peran" value="${e(q)}">
+      </div>
+      <div class="col-md-2 col-6">
+        <select id="f-role" class="form-select form-select-sm">
+          <option value="">Semua Peran</option>
+          ${PKGDB.ROLES.map(r => `<option value="${e(r.role_code)}" ${filterRole === r.role_code ? 'selected' : ''}>${e(r.role_label)}</option>`).join('')}
+        </select>
+      </div>
+      <div class="col-md-2 col-6">
+        <select id="f-jenis" class="form-select form-select-sm">
+          <option value="">Semua Jenis</option>
+          <option value="sumatif" ${filterJenis === 'sumatif' ? 'selected' : ''}>Sumatif</option>
+          <option value="formatif" ${filterJenis === 'formatif' ? 'selected' : ''}>Formatif</option>
+        </select>
+      </div>
+      <div class="col-md-2 col-6">
+        <select id="f-status" class="form-select form-select-sm">
+          <option value="">Semua Status</option>
+          <option value="belum" ${filterStatus === 'belum' ? 'selected' : ''}>Belum Diisi</option>
+          <option value="sebagian" ${filterStatus === 'sebagian' ? 'selected' : ''}>Sebagian</option>
+          <option value="selesai" ${filterStatus === 'selesai' ? 'selected' : ''}>Selesai</option>
+        </select>
+      </div>
+      <div class="col-md-3 col-12">
+        <select id="f-madrasah" class="form-select form-select-sm">
+          <option value="">Semua Madrasah</option>
+          ${madrasahList.map(m => `<option value="${e(m)}" ${filterMadrasah === m.toLowerCase() ? 'selected' : ''}>${e(m)}</option>`).join('')}
+        </select>
+      </div>
+    </div>
+  </div></div>
+
+  <div class="card">
+    <div class="table-responsive">
+      <table class="table table-sm table-hover mb-0 align-middle">
+        <thead class="table-light"><tr>
+          <th>#</th><th>Guru</th><th>Madrasah</th><th>Peran</th><th>Jenis</th><th>Status</th><th class="text-end">Nilai</th><th>Sebutan</th><th>Tanggal</th><th></th>
+        </tr></thead>
+        <tbody>
+          ${filtered.length === 0 ? `<tr><td colspan="10" class="text-center text-muted py-4">${allPen.length === 0 ? 'Belum ada sesi penilaian. Klik "Mulai Penilaian Baru".' : 'Tidak ada hasil dgn filter ini.'}</td></tr>` : ''}
+          ${filtered.map((p, i) => {
+            const cls = p.status === 'belum' ? 'badge-status-belum' : (p.status === 'sebagian' ? 'badge-status-sebagian' : 'badge-status-selesai');
+            return `<tr>
+              <td>${i + 1}</td>
+              <td><a href="#/guru/${p.guru.id}">${e(p.guru.nama)}</a><div class="small text-muted">${e(p.guru.nip || '-')}</div></td>
+              <td class="small">${e(p.guru.nama_madrasah || '-')}</td>
+              <td>${e(p.role_label)}</td>
+              <td><span class="badge bg-secondary text-uppercase">${e(p.jenis)}</span></td>
+              <td><span class="badge ${cls}">${p.terisi}/${p.total}</span></td>
+              <td class="text-end fw-bold">${p.terisi > 0 ? p.nilai.toFixed(2) : '-'}</td>
+              <td>${p.terisi > 0 ? e(p.sebutan) : '-'}</td>
+              <td class="small">${e(p.tanggal || (p.updated_at ? p.updated_at.slice(0, 10) : '-'))}</td>
+              <td class="text-end">
+                <a class="btn btn-sm btn-primary" href="#/guru/${p.guru.id}/nilai/${p.role_code}?jenis=${p.jenis}">Lanjutkan</a>
+                <a class="btn btn-sm btn-outline-secondary" href="#/guru/${p.guru.id}/cetak/${p.role_code}?jenis=${p.jenis}" title="Cetak"><i class="bi bi-printer"></i></a>
+              </td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>
+  </div>`;
+
+  function applyFilters() {
+    const params = new URLSearchParams();
+    const v = $('#f-q').value.trim(); if (v) params.set('q', v);
+    const r = $('#f-role').value; if (r) params.set('role', r);
+    const j = $('#f-jenis').value; if (j) params.set('jenis', j);
+    const s = $('#f-status').value; if (s) params.set('status', s);
+    const m = $('#f-madrasah').value; if (m) params.set('madrasah', m);
+    location.hash = '#/penilaian' + (params.toString() ? '?' + params.toString() : '');
+  }
+
+  $('#f-q').addEventListener('input', () => {
+    clearTimeout(window.__hubT);
+    window.__hubT = setTimeout(applyFilters, 300);
+  });
+  $('#f-role').addEventListener('change', applyFilters);
+  $('#f-jenis').addEventListener('change', applyFilters);
+  $('#f-status').addEventListener('change', applyFilters);
+  $('#f-madrasah').addEventListener('change', applyFilters);
+
+  $('#btn-pn-new').addEventListener('click', () => openPenilaianBaruDialog());
+}
+
+function openPenilaianBaruDialog() {
+  const gurus = PKGDB.listGuru();
+  if (gurus.length === 0) {
+    if (confirm('Belum ada data guru. Tambah guru dulu?')) navigate('/guru/new');
+    return;
+  }
+  document.getElementById('pn-modal')?.remove();
+  const modalHtml = `
+  <div class="modal fade" id="pn-modal" tabindex="-1">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header"><h5 class="modal-title">Mulai Penilaian Baru</h5><button class="btn-close" data-bs-dismiss="modal"></button></div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label">Guru</label>
+            <select id="pn-guru" class="form-select">
+              <option value="">-- Pilih Guru --</option>
+              ${gurus.map(g => `<option value="${g.id}">${e(g.nama)}${g.nama_madrasah ? ' - ' + e(g.nama_madrasah) : ''}</option>`).join('')}
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Peran</label>
+            <select id="pn-role" class="form-select">
+              ${PKGDB.ROLES.map(r => `<option value="${e(r.role_code)}">${e(r.role_label)} (skor 0-${r.max_score})</option>`).join('')}
+            </select>
+          </div>
+          <div class="mb-2">
+            <label class="form-label">Jenis</label>
+            <div class="btn-group w-100" role="group">
+              <input type="radio" class="btn-check" name="pn-jenis" id="pn-sum" value="sumatif" checked>
+              <label class="btn btn-outline-primary" for="pn-sum">Sumatif</label>
+              <input type="radio" class="btn-check" name="pn-jenis" id="pn-form" value="formatif">
+              <label class="btn btn-outline-primary" for="pn-form">Formatif</label>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-light" data-bs-dismiss="modal">Batal</button>
+          <button class="btn btn-primary" id="pn-go"><i class="bi bi-arrow-right"></i> Lanjut</button>
+        </div>
+      </div>
+    </div>
+  </div>`;
+  document.body.insertAdjacentHTML('beforeend', modalHtml);
+  const modalEl = document.getElementById('pn-modal');
+  const modal = new bootstrap.Modal(modalEl);
+  modal.show();
+  modalEl.addEventListener('hidden.bs.modal', () => modalEl.remove(), { once: true });
+  document.getElementById('pn-go').addEventListener('click', () => {
+    const gid = document.getElementById('pn-guru').value;
+    const role = document.getElementById('pn-role').value;
+    const jenis = document.querySelector('input[name="pn-jenis"]:checked').value;
+    if (!gid) { toast('Pilih guru dulu', 'danger'); return; }
+    modal.hide();
+    navigate(`/guru/${gid}/nilai/${role}?jenis=${jenis}`);
+  });
+}
+
+// === REKAP ==============================================================
 function viewRekap(view) {
   const data = PKGDB.getRekap();
   view.innerHTML = `
