@@ -1423,6 +1423,12 @@ function openPenilaianBaruDialog() {
 // === REKAP ==============================================================
 function viewRekap(view) {
   const data = PKGDB.getRekap();
+  // Helper: tugas dari data guru (tugas tambahan jika ada, kalau ngga ada fallback ke 'Guru Mapel'/'Guru')
+  function tugasGuru(g) {
+    const t = [g.tugas_tambahan_1, g.tugas_tambahan_2, g.tugas_tambahan_3].filter(s => s && String(s).trim()).map(s => String(s).trim());
+    if (t.length > 0) return t.join(', ');
+    return g.mapel_kelas ? 'Guru Mapel' : 'Guru';
+  }
   view.innerHTML = `
   <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
     <h4 class="mb-0"><i class="bi bi-table"></i> Rekap PKG</h4>
@@ -1431,14 +1437,15 @@ function viewRekap(view) {
   <div class="card"><div class="table-responsive">
     <table class="table table-sm table-hover mb-0 align-middle">
       <thead class="table-light"><tr>
-        <th>#</th><th>Nama / NIP</th><th>Madrasah</th><th>Mapel/Kelas</th><th>Peran</th><th>Jenis</th><th class="text-end">Nilai</th><th>Sebutan</th>
+        <th>#</th><th>Nama / NIP</th><th>Madrasah</th><th>Mapel/Kelas</th><th>Peran/Tugas</th><th>Instrumen</th><th>Jenis</th><th class="text-end">Nilai</th><th>Sebutan</th>
       </tr></thead>
       <tbody>
-        ${data.length === 0 ? '<tr><td colspan="8" class="text-center text-muted py-4">Belum ada data</td></tr>' : ''}
+        ${data.length === 0 ? '<tr><td colspan="9" class="text-center text-muted py-4">Belum ada data</td></tr>' : ''}
         ${(() => {
           let i = 0;
           let rows = '';
           for (const g of data) {
+            const peranGuru = tugasGuru(g);
             if (g.peran.length === 0) {
               i++;
               rows += `<tr>
@@ -1446,6 +1453,7 @@ function viewRekap(view) {
                 <td><a href="#/guru/${g.id}">${e(g.nama)}</a><div class="small text-muted">${e(g.nip || '')}</div></td>
                 <td>${e(g.nama_madrasah || '-')}</td>
                 <td>${e(g.mapel_kelas || '-')}</td>
+                <td>${e(peranGuru)}</td>
                 <td colspan="4" class="text-muted">Belum ada penilaian</td>
               </tr>`;
             } else {
@@ -1457,8 +1465,9 @@ function viewRekap(view) {
                     <td rowspan="${g.peran.length}"><a href="#/guru/${g.id}">${e(g.nama)}</a><div class="small text-muted">${e(g.nip || '')}</div></td>
                     <td rowspan="${g.peran.length}">${e(g.nama_madrasah || '-')}</td>
                     <td rowspan="${g.peran.length}">${e(g.mapel_kelas || '-')}</td>
+                    <td rowspan="${g.peran.length}">${e(peranGuru)}</td>
                   ` : ''}
-                  <td>${e(p.role_label)}</td>
+                  <td class="small">${e(p.role_label)}</td>
                   <td><span class="badge bg-secondary text-uppercase">${e(p.jenis)}</span></td>
                   <td class="text-end fw-bold">${p.nilai.toFixed(2)}</td>
                   <td>${e(p.sebutan)}</td>
@@ -1473,7 +1482,7 @@ function viewRekap(view) {
   </div></div>`;
 
   $('#btn-csv').addEventListener('click', () => {
-    const lines = ['No;Nama;NIP;Madrasah;Mapel/Kelas;Peran;Jenis;Nilai;Sebutan;Tanggal'];
+    const lines = ['No;Nama;NIP;Madrasah;Mapel/Kelas;Peran/Tugas;Instrumen;Jenis;Nilai;Sebutan;Tanggal'];
     const esc = (v) => {
       if (v === null || v === undefined) return '';
       const s = String(v).replace(/"/g, '""');
@@ -1481,13 +1490,14 @@ function viewRekap(view) {
     };
     let i = 0;
     for (const g of data) {
+      const peranGuru = tugasGuru(g);
       if (g.peran.length === 0) {
         i++;
-        lines.push([i, g.nama, g.nip, g.nama_madrasah, g.mapel_kelas, '', '', '', '', ''].map(esc).join(';'));
+        lines.push([i, g.nama, g.nip, g.nama_madrasah, g.mapel_kelas, peranGuru, '', '', '', '', ''].map(esc).join(';'));
       } else {
         for (const p of g.peran) {
           i++;
-          lines.push([i, g.nama, g.nip, g.nama_madrasah, g.mapel_kelas, p.role_label, p.jenis, p.nilai, p.sebutan, p.tanggal].map(esc).join(';'));
+          lines.push([i, g.nama, g.nip, g.nama_madrasah, g.mapel_kelas, peranGuru, p.role_label, p.jenis, p.nilai, p.sebutan, p.tanggal].map(esc).join(';'));
         }
       }
     }
