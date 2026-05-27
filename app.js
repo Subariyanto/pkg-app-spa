@@ -988,12 +988,15 @@ function viewGuruDetail(view, id) {
 
     <div class="tab-pane fade" id="t-pkb">
       <div class="card">
-        <div class="card-header">Rencana Pengembangan Keprofesian Berkelanjutan (PKB)</div>
+        <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+          <span>Rencana Pengembangan Keprofesian Berkelanjutan (PKB)</span>
+          <button type="button" id="btn-pkb-auto" class="btn btn-sm btn-outline-success" title="Isi otomatis dari kompetensi terlemah hasil penilaian"><i class="bi bi-magic"></i> Auto-Fill dari Hasil Penilaian</button>
+        </div>
         <form id="form-pkb" class="card-body">
           ${[1,2,3].map(i => {
             const p = pkb.find(x => x.prioritas === i) || {};
             return `
-            <div class="mb-3 p-3 border rounded">
+            <div class="mb-3 p-3 border rounded" data-pkb-row="${i}">
               <div class="fw-semibold mb-2">Prioritas ${i}</div>
               <div class="row g-2">
                 <div class="col-md-4"><label class="form-label small">Kompetensi</label><input class="form-control" name="kompetensi_${i}" value="${e(p.kompetensi || '')}"></div>
@@ -1068,6 +1071,160 @@ function viewGuruDetail(view, id) {
     viewGuruDetail(view, id);
     setTimeout(() => $('#tabs button[data-bs-target="#t-pkb"]').click(), 0);
   });
+
+  $('#btn-pkb-auto').addEventListener('click', () => {
+    const suggestions = computePKBSuggestions(id);
+    if (!suggestions || suggestions.length === 0) {
+      toast('Belum ada hasil penilaian. Isi penilaian dulu sebelum auto-fill PKB.', 'warning');
+      return;
+    }
+    // Cek apakah form sudah terisi -> konfirmasi overwrite
+    const formEl = document.getElementById('form-pkb');
+    const fd = new FormData(formEl);
+    const hasContent = [1,2,3].some(i => (fd.get(`kompetensi_${i}`) || fd.get(`rencana_${i}`) || fd.get(`target_${i}`)));
+    if (hasContent && !confirm('Form PKB sudah terisi. Overwrite dengan saran otomatis?')) return;
+    suggestions.slice(0, 3).forEach((s, idx) => {
+      const i = idx + 1;
+      formEl.querySelector(`[name="kompetensi_${i}"]`).value = s.kompetensi;
+      formEl.querySelector(`[name="rencana_${i}"]`).value = s.rencana;
+      formEl.querySelector(`[name="target_${i}"]`).value = s.target;
+    });
+    // Sisanya kosongkan kalau saran < 3
+    for (let i = suggestions.length + 1; i <= 3; i++) {
+      formEl.querySelector(`[name="kompetensi_${i}"]`).value = '';
+      formEl.querySelector(`[name="rencana_${i}"]`).value = '';
+      formEl.querySelector(`[name="target_${i}"]`).value = '';
+    }
+    toast(`${suggestions.length} prioritas terisi otomatis. Periksa lalu Simpan.`);
+  });
+}
+
+// === PKB AUTO-FILL HELPER ===============================================
+// Pilih kompetensi terlemah dari semua sesi penilaian guru, urutkan ascending,
+// generate Kompetensi/Rencana/Target sesuai pola Kemenag.
+function computePKBSuggestions(guruId) {
+  const pens = PKGDB.listPenilaianByGuru(guruId);
+  if (pens.length === 0) return [];
+  const kompStats = []; // { role_code, role_label, komp_no, komp_nama, sum, maks, pct }
+  for (const pen of pens) {
+    const meta = PKGDB.getRoleMeta(pen.role_code);
+    if (!meta) continue;
+    const instrumen = PKGDB.getInstrumen(pen.role_code);
+    const skorMap = PKGDB.getSkorMap(pen.id);
+    // Group instrumen per kompetensi
+    const grouped = {};
+    for (const it of instrumen) {
+      if (!grouped[it.kompetensi_no]) {
+        grouped[it.kompetensi_no] = { komp_no: it.kompetensi_no, komp_nama: it.kompetensi_nama, items: [] };
+      }
+      grouped[it.kompetensi_no].items.push(it);
+    }
+    for (const k of Object.values(grouped)) {
+      let sum = 0, count = 0;
+      for (const it of k.items) {
+        const s = skorMap[it.id];
+        if (typeof s === 'number') { sum += s; count++; }
+      }
+      if (count === 0) continue; // skip kompetensi yg belum dinilai sama sekali
+      const maks = k.items.length * meta.max_score;
+      const pct = maks ? (sum / maks) * 100 : 0;
+      kompStats.push({
+        role_code: pen.role_code,
+        role_label: meta.role_label,
+        jenis: pen.jenis,
+        komp_no: k.komp_no,
+        komp_nama: k.komp_nama,
+        sum, maks, pct,
+      });
+    }
+  }
+  if (kompStats.length === 0) return [];
+  // Urutkan ascending pct (terlemah dulu)
+  kompStats.sort((a, b) => a.pct - b.pct);
+  // Ambil top-3 unique (role_code+komp_no)
+  const seen = new Set();
+  const top = [];
+  for (const k of kompStats) {
+    const key = `${k.role_code}_${k.komp_no}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    top.push(k);
+    if (top.length >= 3) break;
+  }
+  return top.map((k, idx) => ({
+    kompetensi: `${k.role_label} - K${k.komp_no}: ${k.komp_nama} (${k.pct.toFixed(1)}%)`,
+    rencana: pkbRencanaFor(k),
+    target: pkbTargetFor(k, idx),
+  }));
+}
+
+function pkbRencanaFor(k) {
+  // Pola umum berdasar role + nomor kompetensi
+  const generic = [
+    'Diklat Fungsional / Bimtek',
+    'Workshop / Lokakarya',
+    'MGMP / KKG / MGBK',
+    'PKB Mandiri (baca, refleksi, jurnal)',
+    'Mentoring / Coaching dengan rekan',
+    'Penelitian Tindakan Kelas (PTK)',
+  ];
+  // Map khusus per role+komp untuk rencana yang lebih spesifik
+  const specific = {
+    'GMP_3': 'Workshop pengembangan ATP/RPP/Modul Ajar berbasis Kurikulum Merdeka',
+    'GMP_4': 'Diklat metode pembelajaran (Project-Based, Problem-Based, Diferensiasi)',
+    'GMP_7': 'Bimtek penyusunan instrumen asesmen, analisis butir, & rapor pendidikan',
+    'GMP_13': 'Diklat penguatan materi mapel + integrasi nilai keislaman',
+    'GMP_14': 'PKB mandiri: PTK + publikasi (artikel/best practice/PKB digital)',
+    'GMP_2': 'Workshop teori belajar abad 21 + asesmen formatif',
+    'GMP_5': 'Diklat pembelajaran berdiferensiasi & 7 Kebiasaan Anak Indonesia Hebat',
+    'BK_11': 'Bimtek instrumen non-tes BK (ITP, AUM, DCM)',
+    'BK_13': 'Workshop perancangan program BK komprehensif',
+    'BK_14': 'Diklat implementasi layanan BK kolaboratif',
+    'BK_17': 'Pelatihan PTK BK + publikasi ilmiah',
+    'TIK_2': 'Bimtek perencanaan layanan TIK madrasah (siswa-guru-tendik)',
+    'TIK_8': 'Diklat penguasaan TIK terkini (LMS, AI, cloud, digital citizenship)',
+    'TIK_9': 'Pelatihan menjadi fasilitator TIK guru (TPACK, content creation)',
+    'LAB_3': 'Workshop manajemen laboratorium (program, jadwal, POS)',
+    'LAB_6': 'Diklat K3 Laboratorium & penanganan B3',
+    'PUS_2': 'Bimtek monev penyelenggaraan perpustakaan',
+    'PUS_3': 'Diklat klasifikasi DDC & katalogisasi terkini',
+    'PUS_5': 'Workshop kajian minat baca & literasi',
+    'WKKUR_5': 'Diklat manajemen kurikulum operasional madrasah',
+    'WKSIS_5': 'Workshop pembinaan kesiswaan berbasis minat-bakat',
+    'WKSAR_5': 'Bimtek manajemen sarpras & K3 madrasah',
+    'WKHUM_5': 'Diklat humas madrasah & manajemen mitra eksternal',
+  };
+  const key = `${k.role_code}_${k.komp_no}`;
+  if (specific[key]) return specific[key];
+  return generic[(k.komp_no - 1) % generic.length];
+}
+
+function pkbTargetFor(k, prioritasIdx) {
+  // Target naikkan persentase, plus output konkret
+  const current = k.pct;
+  let targetPct = Math.min(100, Math.ceil((current + 15) / 5) * 5); // naik ~15% bulatkan ke 5
+  if (current >= 90) targetPct = 100;
+  // Output konkret per kompetensi
+  const outputs = {
+    'GMP_3': '1 paket Modul Ajar lengkap + ATP + LKPD',
+    'GMP_4': 'Penerapan minimal 3 model pembelajaran inovatif/semester',
+    'GMP_7': 'Instrumen asesmen 3 ranah + analisis butir + rapor',
+    'GMP_13': 'Bahan ajar terintegrasi keislaman, referensi <3 thn',
+    'GMP_14': 'Minimal 1 PTK + 1 artikel/best practice/karya inovatif',
+    'GMP_5': 'RPP berdiferensiasi + jurnal 7 Kebiasaan',
+    'BK_11': 'Bank instrumen non-tes BK terkalibrasi',
+    'BK_13': 'Program BK komprehensif 1 tahun',
+    'BK_17': 'Minimal 1 PTK BK terpublikasi',
+    'TIK_8': 'Sertifikat penguasaan tools TIK terbaru',
+    'TIK_9': 'Modul fasilitasi TIK untuk guru/tendik',
+    'LAB_6': 'SOP K3 lab + penataan B3 + sertifikat K3',
+    'PUS_3': 'Sistem katalog DDC terdigitalisasi',
+    'WKKUR_5': 'KOM/Dokumen 1 disahkan + supervisi 100% guru',
+    'WKSAR_5': 'Inventaris sarpras updated + K3 standar',
+  };
+  const key = `${k.role_code}_${k.komp_no}`;
+  const out = outputs[key] || 'Peningkatan kompetensi terukur via diklat/PKB';
+  return `Skor naik ke ≥ ${targetPct}% (saat ini ${current.toFixed(1)}%). ${out}.`;
 }
 
 // === NILAI ==============================================================
