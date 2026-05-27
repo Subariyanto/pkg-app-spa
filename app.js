@@ -1032,6 +1032,19 @@ function viewNilai(view, guruId, role, jenis) {
   const nilai = PKGDB.hitungNilai(pen.id, role);
   const maxScore = meta.max_score;
 
+  // Pre-calc komp totals for display
+  const kompTotals = {};
+  for (const k of grouped) {
+    let sum = 0, count = 0;
+    for (const it of k.items) {
+      const s = skorMap[it.id];
+      if (typeof s === 'number') { sum += s; count++; }
+    }
+    const maks = k.items.length * maxScore;
+    const pct = maks ? (sum / maks) * 100 : 0;
+    kompTotals[k.no] = { sum, count, maks, pct };
+  }
+
   view.innerHTML = `
   <div class="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-2">
     <div>
@@ -1055,7 +1068,7 @@ function viewNilai(view, guruId, role, jenis) {
       </div>
 
       ${grouped.map(k => `
-        <div class="card kompetensi-card mb-3">
+        <div class="card kompetensi-card mb-3" data-komp="${k.no}">
           <div class="card-header d-flex justify-content-between">
             <span><span class="badge bg-primary me-1">K${k.no}</span> ${e(k.nama)}</span>
             <span class="text-muted small">${k.items.length} indikator</span>
@@ -1073,12 +1086,21 @@ function viewNilai(view, guruId, role, jenis) {
                 </div>
               </div>
             `).join('')}
+            <div class="px-3 py-2 bg-light border-top d-flex flex-wrap gap-3 justify-content-end small fw-semibold" data-komp-summary="${k.no}">
+              <span>Total Skor: <span class="text-primary" data-fld="sum">${kompTotals[k.no].sum}</span></span>
+              <span>Skor Maks: <span data-fld="maks">${kompTotals[k.no].maks}</span></span>
+              <span>Skor Perolehan: <span class="badge bg-primary" data-fld="pct">${kompTotals[k.no].pct.toFixed(2)}%</span></span>
+            </div>
           </div>
         </div>
       `).join('')}
 
-      <div class="text-end">
-        <a class="btn btn-light" href="#/guru/${g.id}">Kembali</a>
+      <div class="d-flex justify-content-between align-items-center gap-2 flex-wrap mb-4">
+        <a class="btn btn-light" href="#/guru/${g.id}"><i class="bi bi-arrow-left"></i> Kembali</a>
+        <div class="d-flex gap-2">
+          <button id="btn-clear-all" class="btn btn-outline-danger"><i class="bi bi-x-circle"></i> Reset Semua</button>
+          <button id="btn-save" class="btn btn-primary"><i class="bi bi-check-lg"></i> Simpan</button>
+        </div>
       </div>
     </div>
 
@@ -1106,6 +1128,25 @@ function viewNilai(view, guruId, role, jenis) {
     </div>
   </div>`;
 
+  function refreshKompSummary(kompNo) {
+    const k = grouped.find(x => x.no === kompNo);
+    if (!k) return;
+    let sum = 0, count = 0;
+    for (const it of k.items) {
+      const s = PKGDB.getSkorMap(pen.id)[it.id];
+      if (typeof s === 'number') { sum += s; count++; }
+    }
+    const maks = k.items.length * maxScore;
+    const pct = maks ? (sum / maks) * 100 : 0;
+    const sel = `[data-komp-summary="${kompNo}"]`;
+    const root = document.querySelector(sel);
+    if (root) {
+      root.querySelector('[data-fld="sum"]').textContent = sum;
+      root.querySelector('[data-fld="maks"]').textContent = maks;
+      root.querySelector('[data-fld="pct"]').textContent = pct.toFixed(2) + '%';
+    }
+  }
+
   function refreshNilai() {
     const n = PKGDB.hitungNilai(pen.id, role);
     $('#nilai-akhir').textContent = n.nilaiAkhir.toFixed(2);
@@ -1119,6 +1160,9 @@ function viewNilai(view, guruId, role, jenis) {
       $('#save-status').className = 'save-status-saving';
       try {
         PKGDB.setSkor(pen.id, iid, r.value);
+        // Find komp_no from instrumen
+        const inst = window.INSTRUMEN.find(i => `${i.role_code}_${i.kompetensi_no}_${i.indikator_no}` === iid);
+        if (inst) refreshKompSummary(inst.kompetensi_no);
         refreshNilai();
         $('#save-status').textContent = 'Tersimpan';
         $('#save-status').className = 'save-status-saved';
@@ -1127,6 +1171,19 @@ function viewNilai(view, guruId, role, jenis) {
         $('#save-status').className = 'save-status-error';
       }
     });
+  });
+
+  $('#btn-save').addEventListener('click', () => {
+    saveMeta();
+    toast('Penilaian disimpan');
+    setTimeout(() => navigate('/guru/' + g.id), 400);
+  });
+
+  $('#btn-clear-all').addEventListener('click', () => {
+    if (!confirm('Reset semua skor di lembar penilaian ini? Tindakan tidak bisa dibatalkan.')) return;
+    for (const k of grouped) for (const it of k.items) PKGDB.setSkor(pen.id, it.id, null);
+    toast('Semua skor di-reset');
+    viewNilai(view, guruId, role, jenis);
   });
 
   let metaSaveTimer = null;
