@@ -398,6 +398,273 @@ function viewKamadDetail(view, id) {
   });
 }
 
+// === BULK IMPORT/TEMPLATE GURU & KAMAD =================================
+const GURU_COLUMNS = [
+  { key: 'nama', label: 'Nama Guru', width: 28, required: true },
+  { key: 'nip', label: 'NIP', width: 22 },
+  { key: 'nuptk', label: 'NUPTK', width: 20 },
+  { key: 'nrg', label: 'NRG', width: 20 },
+  { key: 'jenis_kelamin', label: 'Jenis Kelamin (L/P)', width: 14 },
+  { key: 'tempat_lahir', label: 'Tempat Lahir', width: 18 },
+  { key: 'tanggal_lahir', label: 'Tanggal Lahir (YYYY-MM-DD)', width: 18 },
+  { key: 'pendidikan', label: 'Pendidikan Terakhir', width: 22 },
+  { key: 'pangkat_gol', label: 'Pangkat/Gol', width: 16 },
+  { key: 'tmt_gol', label: 'TMT Golongan', width: 16 },
+  { key: 'tmt_guru', label: 'TMT Guru', width: 16 },
+  { key: 'mapel_kelas', label: 'Mapel/Kelas', width: 22 },
+  { key: 'jjm', label: 'JJM', width: 8 },
+  { key: 'tugas_tambahan_1', label: 'Tugas Tambahan 1', width: 22 },
+  { key: 'tugas_tambahan_2', label: 'Tugas Tambahan 2', width: 22 },
+  { key: 'tugas_tambahan_3', label: 'Tugas Tambahan 3', width: 22 },
+  { key: 'nama_madrasah', label: 'Nama Madrasah', width: 30 },
+  { key: 'alamat_madrasah', label: 'Alamat Madrasah', width: 30 },
+  { key: 'tahun_pelajaran', label: 'Tahun Pelajaran', width: 14 },
+  { key: 'semester', label: 'Semester (Ganjil/Genap)', width: 14 },
+  { key: 'nama_kamad', label: 'Nama Kamad', width: 24 },
+  { key: 'nip_kamad', label: 'NIP Kamad', width: 22 },
+  { key: 'nama_penilai', label: 'Nama Penilai', width: 24 },
+  { key: 'nip_penilai', label: 'NIP Penilai', width: 22 },
+  { key: 'jabatan_penilai', label: 'Jabatan Penilai', width: 18 },
+];
+
+const KAMAD_COLUMNS = [
+  { key: 'nama_madrasah', label: 'Nama Madrasah', width: 30, required: true },
+  { key: 'jenjang', label: 'Jenjang (RA/MI/MTs/MA/MAK)', width: 14 },
+  { key: 'nsm', label: 'NSM', width: 16 },
+  { key: 'npsn', label: 'NPSN', width: 14 },
+  { key: 'akreditasi', label: 'Akreditasi (A/B/C)', width: 12 },
+  { key: 'alamat_madrasah', label: 'Alamat Madrasah', width: 30 },
+  { key: 'nama', label: 'Nama Kepala Madrasah', width: 28, required: true },
+  { key: 'gelar', label: 'Gelar', width: 12 },
+  { key: 'nip', label: 'NIP', width: 22 },
+  { key: 'nuptk', label: 'NUPTK', width: 20 },
+  { key: 'jenis_kelamin', label: 'Jenis Kelamin (L/P)', width: 14 },
+  { key: 'tempat_lahir', label: 'Tempat Lahir', width: 18 },
+  { key: 'tanggal_lahir', label: 'Tanggal Lahir (YYYY-MM-DD)', width: 18 },
+  { key: 'pendidikan', label: 'Pendidikan', width: 22 },
+  { key: 'pangkat_gol', label: 'Pangkat/Gol', width: 16 },
+  { key: 'tmt_kamad', label: 'TMT Sebagai Kamad (YYYY-MM-DD)', width: 18 },
+  { key: 'periode', label: 'Periode', width: 16 },
+  { key: 'no_hp', label: 'No HP/WA', width: 16 },
+  { key: 'email', label: 'Email', width: 22 },
+  { key: 'alamat_rumah', label: 'Alamat Rumah', width: 28 },
+  { key: 'catatan', label: 'Catatan', width: 28 },
+];
+
+async function downloadTemplateExcel(name, columns, sampleRow) {
+  if (typeof ExcelJS === 'undefined') {
+    toast('Library Excel belum termuat. Pastikan online.', 'danger');
+    return;
+  }
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet('Data');
+  ws.columns = columns.map(c => ({ header: c.label, key: c.key, width: c.width }));
+  // Header style
+  const headerRow = ws.getRow(1);
+  headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+  headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF047A3A' } };
+  headerRow.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+  headerRow.height = 30;
+  // Border + freeze
+  ws.views = [{ state: 'frozen', ySplit: 1 }];
+  // Sample row(s)
+  if (sampleRow) ws.addRow(sampleRow);
+  // Add 50 empty rows (so user has space)
+  for (let i = 0; i < 50; i++) ws.addRow({});
+  // All-cells border
+  ws.eachRow((row) => {
+    row.eachCell({ includeEmpty: true }, (cell) => {
+      cell.border = {
+        top: { style: 'thin', color: { argb: 'FFCCCCCC' } },
+        left: { style: 'thin', color: { argb: 'FFCCCCCC' } },
+        bottom: { style: 'thin', color: { argb: 'FFCCCCCC' } },
+        right: { style: 'thin', color: { argb: 'FFCCCCCC' } },
+      };
+    });
+  });
+
+  // Catatan sheet
+  const ws2 = wb.addWorksheet('Petunjuk');
+  ws2.columns = [{ header: 'Petunjuk Pengisian', key: 'p', width: 80 }];
+  const tips = [
+    'Isi data mulai baris ke-2 (baris 1 adalah header, jangan diubah).',
+    'Kolom yang wajib diisi: ' + columns.filter(c => c.required).map(c => c.label).join(', ') + '.',
+    'Format tanggal: YYYY-MM-DD (mis. 1980-05-15).',
+    'Jenis Kelamin: L atau P.',
+    'NIP & nama_madrasah jadi kunci unik (upsert) saat import. Jadi import ulang aman, tidak duplikat.',
+    'Simpan file dalam format .xlsx, lalu klik tombol Import di aplikasi.',
+  ];
+  for (const t of tips) ws2.addRow({ p: t });
+  ws2.getColumn(1).alignment = { wrapText: true, vertical: 'top' };
+
+  const buf = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `template-${name}-pkg.xlsx`;
+  a.click();
+  URL.revokeObjectURL(url);
+  toast('Template terdownload');
+}
+
+async function importFlatXlsx(file, columns) {
+  if (typeof ExcelJS === 'undefined') throw new Error('Library Excel belum termuat');
+  const buf = await file.arrayBuffer();
+  const wb = new ExcelJS.Workbook();
+  await wb.xlsx.load(buf);
+  const ws = wb.getWorksheet('Data') || wb.worksheets[0];
+  if (!ws) throw new Error('Sheet tidak ditemukan');
+
+  // Map header to column key
+  const headerRow = ws.getRow(1);
+  const colMap = {};
+  headerRow.eachCell((cell, idx) => {
+    const v = (cell.value || '').toString().trim();
+    const found = columns.find(c => c.label === v || c.key === v);
+    if (found) colMap[idx] = found.key;
+  });
+  if (Object.keys(colMap).length === 0) throw new Error('Header kolom tidak cocok dengan template. Pastikan pakai template yang benar.');
+
+  const rows = [];
+  ws.eachRow((row, rIdx) => {
+    if (rIdx === 1) return;
+    const obj = {};
+    let hasData = false;
+    row.eachCell((cell, cIdx) => {
+      const key = colMap[cIdx];
+      if (!key) return;
+      let val = cell.value;
+      if (val && typeof val === 'object') {
+        if (val.text) val = val.text;
+        else if (val.result !== undefined) val = val.result;
+        else if (val.richText) val = val.richText.map(t => t.text).join('');
+        else if (val instanceof Date) {
+          const d = val;
+          const pad = n => String(n).padStart(2, '0');
+          val = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+        }
+      }
+      val = (val == null) ? '' : String(val).trim();
+      if (val) hasData = true;
+      obj[key] = val;
+    });
+    if (hasData) rows.push({ rowNum: rIdx, data: obj });
+  });
+  return rows;
+}
+
+async function bulkImportGuru(rows) {
+  const results = [];
+  for (const r of rows) {
+    try {
+      if (!r.data.nama) {
+        results.push({ row: r.rowNum, ok: false, error: 'Nama kosong' });
+        continue;
+      }
+      const existing = r.data.nip ? PKGDB.findGuruByNIP(r.data.nip) : null;
+      const saved = PKGDB.saveGuru(r.data, existing ? existing.id : null);
+      results.push({ row: r.rowNum, ok: true, action: existing ? 'update' : 'new', nama: saved.nama, id: saved.id });
+    } catch (err) {
+      results.push({ row: r.rowNum, ok: false, error: err.message });
+    }
+  }
+  return results;
+}
+
+async function bulkImportKamad(rows) {
+  const results = [];
+  const existing = PKGDB.listKamad();
+  for (const r of rows) {
+    try {
+      if (!r.data.nama_madrasah) {
+        results.push({ row: r.rowNum, ok: false, error: 'Nama Madrasah kosong' });
+        continue;
+      }
+      // Upsert by nama_madrasah (case-insensitive)
+      const key = r.data.nama_madrasah.toLowerCase().trim();
+      const found = existing.find(k => (k.nama_madrasah || '').toLowerCase().trim() === key);
+      const saved = PKGDB.saveKamad(r.data, found ? found.id : null);
+      results.push({ row: r.rowNum, ok: true, action: found ? 'update' : 'new', nama: saved.nama, id: saved.id });
+    } catch (err) {
+      results.push({ row: r.rowNum, ok: false, error: err.message });
+    }
+  }
+  return results;
+}
+
+function renderImportResult(target, results) {
+  const ok = results.filter(r => r.ok).length;
+  const fail = results.filter(r => !r.ok).length;
+  target.innerHTML = `
+  <div class="card mt-3">
+    <div class="card-header d-flex justify-content-between">
+      <span>Hasil Import Excel</span>
+      <span class="small text-muted">${ok} sukses / ${fail} gagal</span>
+    </div>
+    <div class="table-responsive"><table class="table table-sm mb-0">
+      <thead class="table-light"><tr><th>Baris</th><th>Status</th><th>Detail</th></tr></thead>
+      <tbody>
+        ${results.map(r => r.ok
+          ? `<tr><td>${r.row}</td><td><span class="badge bg-${r.action === 'update' ? 'info' : 'success'}">${r.action === 'update' ? 'UPDATE' : 'BARU'}</span></td><td>${e(r.nama)}</td></tr>`
+          : `<tr class="table-danger"><td>${r.row}</td><td><span class="badge bg-danger">GAGAL</span></td><td class="small">${e(r.error)}</td></tr>`
+        ).join('')}
+      </tbody>
+    </table></div>
+  </div>`;
+}
+
+function openImportDialog(title, columns, bulkFn, onDone) {
+  const modalHtml = `
+  <div class="modal fade" id="import-modal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">${e(title)}</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="alert alert-info small">
+            <i class="bi bi-info-circle"></i> Pastikan pakai <strong>file template Excel</strong> dari tombol "Template". Header kolom tidak boleh diubah.
+          </div>
+          <div class="mb-3">
+            <label class="form-label">File Excel (.xlsx)</label>
+            <input type="file" id="imp-file" class="form-control" accept=".xlsx">
+          </div>
+          <div id="imp-result"></div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-light" data-bs-dismiss="modal">Tutup</button>
+          <button type="button" class="btn btn-primary" id="btn-imp-go"><i class="bi bi-upload"></i> Import</button>
+        </div>
+      </div>
+    </div>
+  </div>`;
+  // Cleanup any existing modal
+  document.getElementById('import-modal')?.remove();
+  document.body.insertAdjacentHTML('beforeend', modalHtml);
+  const modalEl = document.getElementById('import-modal');
+  const modal = new bootstrap.Modal(modalEl);
+  modal.show();
+  modalEl.addEventListener('hidden.bs.modal', () => modalEl.remove(), { once: true });
+
+  document.getElementById('btn-imp-go').addEventListener('click', async () => {
+    const f = document.getElementById('imp-file').files[0];
+    const result = document.getElementById('imp-result');
+    if (!f) { result.innerHTML = '<div class="alert alert-warning">Pilih file Excel dulu.</div>'; return; }
+    result.innerHTML = '<div class="alert alert-info"><i class="bi bi-hourglass"></i> Memproses...</div>';
+    try {
+      const rows = await importFlatXlsx(f, columns);
+      if (rows.length === 0) { result.innerHTML = '<div class="alert alert-warning">File kosong, tidak ada baris data.</div>'; return; }
+      const results = await bulkFn(rows);
+      renderImportResult(result, results);
+      if (typeof onDone === 'function') onDone(results);
+    } catch (err) {
+      console.error(err);
+      result.innerHTML = `<div class="alert alert-danger"><i class="bi bi-exclamation-triangle"></i> ${e(err.message)}</div>`;
+    }
+  });
+}
+
 // === GURU LIST ==========================================================
 function viewGuruList(view) {
   const { query } = parseHash();
