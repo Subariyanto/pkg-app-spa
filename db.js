@@ -9,6 +9,8 @@ const KEYS = {
   kehadiran: 'pkg_v1_kehadiran',
   pkb: 'pkg_v1_pkb',
   meta: 'pkg_v1_meta',
+  instrumen_overrides: 'pkg_v1_instrumen_overrides',
+  kompetensi_overrides: 'pkg_v1_kompetensi_overrides',
 };
 
 function load(key, def) {
@@ -68,10 +70,50 @@ function getRoleMeta(code) {
 }
 
 function getInstrumen(role) {
+  const overInd = load(KEYS.instrumen_overrides, {});
+  const overKomp = load(KEYS.kompetensi_overrides, {});
   return window.INSTRUMEN
     .filter(i => i.role_code === role)
-    .map((it, idx) => ({ ...it, id: `${it.role_code}_${it.kompetensi_no}_${it.indikator_no}` }))
+    .map((it) => {
+      const id = `${it.role_code}_${it.kompetensi_no}_${it.indikator_no}`;
+      const kompKey = `${it.role_code}_${it.kompetensi_no}`;
+      return {
+        ...it,
+        id,
+        indikator: overInd[id] != null ? overInd[id] : it.indikator,
+        kompetensi_nama: overKomp[kompKey] != null ? overKomp[kompKey] : it.kompetensi_nama,
+        _isOverridden: !!(overInd[id] || overKomp[kompKey]),
+        _origIndikator: it.indikator,
+        _origKompetensi: it.kompetensi_nama,
+      };
+    })
     .sort((a, b) => a.kompetensi_no - b.kompetensi_no || a.indikator_no - b.indikator_no);
+}
+
+function setIndikatorOverride(id, newText) {
+  const all = load(KEYS.instrumen_overrides, {});
+  if (newText == null || newText === '') delete all[id];
+  else all[id] = newText;
+  save(KEYS.instrumen_overrides, all);
+}
+
+function setKompetensiOverride(roleCode, kompNo, newText) {
+  const all = load(KEYS.kompetensi_overrides, {});
+  const key = `${roleCode}_${kompNo}`;
+  if (newText == null || newText === '') delete all[key];
+  else all[key] = newText;
+  save(KEYS.kompetensi_overrides, all);
+}
+
+function resetAllOverrides() {
+  save(KEYS.instrumen_overrides, {});
+  save(KEYS.kompetensi_overrides, {});
+}
+
+function countOverrides() {
+  const a = Object.keys(load(KEYS.instrumen_overrides, {})).length;
+  const b = Object.keys(load(KEYS.kompetensi_overrides, {})).length;
+  return { indikator: a, kompetensi: b, total: a + b };
 }
 
 // === GURU ===============================================================
@@ -388,6 +430,8 @@ function exportAll() {
       kehadiran: load(KEYS.kehadiran, []),
       pkb: load(KEYS.pkb, []),
       meta: load(KEYS.meta, {}),
+      instrumen_overrides: load(KEYS.instrumen_overrides, {}),
+      kompetensi_overrides: load(KEYS.kompetensi_overrides, {}),
     },
   };
 }
@@ -440,6 +484,8 @@ function importAll(json, mode) {
   save(KEYS.kehadiran, d.kehadiran || []);
   save(KEYS.pkb, d.pkb || []);
   save(KEYS.meta, d.meta || {});
+  save(KEYS.instrumen_overrides, d.instrumen_overrides || {});
+  save(KEYS.kompetensi_overrides, d.kompetensi_overrides || {});
   return { mode: 'replace', count: (d.guru || []).length };
 }
 
@@ -471,6 +517,7 @@ function getRekap() {
 window.PKGDB = {
   KEYS, ROLES,
   getRoleMeta, getInstrumen,
+  setIndikatorOverride, setKompetensiOverride, resetAllOverrides, countOverrides,
   listGuru, getGuru, findGuruByNIP, saveGuru, deleteGuru,
   listKamad, getKamad, saveKamad, deleteKamad, syncKamadFromGuru,
   listPenilaianByGuru, getOrCreatePenilaian, updatePenilaianMeta,

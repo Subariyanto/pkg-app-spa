@@ -1505,12 +1505,20 @@ function viewRekap(view) {
 function viewInstrumen(view) {
   const { query } = parseHash();
   const focusRole = query.role || null;
+  const overCount = PKGDB.countOverrides();
   view.innerHTML = `
   <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
     <h4 class="mb-0"><i class="bi bi-list-check"></i> Instrumen PKG</h4>
-    <a href="#/" class="btn btn-sm btn-outline-secondary"><i class="bi bi-arrow-left"></i> Kembali ke Beranda</a>
+    <div class="d-flex gap-2 flex-wrap">
+      ${overCount.total > 0 ? `<button id="btn-reset-all" class="btn btn-sm btn-outline-warning" title="Hapus semua override editan"><i class="bi bi-arrow-counterclockwise"></i> Reset Semua Editan (${overCount.total})</button>` : ''}
+      <a href="#/" class="btn btn-sm btn-outline-secondary"><i class="bi bi-arrow-left"></i> Kembali ke Beranda</a>
+    </div>
   </div>
-  <div class="alert alert-info small">Total ${window.INSTRUMEN.length} indikator dari ${PKGDB.ROLES.length} peran. Klik kepala kartu untuk lihat detail.</div>
+  <div class="alert alert-info small">
+    Total ${window.INSTRUMEN.length} indikator dari ${PKGDB.ROLES.length} peran. Klik kepala kartu untuk lihat detail.
+    Klik tombol <i class="bi bi-pencil"></i> untuk edit nama kompetensi atau teks indikator (override per device, ngga merubah data master).
+    ${overCount.total > 0 ? `<br><strong>Editan aktif:</strong> ${overCount.kompetensi} kompetensi, ${overCount.indikator} indikator.` : ''}
+  </div>
   ${PKGDB.ROLES.map(r => {
     const items = PKGDB.getInstrumen(r.role_code);
     const grouped = [];
@@ -1531,12 +1539,25 @@ function viewInstrumen(view) {
       </div>
       <div class="collapse${isOpen ? ' show' : ''}" id="col-${r.role_code}">
         <div class="card-body p-0">
-          ${grouped.map(k => `
+          ${grouped.map(k => {
+            const kompKey = `${r.role_code}_${k.no}`;
+            return `
             <div class="border-bottom p-3">
-              <div class="fw-semibold mb-2"><span class="badge bg-primary me-1">K${k.no}</span> ${e(k.nama)}</div>
-              <ol class="mb-0 small">${k.items.map(it => `<li>${e(it.indikator)}</li>`).join('')}</ol>
-            </div>
-          `).join('')}
+              <div class="d-flex justify-content-between align-items-start mb-2 gap-2">
+                <div class="fw-semibold flex-grow-1">
+                  <span class="badge bg-primary me-1">K${k.no}</span> ${e(k.nama)}
+                  ${k.items[0]?._origKompetensi !== k.nama ? '<span class="badge bg-warning text-dark ms-1" title="Sudah diedit">edited</span>' : ''}
+                </div>
+                <button class="btn btn-sm btn-outline-primary flex-shrink-0" data-edit-komp="${e(r.role_code)}" data-komp-no="${k.no}" data-komp-nama="${e(k.nama)}" data-komp-orig="${e(k.items[0]?._origKompetensi || k.nama)}" title="Edit nama kompetensi"><i class="bi bi-pencil"></i></button>
+              </div>
+              <ol class="mb-0 small" style="padding-left: 1.5rem;">${k.items.map(it => `
+                <li class="mb-1 d-flex align-items-start gap-2">
+                  <span class="flex-grow-1">${e(it.indikator)}${it.indikator !== it._origIndikator ? ' <span class="badge bg-warning text-dark" title="Sudah diedit" style="font-size:.65rem">edited</span>' : ''}</span>
+                  <button class="btn btn-sm btn-link p-0 text-secondary" data-edit-ind="${e(it.id)}" data-ind-text="${e(it.indikator)}" data-ind-orig="${e(it._origIndikator)}" title="Edit indikator"><i class="bi bi-pencil"></i></button>
+                </li>
+              `).join('')}</ol>
+            </div>`;
+          }).join('')}
         </div>
       </div>
     </div>`;
@@ -1548,6 +1569,145 @@ function viewInstrumen(view) {
       if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }, 100);
   }
+
+  // Wire edit buttons
+  $$('[data-edit-komp]').forEach(btn => {
+    btn.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      ev.preventDefault();
+      openEditKompetensiDialog({
+        roleCode: btn.dataset.editKomp,
+        kompNo: parseInt(btn.dataset.kompNo),
+        currentText: btn.dataset.kompNama,
+        origText: btn.dataset.kompOrig,
+        onSaved: () => viewInstrumen(view),
+      });
+    });
+  });
+  $$('[data-edit-ind]').forEach(btn => {
+    btn.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      ev.preventDefault();
+      openEditIndikatorDialog({
+        id: btn.dataset.editInd,
+        currentText: btn.dataset.indText,
+        origText: btn.dataset.indOrig,
+        onSaved: () => viewInstrumen(view),
+      });
+    });
+  });
+
+  if (overCount.total > 0) {
+    $('#btn-reset-all')?.addEventListener('click', () => {
+      if (!confirm(`Hapus SEMUA override editan (${overCount.total} item)? Indikator & kompetensi akan kembali ke teks bawaan dari Master PKG.`)) return;
+      PKGDB.resetAllOverrides();
+      toast('Semua override direset');
+      viewInstrumen(view);
+    });
+  }
+}
+
+function openEditIndikatorDialog(opts) {
+  document.getElementById('ind-modal')?.remove();
+  const modalHtml = `
+  <div class="modal fade" id="ind-modal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content">
+        <div class="modal-header"><h5 class="modal-title">Edit Indikator</h5><button class="btn-close" data-bs-dismiss="modal"></button></div>
+        <div class="modal-body">
+          <div class="mb-2 small text-muted">ID: <code>${e(opts.id)}</code></div>
+          <div class="mb-3">
+            <label class="form-label small">Teks Bawaan (read-only)</label>
+            <textarea class="form-control form-control-sm" rows="3" readonly>${e(opts.origText)}</textarea>
+          </div>
+          <div class="mb-2">
+            <label class="form-label">Teks Indikator</label>
+            <textarea id="ind-text" class="form-control" rows="4">${e(opts.currentText)}</textarea>
+          </div>
+          <div class="small text-muted"><i class="bi bi-info-circle"></i> Override disimpan di browser ini saja (per-device). Tidak mengubah data master.</div>
+        </div>
+        <div class="modal-footer d-flex justify-content-between">
+          ${opts.currentText !== opts.origText ? '<button class="btn btn-outline-warning btn-sm" id="ind-revert"><i class="bi bi-arrow-counterclockwise"></i> Kembalikan ke Bawaan</button>' : '<span></span>'}
+          <div>
+            <button class="btn btn-light" data-bs-dismiss="modal">Batal</button>
+            <button class="btn btn-primary" id="ind-save"><i class="bi bi-check-lg"></i> Simpan</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>`;
+  document.body.insertAdjacentHTML('beforeend', modalHtml);
+  const modalEl = document.getElementById('ind-modal');
+  const modal = new bootstrap.Modal(modalEl);
+  modal.show();
+  modalEl.addEventListener('hidden.bs.modal', () => modalEl.remove(), { once: true });
+  document.getElementById('ind-save').addEventListener('click', () => {
+    const v = document.getElementById('ind-text').value.trim();
+    if (!v) { toast('Teks tidak boleh kosong', 'danger'); return; }
+    const newVal = v === opts.origText ? null : v; // restore default if same as original
+    PKGDB.setIndikatorOverride(opts.id, newVal);
+    toast(newVal == null ? 'Dikembalikan ke bawaan' : 'Indikator disimpan');
+    modal.hide();
+    if (typeof opts.onSaved === 'function') opts.onSaved();
+  });
+  document.getElementById('ind-revert')?.addEventListener('click', () => {
+    if (!confirm('Kembalikan teks ke bawaan?')) return;
+    PKGDB.setIndikatorOverride(opts.id, null);
+    toast('Indikator dikembalikan');
+    modal.hide();
+    if (typeof opts.onSaved === 'function') opts.onSaved();
+  });
+}
+
+function openEditKompetensiDialog(opts) {
+  document.getElementById('kom-modal')?.remove();
+  const modalHtml = `
+  <div class="modal fade" id="kom-modal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content">
+        <div class="modal-header"><h5 class="modal-title">Edit Nama Kompetensi K${opts.kompNo} (${e(opts.roleCode)})</h5><button class="btn-close" data-bs-dismiss="modal"></button></div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label small">Nama Bawaan (read-only)</label>
+            <textarea class="form-control form-control-sm" rows="2" readonly>${e(opts.origText)}</textarea>
+          </div>
+          <div class="mb-2">
+            <label class="form-label">Nama Kompetensi</label>
+            <textarea id="kom-text" class="form-control" rows="3">${e(opts.currentText)}</textarea>
+          </div>
+          <div class="small text-muted"><i class="bi bi-info-circle"></i> Berlaku untuk seluruh indikator di kompetensi ini. Override per-device, tidak mengubah master.</div>
+        </div>
+        <div class="modal-footer d-flex justify-content-between">
+          ${opts.currentText !== opts.origText ? '<button class="btn btn-outline-warning btn-sm" id="kom-revert"><i class="bi bi-arrow-counterclockwise"></i> Kembalikan ke Bawaan</button>' : '<span></span>'}
+          <div>
+            <button class="btn btn-light" data-bs-dismiss="modal">Batal</button>
+            <button class="btn btn-primary" id="kom-save"><i class="bi bi-check-lg"></i> Simpan</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>`;
+  document.body.insertAdjacentHTML('beforeend', modalHtml);
+  const modalEl = document.getElementById('kom-modal');
+  const modal = new bootstrap.Modal(modalEl);
+  modal.show();
+  modalEl.addEventListener('hidden.bs.modal', () => modalEl.remove(), { once: true });
+  document.getElementById('kom-save').addEventListener('click', () => {
+    const v = document.getElementById('kom-text').value.trim();
+    if (!v) { toast('Nama tidak boleh kosong', 'danger'); return; }
+    const newVal = v === opts.origText ? null : v;
+    PKGDB.setKompetensiOverride(opts.roleCode, opts.kompNo, newVal);
+    toast(newVal == null ? 'Dikembalikan ke bawaan' : 'Kompetensi disimpan');
+    modal.hide();
+    if (typeof opts.onSaved === 'function') opts.onSaved();
+  });
+  document.getElementById('kom-revert')?.addEventListener('click', () => {
+    if (!confirm('Kembalikan nama kompetensi ke bawaan?')) return;
+    PKGDB.setKompetensiOverride(opts.roleCode, opts.kompNo, null);
+    toast('Kompetensi dikembalikan');
+    modal.hide();
+    if (typeof opts.onSaved === 'function') opts.onSaved();
+  });
 }
 
 // === IMPORT =============================================================
