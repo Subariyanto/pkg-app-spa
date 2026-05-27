@@ -1,0 +1,207 @@
+/* PKG App SPA - Kemenag green theme */
+:root {
+  --pkg-primary: #047a3a;
+  --pkg-primary-dark: #035a2a;
+  --pkg-primary-light: #d6efd9;
+  --pkg-soft: #f4faf5;
+  --pkg-accent: #f8b500;
+  --pkg-danger: #c0392b;
+}
+
+body {
+  background: var(--pkg-soft);
+  font-size: 14px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+/* Override Bootstrap primary */
+.btn-primary {
+  background-color: var(--pkg-primary);
+  border-color: var(--pkg-primary);
+}
+.btn-primary:hover, .btn-primary:focus {
+  background-color: var(--pkg-primary-dark);
+  border-color: var(--pkg-primary-dark);
+}
+.btn-outline-primary {
+  color: var(--pkg-primary);
+  border-color: var(--pkg-primary);
+}
+.btn-outline-primary:hover {
+  background-color: var(--pkg-primary);
+  border-color: var(--pkg-primary);
+}
+.bg-primary { background-color: var(--pkg-primary) !important; }
+.text-primary { color: var(--pkg-primary) !important; }
+a { color: var(--pkg-primary); }
+a:hover { color: var(--pkg-primary-dark); }
+.navbar-dark.bg-primary { background-color: var(--pkg-primary) !important; }
+.form-control:focus, .form-select:focus {
+  border-color: var(--pkg-primary);
+  box-shadow: 0 0 0 .2rem rgba(4, 122, 58, .15);
+}
+.nav-tabs .nav-link.active {
+  color: var(--pkg-primary);
+  border-bottom-color: var(--pkg-primary);
+}
+
+/* Cards */
+.card {
+  border: 0;
+  box-shadow: 0 1px 3px rgba(0,0,0,.06);
+}
+.card-header {
+  background: #fff;
+  border-bottom: 1px solid #e8efe9;
+  font-weight: 600;
+}
+
+/* Penilaian form */
+.kompetensi-card {
+  border-left: 4px solid var(--pkg-primary);
+}
+.indikator-row {
+  padding: .55rem .75rem;
+  border-bottom: 1px solid #f0f3f8;
+  display: flex;
+  align-items: flex-start;
+  gap: .75rem;
+}
+.indikator-row:hover { background: #fafcfa; }
+.indikator-row:last-child { border-bottom: 0; }
+
+.skor-pill {
+  display: inline-flex;
+  gap: .25rem;
+  flex-shrink: 0;
+}
+.skor-pill input[type=radio] { display: none; }
+.skor-pill label {
+  display: inline-block;
+  min-width: 2.2rem;
+  text-align: center;
+  padding: .25rem .5rem;
+  border: 1px solid #ced4da;
+  border-radius: .35rem;
+  cursor: pointer;
+  user-select: none;
+  font-weight: 600;
+  font-size: .85rem;
+  background: #fff;
+  margin-bottom: 0;
+}
+.skor-pill input:checked + label {
+  background: var(--pkg-primary);
+  color: #fff;
+  border-color: var(--pkg-primary);
+}
+.skor-pill .lbl-0 { color: #b22; }
+.skor-pill .lbl-1 { color: #c80; }
+.skor-pill .lbl-2 { color: #185; }
+.skor-pill .lbl-3 { color: #06a; }
+.skor-pill .lbl-4 { color: #036; }
+.skor-pill input:checked + .lbl-0,
+.skor-pill input:checked + .lbl-1,
+.skor-pill input:checked + .lbl-2,
+.skor-pill input:checked + .lbl-3,
+.skor-pill input:checked + .lbl-4 { color: #fff; }
+
+.nilai-akhir-box {
+  background: linear-gradient(135deg, var(--pkg-primary), #06a04c);
+  color: white;
+  border-radius: .5rem;
+}
+
+.role-card {
+  transition: transform .15s, box-shadow .15s;
+  cursor: pointer;
+  border: 1px solid #e8efe9;
+}
+.role-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(4, 122, 58, .15);
+  border-color: var(--pkg-primary);
+}
+.role-icon { font-size: 2rem; }
+
+.badge-status-belum { background: #e9ecef; color: #6c757d; }
+.badge-status-sebagian { background: #fff3cd; color: #997404; }
+.badge-status-selesai { background: #d1e7dd; color: #0f5132; }
+
+.sticky-summary { position: sticky; top: 1rem; }
+.text-tiny { font-size: .75rem; }
+
+/* Mobile */
+@media (max-width: 767px) {
+  .indikator-row {
+    flex-direction: column;
+    gap: .35rem;
+    padding: .65rem;
+  }
+  .indikator-row .skor-pill { align-self: flex-end; }
+  .skor-pill label {
+    min-width: 2.5rem;
+    padding: .35rem .6rem;
+  }
+}
+
+/* Print */
+@media print {
+  .no-print, nav, footer, .navbar { display: none !important; }
+  body { background: white; font-size: 11pt; }
+  .container-fluid { max-width: 100%; padding: 0; }
+  .page-break { page-break-after: always; }
+  .card { box-shadow: none; border: 0; }
+}
+
+/* Toast / banner */
+.toast-fixed {
+  position: fixed;
+  top: 1rem;
+  right: 1rem;
+  z-index: 1080;
+  min-width: 240px;
+}
+
+/* Status save indicator */
+.save-status-saved { color: var(--pkg-primary); }
+.save-status-saving { color: #888; }
+.save-status-error { color: var(--pkg-danger); }
+
+/* Loading */
+.spinner-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(255,255,255,.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+}
+
+/* PWA install banner */
+.install-banner {
+  position: fixed;
+  bottom: 1rem;
+  left: 1rem;
+  right: 1rem;
+  max-width: 480px;
+  margin: 0 auto;
+  background: var(--pkg-primary);
+  color: white;
+  padding: .75rem 1rem;
+  border-radius: .5rem;
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+  box-shadow: 0 4px 16px rgba(0,0,0,.2);
+  z-index: 1070;
+}
+.install-banner button {
+  background: white;
+  color: var(--pkg-primary);
+  border: 0;
+  padding: .35rem .75rem;
+  border-radius: .35rem;
+  font-weight: 600;
+}
