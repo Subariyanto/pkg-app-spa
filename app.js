@@ -1332,8 +1332,38 @@ window.addEventListener('DOMContentLoaded', () => {
   renderShell();
   render();
 
-  // Service worker (PWA)
+  // Service worker (PWA) with auto-update
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('sw.js').catch(() => {});
+    navigator.serviceWorker.register('sw.js').then(reg => {
+      // Check for updates every 60 seconds while page is open
+      setInterval(() => reg.update().catch(() => {}), 60000);
+      reg.addEventListener('updatefound', () => {
+        const nw = reg.installing;
+        if (!nw) return;
+        nw.addEventListener('statechange', () => {
+          if (nw.state === 'installed' && navigator.serviceWorker.controller) {
+            showUpdateBanner();
+          }
+        });
+      });
+    }).catch(() => {});
+    navigator.serviceWorker.addEventListener('message', (ev) => {
+      if (ev.data && ev.data.type === 'SW_UPDATED') {
+        showUpdateBanner();
+      }
+    });
   }
 });
+
+function showUpdateBanner() {
+  if (document.getElementById('upd-banner')) return;
+  const div = document.createElement('div');
+  div.id = 'upd-banner';
+  div.className = 'install-banner';
+  div.innerHTML = `<i class="bi bi-arrow-clockwise"></i> <span class="flex-grow-1">Versi baru tersedia.</span><button id="btn-upd-reload">Muat Ulang</button>`;
+  document.body.appendChild(div);
+  document.getElementById('btn-upd-reload').addEventListener('click', () => {
+    location.reload();
+  });
+}
+

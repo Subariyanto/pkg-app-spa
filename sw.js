@@ -1,6 +1,19 @@
-// sw.js - Service worker for PKG app (offline-first cache)
-const CACHE_VERSION = 'pkg-v1-2026-05-27-r4';
-const ASSETS = [
+// sw.js - Service worker for PKG app
+// Strategy: network-first for app code (instant updates), cache-first for static assets.
+const CACHE_VERSION = 'pkg-v1-2026-05-27-r5';
+
+const NETWORK_FIRST = [
+  // Same-origin app code: always try network first so updates show immediately
+  'index.html',
+  'app.js',
+  'db.js',
+  'importer.js',
+  'instrumen.js',
+  'style.css',
+  'manifest.json',
+];
+
+const PRECACHE = [
   './',
   './index.html',
   './style.css',
@@ -11,16 +24,12 @@ const ASSETS = [
   './manifest.json',
   './icon-192.png',
   './icon-512.png',
-  'https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css',
-  'https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css',
-  'https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js',
-  'https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js',
 ];
 
 self.addEventListener('install', (ev) => {
   ev.waitUntil(
     caches.open(CACHE_VERSION).then(cache =>
-      Promise.all(ASSETS.map(url =>
+      Promise.all(PRECACHE.map(url =>
         cache.add(url).catch(err => console.warn('Cache skip:', url, err.message))
       ))
     ).then(() => self.skipWaiting())
@@ -29,20 +38,43 @@ self.addEventListener('install', (ev) => {
 
 self.addEventListener('activate', (ev) => {
   ev.waitUntil(
-    caches.keys().then(keys =>
-      Promise.all(keys.filter(k => k !== CACHE_VERSION).map(k => caches.delete(k)))
-    ).then(() => self.clients.claim())
+    caches.keys()
+      .then(keys => Promise.all(keys.filter(k => k !== CACHE_VERSION).map(k => caches.delete(k))))
+      .then(() => self.clients.claim())
+      .then(() => self.clients.matchAll({ type: 'window' }))
+      .then(clients => clients.forEach(c => c.postMessage({ type: 'SW_UPDATED' })))
   );
 });
+
+function isAppCode(url) {
+  const u = new URL(url);
+  if (u.origin !== self.location.origin) return false;
+  return NETWORK_FIRST.some(name => u.pathname.endsWith('/' + name) || u.pathname === '/' || u.pathname.endsWith('pkg-app-spa/'));
+}
 
 self.addEventListener('fetch', (ev) => {
   const req = ev.request;
   if (req.method !== 'GET') return;
+
+  // Network-first for same-origin app shell
+  if (isAppCode(req.url)) {
+    ev.respondWith(
+      fetch(req).then(res => {
+        if (res && res.status === 200) {
+          const clone = res.clone();
+          caches.open(CACHE_VERSION).then(cache => cache.put(req, clone)).catch(() => {});
+        }
+        return res;
+      }).catch(() => caches.match(req))
+    );
+    return;
+  }
+
+  // Cache-first for everything else (CDN, icons)
   ev.respondWith(
     caches.match(req).then(cached => {
       if (cached) return cached;
       return fetch(req).then(res => {
-        // Cache successful same-origin and CDN responses
         if (res && res.status === 200 && (res.type === 'basic' || res.type === 'cors')) {
           const clone = res.clone();
           caches.open(CACHE_VERSION).then(cache => cache.put(req, clone)).catch(() => {});
