@@ -1786,6 +1786,8 @@ function viewRekap(view) {
 
   <ul class="nav nav-tabs mb-3">
     <li class="nav-item"><a class="nav-link ${tab === 'pkg' ? 'active' : ''}" href="#/rekap?tab=pkg"><i class="bi bi-clipboard-check"></i> Penilaian PKG</a></li>
+    <li class="nav-item"><a class="nav-link ${tab === 'pkg-kkm' ? 'active' : ''}" href="#/rekap?tab=pkg-kkm"><i class="bi bi-diagram-3"></i> Penilaian KKM</a></li>
+    <li class="nav-item"><a class="nav-link ${tab === 'pkg-kab' ? 'active' : ''}" href="#/rekap?tab=pkg-kab"><i class="bi bi-geo-alt-fill"></i> Penilaian Kabupaten</a></li>
     <li class="nav-item"><a class="nav-link ${tab === 'pkb' ? 'active' : ''}" href="#/rekap?tab=pkb"><i class="bi bi-mortarboard"></i> PKB Guru</a></li>
     <li class="nav-item"><a class="nav-link ${tab === 'pkb-madrasah' ? 'active' : ''}" href="#/rekap?tab=pkb-madrasah"><i class="bi bi-building"></i> PKB Madrasah</a></li>
     <li class="nav-item"><a class="nav-link ${tab === 'absen' ? 'active' : ''}" href="#/rekap?tab=absen"><i class="bi bi-calendar-check"></i> Absensi</a></li>
@@ -1797,12 +1799,16 @@ function viewRekap(view) {
   const content = document.getElementById('rekap-content');
   if (tab === 'pkb') renderRekapPKB(content, data);
   else if (tab === 'pkb-madrasah') renderRekapPKBMadrasah(content, data);
+  else if (tab === 'pkg-kkm') renderRekapPKGScope(content, data, 'kkm');
+  else if (tab === 'pkg-kab') renderRekapPKGScope(content, data, 'kabupaten');
   else if (tab === 'absen') renderRekapAbsen(content, data);
   else renderRekapPKG(content, data, tugasGuru);
 
   $('#btn-csv').addEventListener('click', () => {
     if (tab === 'pkb') exportRekapPKBCSV(data);
     else if (tab === 'pkb-madrasah') exportRekapPKBMadrasahCSV(data);
+    else if (tab === 'pkg-kkm') exportRekapPKGScopeCSV(data, 'kkm');
+    else if (tab === 'pkg-kab') exportRekapPKGScopeCSV(data, 'kabupaten');
     else if (tab === 'absen') exportRekapAbsenCSV(data);
     else exportRekapPKGCSV(data, tugasGuru);
   });
@@ -1810,6 +1816,8 @@ function viewRekap(view) {
     try {
       if (tab === 'pkb') await exportRekapPKBXLSX(data);
       else if (tab === 'pkb-madrasah') await exportRekapPKBMadrasahXLSX(data);
+      else if (tab === 'pkg-kkm') await exportRekapPKGScopeXLSX(data, 'kkm');
+      else if (tab === 'pkg-kab') await exportRekapPKGScopeXLSX(data, 'kabupaten');
       else if (tab === 'absen') await exportRekapAbsenXLSX(data);
       else await exportRekapPKGXLSX(data, tugasGuru);
       toast('Excel terdownload');
@@ -1819,7 +1827,7 @@ function viewRekap(view) {
     }
   });
   $('#btn-print').addEventListener('click', () => {
-    const titleMap = { pkg: 'Rekap Penilaian PKG', pkb: 'Rekap PKB Guru', 'pkb-madrasah': 'Rekap PKB Madrasah', absen: 'Rekap Absensi Guru' };
+    const titleMap = { pkg: 'Rekap Penilaian PKG', pkb: 'Rekap PKB Guru', 'pkb-madrasah': 'Rekap PKB Madrasah', 'pkg-kkm': 'Rekap Penilaian PKG per KKM', 'pkg-kab': 'Rekap Penilaian PKG per Kabupaten', absen: 'Rekap Absensi Guru' };
     printRekapTab(titleMap[tab] || 'Rekap', content.innerHTML);
   });
 }
@@ -2154,6 +2162,231 @@ async function exportRekapPKBMadrasahXLSX(data) {
     });
   }
   await buildXLSX(`rekap-pkb-${scope}-${new Date().toISOString().slice(0, 10)}.xlsx`, `PKB ${scopeLabel}`, headers, rows, widths);
+}
+
+// === REKAP PENILAIAN PKG per KKM / Kabupaten =============================
+function computePKGScope(data, scope) {
+  // scope: 'kkm' | 'kabupaten'
+  const groupKey = (g) => {
+    if (scope === 'kkm') return (g.kkm || '').trim() || '(Tanpa KKM)';
+    return (g.kabupaten || '').trim() || '(Tanpa Kabupaten)';
+  };
+  const byGroup = {};
+  for (const g of data) {
+    const k = groupKey(g);
+    if (!byGroup[k]) byGroup[k] = { name: k, gurus: [], madrasahSet: new Set() };
+    byGroup[k].gurus.push(g);
+    if (g.nama_madrasah) byGroup[k].madrasahSet.add(g.nama_madrasah);
+  }
+  const result = [];
+  for (const name of Object.keys(byGroup).sort()) {
+    const grp = byGroup[name];
+    const allNilai = [];
+    const sebutanCount = { 'Amat Baik': 0, 'Baik': 0, 'Cukup': 0, 'Sedang': 0, 'Kurang': 0, 'Belum dinilai': 0 };
+    let dinilai = 0;
+    let sumNilai = 0;
+    const guruRows = [];
+    for (const g of grp.gurus) {
+      const peran = g.peran || [];
+      // Ambil sumatif first, fallback formatif
+      const peranWithNilai = peran.filter(p => p.nilai != null && p.nilai > 0);
+      if (peranWithNilai.length === 0) {
+        sebutanCount['Belum dinilai']++;
+        guruRows.push({ guru: g, nilai: null, sebutan: 'Belum dinilai', role_label: '', jenis: '' });
+        continue;
+      }
+      // Pakai sumatif kalau ada, kalau tidak formatif
+      const sumatif = peranWithNilai.find(p => p.jenis === 'sumatif');
+      const dipakai = sumatif || peranWithNilai[0];
+      sumNilai += dipakai.nilai;
+      dinilai++;
+      allNilai.push(dipakai.nilai);
+      sebutanCount[dipakai.sebutan] = (sebutanCount[dipakai.sebutan] || 0) + 1;
+      guruRows.push({ guru: g, nilai: dipakai.nilai, sebutan: dipakai.sebutan, role_label: dipakai.role_label || '', jenis: dipakai.jenis || '' });
+    }
+    const rata = dinilai ? sumNilai / dinilai : 0;
+    result.push({
+      name,
+      jumlahMadrasah: grp.madrasahSet.size,
+      jumlahGuru: grp.gurus.length,
+      dinilai,
+      rata,
+      sebutanCount,
+      guruRows,
+    });
+  }
+  return result;
+}
+
+function renderRekapPKGScope(target, data, scope) {
+  const list = computePKGScope(data, scope);
+  const scopeLabel = scope === 'kkm' ? 'KKM' : 'Kabupaten';
+  const scopeIcon = scope === 'kkm' ? 'bi-diagram-3' : 'bi-geo-alt-fill';
+  const fieldLabel = scope === 'kkm' ? 'kkm' : 'kabupaten';
+  if (list.length === 0) {
+    target.innerHTML = `<div class="alert alert-warning">Belum ada data guru. Tambah guru dulu di menu Data Guru.</div>`;
+    return;
+  }
+  // Ringkasan keseluruhan
+  let totalGuru = 0, totalDinilai = 0, totalSum = 0;
+  for (const g of list) { totalGuru += g.jumlahGuru; totalDinilai += g.dinilai; totalSum += g.rata * g.dinilai; }
+  const rataKeseluruhan = totalDinilai ? totalSum / totalDinilai : 0;
+
+  let summaryRows = '';
+  let detailHtml = '';
+  list.forEach((g, idx) => {
+    const sb = g.sebutanCount;
+    summaryRows += `<tr>
+      <td>${idx + 1}</td>
+      <td><a href="#group-${idx}" class="text-decoration-none"><strong>${e(g.name)}</strong></a></td>
+      <td class="text-center">${g.jumlahMadrasah}</td>
+      <td class="text-center">${g.jumlahGuru}</td>
+      <td class="text-center">${g.dinilai}</td>
+      <td class="text-end"><strong>${g.rata.toFixed(2)}</strong></td>
+      <td class="text-center small">${sb['Amat Baik'] || 0}</td>
+      <td class="text-center small">${sb['Baik'] || 0}</td>
+      <td class="text-center small">${sb['Cukup'] || 0}</td>
+      <td class="text-center small">${sb['Sedang'] || 0}</td>
+      <td class="text-center small">${sb['Kurang'] || 0}</td>
+      <td class="text-center small text-muted">${sb['Belum dinilai'] || 0}</td>
+    </tr>`;
+
+    let detailRows = '';
+    g.guruRows.forEach((row, j) => {
+      const badge = row.sebutan === 'Belum dinilai' ? 'bg-secondary' :
+        row.sebutan === 'Amat Baik' ? 'bg-success' :
+        row.sebutan === 'Baik' ? 'bg-primary' :
+        row.sebutan === 'Cukup' ? 'bg-info text-dark' :
+        row.sebutan === 'Sedang' ? 'bg-warning text-dark' : 'bg-danger';
+      detailRows += `<tr>
+        <td>${j + 1}</td>
+        <td>${e(row.guru.nama)}<div class="small text-muted">${e(row.guru.nip || '-')}</div></td>
+        <td class="small">${e(row.guru.nama_madrasah || '-')}</td>
+        <td class="small">${e(row.role_label || '-')}</td>
+        <td class="small">${e((row.jenis || '').toUpperCase())}</td>
+        <td class="text-end">${row.nilai != null ? row.nilai.toFixed(2) : '-'}</td>
+        <td><span class="badge ${badge}">${e(row.sebutan)}</span></td>
+      </tr>`;
+    });
+    detailHtml += `
+      <div class="card mb-3" id="group-${idx}">
+        <div class="card-header bg-light d-flex justify-content-between flex-wrap gap-2">
+          <div><i class="bi ${scopeIcon}"></i> <strong>${e(g.name)}</strong></div>
+          <div class="small">${g.jumlahMadrasah} madrasah &middot; ${g.dinilai}/${g.jumlahGuru} guru dinilai &middot; rata-rata <strong>${g.rata.toFixed(2)}</strong></div>
+        </div>
+        <div class="table-responsive">
+          <table class="table table-sm table-hover mb-0 align-middle">
+            <thead class="table-light"><tr><th>#</th><th>Guru</th><th>Madrasah</th><th>Peran</th><th>Jenis</th><th class="text-end">Nilai</th><th>Sebutan</th></tr></thead>
+            <tbody>${detailRows || '<tr><td colspan="7" class="text-muted small text-center py-3">Tidak ada guru di scope ini</td></tr>'}</tbody>
+          </table>
+        </div>
+      </div>`;
+  });
+
+  target.innerHTML = `
+  <div class="alert alert-info py-2 small"><i class="bi ${scopeIcon}"></i>
+    Rekap Penilaian PKG agregat per <strong>${scopeLabel}</strong> (${list.length} group, ${totalGuru} guru total, rata-rata keseluruhan: <strong>${rataKeseluruhan.toFixed(2)}</strong>). Pakai nilai sumatif (fallback formatif kalau sumatif belum ada). Isi field <code>${fieldLabel}</code> di Data Guru untuk grouping yang akurat.
+  </div>
+  <div class="card mb-3">
+    <div class="card-header bg-success text-white"><i class="bi bi-bar-chart-fill"></i> Ringkasan per ${scopeLabel}</div>
+    <div class="table-responsive">
+      <table class="table table-sm mb-0 align-middle">
+        <thead class="table-light"><tr>
+          <th>#</th><th>${scopeLabel}</th><th class="text-center">Madrasah</th><th class="text-center">Guru</th><th class="text-center">Dinilai</th><th class="text-end">Rata-rata</th>
+          <th class="text-center small text-success" title="Amat Baik">AB</th>
+          <th class="text-center small text-primary" title="Baik">B</th>
+          <th class="text-center small" title="Cukup">C</th>
+          <th class="text-center small text-warning" title="Sedang">S</th>
+          <th class="text-center small text-danger" title="Kurang">K</th>
+          <th class="text-center small text-muted" title="Belum dinilai">-</th>
+        </tr></thead>
+        <tbody>${summaryRows}</tbody>
+      </table>
+    </div>
+  </div>
+  <h6 class="text-muted text-uppercase small mb-2 mt-4"><i class="bi bi-card-list"></i> Detail Per ${scopeLabel}</h6>
+  ${detailHtml}
+  `;
+}
+
+function exportRekapPKGScopeCSV(data, scope) {
+  const list = computePKGScope(data, scope);
+  const scopeLabel = scope === 'kkm' ? 'KKM' : 'Kabupaten';
+  const lines = [`No;${scopeLabel};Madrasah;Nama Guru;NIP;Peran/Tugas;Jenis;Nilai;Sebutan`];
+  let i = 0;
+  for (const g of list) {
+    for (const row of g.guruRows) {
+      i++;
+      lines.push([i, g.name, row.guru.nama_madrasah || '', row.guru.nama, row.guru.nip || '', row.role_label || '', (row.jenis || '').toUpperCase(), row.nilai != null ? row.nilai.toFixed(2) : '', row.sebutan].map(csvEsc).join(';'));
+    }
+  }
+  // Tambah ringkasan di akhir
+  lines.push('');
+  lines.push(`RINGKASAN per ${scopeLabel};Madrasah;Guru;Dinilai;Rata-rata;Amat Baik;Baik;Cukup;Sedang;Kurang;Belum dinilai`);
+  for (const g of list) {
+    const sb = g.sebutanCount;
+    lines.push([g.name, g.jumlahMadrasah, g.jumlahGuru, g.dinilai, g.rata.toFixed(2), sb['Amat Baik'] || 0, sb['Baik'] || 0, sb['Cukup'] || 0, sb['Sedang'] || 0, sb['Kurang'] || 0, sb['Belum dinilai'] || 0].map(csvEsc).join(';'));
+  }
+  downloadCSV(`rekap-pkg-${scope}-${new Date().toISOString().slice(0, 10)}.csv`, lines);
+}
+
+async function exportRekapPKGScopeXLSX(data, scope) {
+  const list = computePKGScope(data, scope);
+  const scopeLabel = scope === 'kkm' ? 'KKM' : 'Kabupaten';
+
+  // Kita pakai 2 sheet: Detail & Ringkasan
+  if (typeof ExcelJS === 'undefined') throw new Error('ExcelJS library belum load');
+  const wb = new ExcelJS.Workbook();
+  wb.creator = 'PKG App';
+  wb.created = new Date();
+
+  const headerStyle = {
+    font: { bold: true, color: { argb: 'FFFFFFFF' } },
+    fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF047A3A' } },
+    alignment: { horizontal: 'center', vertical: 'middle', wrapText: true },
+    border: { top: { style: 'thin' }, bottom: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' } },
+  };
+  const cellBorder = { top: { style: 'thin', color: { argb: 'FFCCCCCC' } }, bottom: { style: 'thin', color: { argb: 'FFCCCCCC' } }, left: { style: 'thin', color: { argb: 'FFCCCCCC' } }, right: { style: 'thin', color: { argb: 'FFCCCCCC' } } };
+
+  // Sheet 1: Ringkasan
+  const wsR = wb.addWorksheet('Ringkasan');
+  const ringHeaders = ['No', scopeLabel, 'Madrasah', 'Guru', 'Dinilai', 'Rata-rata', 'Amat Baik', 'Baik', 'Cukup', 'Sedang', 'Kurang', 'Belum dinilai'];
+  const ringWidths = [5, 30, 12, 10, 10, 12, 12, 8, 8, 10, 10, 14];
+  wsR.columns = ringHeaders.map((h, k) => ({ header: h, width: ringWidths[k] }));
+  wsR.getRow(1).eachCell(c => Object.assign(c, headerStyle));
+  wsR.getRow(1).height = 30;
+  list.forEach((g, idx) => {
+    const sb = g.sebutanCount;
+    const row = wsR.addRow([idx + 1, g.name, g.jumlahMadrasah, g.jumlahGuru, g.dinilai, Number(g.rata.toFixed(2)), sb['Amat Baik'] || 0, sb['Baik'] || 0, sb['Cukup'] || 0, sb['Sedang'] || 0, sb['Kurang'] || 0, sb['Belum dinilai'] || 0]);
+    row.eachCell(c => { c.border = cellBorder; });
+  });
+  wsR.views = [{ state: 'frozen', ySplit: 1 }];
+
+  // Sheet 2: Detail
+  const wsD = wb.addWorksheet('Detail');
+  const detHeaders = ['No', scopeLabel, 'Madrasah', 'Nama Guru', 'NIP', 'Peran/Tugas', 'Jenis', 'Nilai', 'Sebutan'];
+  const detWidths = [5, 25, 28, 28, 22, 22, 10, 10, 14];
+  wsD.columns = detHeaders.map((h, k) => ({ header: h, width: detWidths[k] }));
+  wsD.getRow(1).eachCell(c => Object.assign(c, headerStyle));
+  wsD.getRow(1).height = 30;
+  let rno = 0;
+  for (const g of list) {
+    for (const row of g.guruRows) {
+      rno++;
+      const r = wsD.addRow([rno, g.name, row.guru.nama_madrasah || '', row.guru.nama, row.guru.nip || '', row.role_label || '', (row.jenis || '').toUpperCase(), row.nilai != null ? Number(row.nilai.toFixed(2)) : '', row.sebutan]);
+      r.eachCell(c => { c.border = cellBorder; });
+    }
+  }
+  wsD.views = [{ state: 'frozen', ySplit: 1 }];
+
+  const buf = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `rekap-pkg-${scope}-${new Date().toISOString().slice(0, 10)}.xlsx`;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 function renderRekapAbsen(target, data) {
