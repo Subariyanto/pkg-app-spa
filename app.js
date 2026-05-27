@@ -1135,18 +1135,24 @@ function viewNilai(view, guruId, role, jenis) {
             <span class="text-muted small">${k.items.length} indikator</span>
           </div>
           <div class="card-body p-0">
-            ${k.items.map(it => `
+            ${k.items.map(it => {
+              const pg = PKGDB.getPenggalian(it.id);
+              const hasPg = !!pg;
+              return `
               <div class="indikator-row">
                 <div class="text-muted small" style="min-width: 1.8rem;">${it.indikator_no}.</div>
-                <div class="flex-grow-1">${e(it.indikator)}</div>
+                <div class="flex-grow-1">
+                  <a href="#" class="text-decoration-none text-body" data-pg-ind="${e(it.id)}" data-pg-text="${e(it.indikator)}" data-pg-role="${e(meta.role_label)}" data-pg-komp="${e(k.nama)}" title="Klik untuk lihat catatan penggalian data">${e(it.indikator)}</a>
+                  ${hasPg ? ' <span class="badge bg-info text-dark" style="font-size:.65rem" title="Ada catatan penggalian data">📋 catatan</span>' : ''}
+                </div>
                 <div class="skor-pill" data-iid="${e(it.id)}">
                   ${Array.from({ length: maxScore + 1 }, (_, v) => `
                     <input type="radio" id="s_${e(it.id)}_${v}" name="skor_${e(it.id)}" value="${v}" ${skorMap[it.id] === v ? 'checked' : ''}>
                     <label for="s_${e(it.id)}_${v}" class="lbl-${v}">${v}</label>
                   `).join('')}
                 </div>
-              </div>
-            `).join('')}
+              </div>`;
+            }).join('')}
             <div class="px-3 py-2 bg-light border-top d-flex flex-wrap gap-3 justify-content-end small fw-semibold" data-komp-summary="${k.no}">
               <span>Total Skor: <span class="text-primary" data-fld="sum">${kompTotals[k.no].sum}</span></span>
               <span>Skor Maks: <span data-fld="maks">${kompTotals[k.no].maks}</span></span>
@@ -1231,6 +1237,31 @@ function viewNilai(view, guruId, role, jenis) {
         $('#save-status').textContent = 'Gagal';
         $('#save-status').className = 'save-status-error';
       }
+    });
+  });
+
+  // Click on indikator text -> open Catatan Penggalian Data popup
+  view.addEventListener('click', (ev) => {
+    const pgBtn = ev.target.closest('[data-pg-ind]');
+    if (!pgBtn) return;
+    if (!view.contains(pgBtn)) return;
+    ev.preventDefault();
+    ev.stopPropagation();
+    openPenggalianDialog({
+      id: pgBtn.dataset.pgInd,
+      indikator: pgBtn.dataset.pgText,
+      roleLabel: pgBtn.dataset.pgRole,
+      kompNama: pgBtn.dataset.pgKomp,
+      onSaved: () => {
+        // Update badge inline (re-render whole view supaya state radio juga ngga reset)
+        const newPg = PKGDB.getPenggalian(pgBtn.dataset.pgInd);
+        const span = pgBtn.parentElement;
+        // remove existing badge then re-add if exists
+        span.querySelectorAll('.badge.bg-info').forEach(b => b.remove());
+        if (newPg) {
+          span.insertAdjacentHTML('beforeend', ' <span class="badge bg-info text-dark" style="font-size:.65rem" title="Ada catatan penggalian data">📋 catatan</span>');
+        }
+      },
     });
   });
 
@@ -1805,8 +1836,15 @@ function openEditKompetensiDialog(opts) {
 
 function openPenggalianDialog(opts) {
   document.getElementById('pg-modal')?.remove();
-  const existing = PKGDB.getPenggalian(opts.id) || {};
-  const metode = Array.isArray(existing.metode) ? existing.metode : [];
+  const existing = PKGDB.getPenggalian(opts.id) || null;
+  // Find role_code & komp_no dari id (format: ROLE_komp_indikator)
+  const parts = String(opts.id).split('_');
+  const roleCode = parts[0];
+  const kompNo = parseInt(parts[1]);
+  const saran = (window.SARAN_DOKUMEN && window.SARAN_DOKUMEN[roleCode] && window.SARAN_DOKUMEN[roleCode][kompNo]) || null;
+  // Pakai existing kalau ada, kalau tidak fallback ke saran (untuk pre-fill UX)
+  const data = existing || (saran ? { metode: saran.metode || [], sumber: saran.sumber || '', catatan: saran.catatan || '' } : { metode: [], sumber: '', catatan: '' });
+  const metode = Array.isArray(data.metode) ? data.metode : [];
   const has = (k) => metode.includes(k);
   const modalHtml = `
   <div class="modal fade" id="pg-modal" tabindex="-1">
@@ -1833,16 +1871,16 @@ function openPenggalianDialog(opts) {
           </div>
           <div class="mb-3">
             <label class="form-label">Sumber Data</label>
-            <textarea id="pg-sumber" class="form-control" rows="2" placeholder="Mis. RPP, jurnal mengajar, hasil supervisi, dokumen kurikulum...">${e(existing.sumber || '')}</textarea>
+            <textarea id="pg-sumber" class="form-control" rows="3" placeholder="Mis. RPP, jurnal mengajar, hasil supervisi, dokumen kurikulum...">${e(data.sumber || '')}</textarea>
           </div>
           <div class="mb-2">
             <label class="form-label">Catatan Penggalian Data</label>
-            <textarea id="pg-catatan" class="form-control" rows="6" placeholder="Tulis tips/petunjuk teknis: apa yang dicari, bukti yang diperlukan, pertanyaan kunci wawancara, dst.">${e(existing.catatan || '')}</textarea>
+            <textarea id="pg-catatan" class="form-control" rows="6" placeholder="Tulis tips/petunjuk teknis: apa yang dicari, bukti yang diperlukan, pertanyaan kunci wawancara, dst.">${e(data.catatan || '')}</textarea>
           </div>
-          ${existing.updated_at ? `<div class="small text-muted mt-2"><i class="bi bi-clock-history"></i> Terakhir diubah: ${fmtDate(existing.updated_at)}</div>` : ''}
+          ${existing && existing.updated_at ? `<div class="small text-muted mt-2"><i class="bi bi-clock-history"></i> Terakhir diubah: ${fmtDate(existing.updated_at)}</div>` : (saran ? '<div class="small text-success mt-2"><i class="bi bi-info-circle"></i> Pre-isi dari saran dokumen Kemenag. Ubah/tambahkan sesuai kebutuhan, lalu Simpan.</div>' : '')}
         </div>
         <div class="modal-footer d-flex justify-content-between">
-          ${existing.updated_at ? '<button class="btn btn-outline-danger btn-sm" id="pg-clear"><i class="bi bi-trash"></i> Hapus Catatan</button>' : '<span></span>'}
+          ${existing && existing.updated_at ? '<button class="btn btn-outline-danger btn-sm" id="pg-clear"><i class="bi bi-trash"></i> Hapus Catatan</button>' : '<span></span>'}
           <div>
             <button class="btn btn-light" data-bs-dismiss="modal">Tutup</button>
             <button class="btn btn-primary" id="pg-save"><i class="bi bi-check-lg"></i> Simpan</button>
