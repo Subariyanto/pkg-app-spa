@@ -999,9 +999,9 @@ function viewGuruDetail(view, id) {
             <div class="mb-3 p-3 border rounded" data-pkb-row="${i}">
               <div class="fw-semibold mb-2">Prioritas ${i}</div>
               <div class="row g-2">
-                <div class="col-md-4"><label class="form-label small">Kompetensi</label><input class="form-control" name="kompetensi_${i}" value="${e(p.kompetensi || '')}"></div>
-                <div class="col-md-4"><label class="form-label small">Rencana Kegiatan</label><input class="form-control" name="rencana_${i}" value="${e(p.rencana || '')}"></div>
-                <div class="col-md-4"><label class="form-label small">Target</label><input class="form-control" name="target_${i}" value="${e(p.target || '')}"></div>
+                <div class="col-md-4"><label class="form-label small">Kompetensi</label><textarea class="form-control" name="kompetensi_${i}" rows="4">${e(p.kompetensi || '')}</textarea></div>
+                <div class="col-md-4"><label class="form-label small">Rencana Kegiatan</label><textarea class="form-control" name="rencana_${i}" rows="4">${e(p.rencana || '')}</textarea></div>
+                <div class="col-md-4"><label class="form-label small">Target</label><textarea class="form-control" name="target_${i}" rows="4">${e(p.target || '')}</textarea></div>
               </div>
             </div>`;
           }).join('')}
