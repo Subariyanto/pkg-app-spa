@@ -1837,11 +1837,16 @@ function openEditKompetensiDialog(opts) {
 function openPenggalianDialog(opts) {
   document.getElementById('pg-modal')?.remove();
   const existing = PKGDB.getPenggalian(opts.id) || null;
-  // Find role_code & komp_no dari id (format: ROLE_komp_indikator)
+  // Find role_code & komp_no & ind_no dari id (format: ROLE_komp_indikator)
   const parts = String(opts.id).split('_');
   const roleCode = parts[0];
   const kompNo = parseInt(parts[1]);
-  const saran = (window.SARAN_DOKUMEN && window.SARAN_DOKUMEN[roleCode] && window.SARAN_DOKUMEN[roleCode][kompNo]) || null;
+  const indNo = parseInt(parts[2]);
+  // Prioritas: per-indikator > per-kompetensi
+  const saranInd = (window.SARAN_INDIKATOR && window.SARAN_INDIKATOR[roleCode] && window.SARAN_INDIKATOR[roleCode][kompNo] && window.SARAN_INDIKATOR[roleCode][kompNo][indNo]) || null;
+  const saranKomp = (window.SARAN_DOKUMEN && window.SARAN_DOKUMEN[roleCode] && window.SARAN_DOKUMEN[roleCode][kompNo]) || null;
+  const saran = saranInd || saranKomp;
+  const saranScope = saranInd ? 'indikator' : (saranKomp ? 'kompetensi' : null);
   // Pakai existing kalau ada, kalau tidak fallback ke saran (untuk pre-fill UX)
   const data = existing || (saran ? { metode: saran.metode || [], sumber: saran.sumber || '', catatan: saran.catatan || '' } : { metode: [], sumber: '', catatan: '' });
   const metode = Array.isArray(data.metode) ? data.metode : [];
@@ -1877,7 +1882,7 @@ function openPenggalianDialog(opts) {
             <label class="form-label">Catatan Penggalian Data</label>
             <textarea id="pg-catatan" class="form-control" rows="6" placeholder="Tulis tips/petunjuk teknis: apa yang dicari, bukti yang diperlukan, pertanyaan kunci wawancara, dst.">${e(data.catatan || '')}</textarea>
           </div>
-          ${existing && existing.updated_at ? `<div class="small text-muted mt-2"><i class="bi bi-clock-history"></i> Terakhir diubah: ${fmtDate(existing.updated_at)}</div>` : (saran ? '<div class="small text-success mt-2"><i class="bi bi-info-circle"></i> Pre-isi dari saran dokumen Kemenag. Ubah/tambahkan sesuai kebutuhan, lalu Simpan.</div>' : '')}
+          ${existing && existing.updated_at ? `<div class="small text-muted mt-2"><i class="bi bi-clock-history"></i> Terakhir diubah: ${fmtDate(existing.updated_at)}</div>` : (saran ? `<div class="small text-success mt-2"><i class="bi bi-info-circle"></i> Pre-isi dari saran dokumen ${saranScope === 'indikator' ? 'spesifik <strong>per-indikator</strong>' : '<strong>per-kompetensi</strong>'}. Ubah/tambahkan sesuai kebutuhan, lalu Simpan.</div>` : '')}
         </div>
         <div class="modal-footer d-flex justify-content-between">
           ${existing && existing.updated_at ? '<button class="btn btn-outline-danger btn-sm" id="pg-clear"><i class="bi bi-trash"></i> Hapus Catatan</button>' : '<span></span>'}

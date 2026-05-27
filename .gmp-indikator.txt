@@ -1,0 +1,90 @@
+﻿=== GMP_1 (Mengenal karakteristik peserta didik) ===
+ 1. Guru dapat mengidentifikasi karakteristik belajar setiap peserta didik di kelasnya untuk mendorong pembelajaran mendalam
+ 2. Guru memastikan bahwa semua peserta didik mendapatkan kesempatan yang sama untuk berpartisipasi aktif dalam kegiatan pembelajaran.
+ 3. Guru mencoba mengetahui penyebab penyimpangan perilaku peserta didik untuk mencegah agar perilaku tersebut tidak merugikan peserta didik lainnya.
+ 4. Guru memahami minat, bakat, kebutuhan peserta didik untuk mendorong pembelajaran mendalam
+=== GMP_10 (Etos kerja, tanggung jawab yang tinggi, dan rasa bangga menjadi guru) ===
+ 1. Guru mengawali dan mengakhiri pembelajaran dengan tepat waktu.
+ 2. Jika guru harus meninggalkan kelas, guru mengaktifkan siswa dengan melakukan hal-hal produktif terkait dengan mata pelajaran, dan meminta guru piket atau guru lain untuk mengawasi kelas.
+ 3. Guru memenuhi jam mengajar dan dapat melakukan semua kegiatan lain di luar jam mengajar berdasarkan ijin dan persetujuan pengelola madrasah.
+ 4. Guru meminta ijin dan memberitahu lebih awal, dengan memberikan alasan dan bukti yang sah jika tidak menghadiri kegiatan yang telah direncanakan, termasuk proses pembelajaran di kelas.
+ 5. Guru menyelesaikan semua tugas administratif dan non-pembelajaran dengan tepat waktu sesuai standar yang ditetapkan.
+ 6. Guru memanfaatkan waktu luang selain mengajar untuk kegiatan yang produktif terkait dengan tugasnya.
+ 7. Guru memberikan kontribusi terhadap pengembangan sekolah dan mempunyai prestasi yang berdampak positif terhadap nama baik sekolah.
+ 8. Guru merasa bangga dengan profesinya sebagai guru.
+=== GMP_11 (Bersikap inklusif, bertindak objektif, serta tidak diskriminatif.) ===
+ 1. Guru memperlakukan semua peserta didik secara adil, memberikan perhatian dan bantuan sesuai kebutuhan masing-masing, tanpa memperdulikan faktor personal.
+ 2. Guru menjaga hubungan baik dan peduli dengan teman sejawat (bersifat inklusif), serta berkontribusi positif terhadap semua diskusi formal dan informal terkait dengan pekerjaannya.
+ 3. Guru sering berinteraksi dengan peserta didik dan tidak membatasi perhatiannya hanya pada kelompok tertentu (misalnya: peserta didik yang pandai, kaya, berasal dari daerah yang sama dengan guru).
+ 4. Guru membangun iklim sosial berbasis cinta, kebersamaan, dan kepedulian
+=== GMP_12 (Komunikasi dengan sesama guru, tenaga pendidikan, orang tua peserta didik, dan) ===
+ 1. Guru menyampaikan informasi tentang kemajuan, kesulitan, dan potensi peserta didik kepada orang tuanya, baik dalam pertemuan formal maupun tidak formal antara guru dan orang tua, teman sejawat, dan dapat menunjukkan buktinya.
+ 2. Guru ikut berperan aktif dalam kegiatan di luar pembelajaran yang diselenggarakan oleh sekolah dan masyarakat dan dapat memberikan bukti keikutsertaannya.
+ 3. Guru menanamkan nilai kebiasaan sehat & cinta dalam interaksi sosial
+=== GMP_13 (Penguasaan materi struktur konsep dan pola pikir keilmuan yang mendukung mata) ===
+ 1. Guru mengintegrasikan materi pembelajaran dengan konsep- konsep yang terdapat di dalam Al Qur├óΓé¼Γäóan dan Hadits.
+ 2. Guru melakukan pemetaan standar kompetensi dan kompetensi dasar untuk mata pelajaran yang diampunya, untuk mengidentifikasi materi pembelajaran yang dianggap sulit, melakukan perencanaan dan pelaksanaan pembelajaran, dan memperkirakan alokasi waktu yang diperlukan.
+ 3. Guru menyusun materi, perencanaan dan pelaksanaan pembelajaran yang berisi informasi yang tepat, mutakhir, dan yang membantu peserta didik untuk memahami konsep materi pembelajaran.
+ 4. Guru mengaitkan materi dengan kehidupan nyata agar tercapai deep learning
+=== GMP_14 (Mengembangkan keprofesian melalui tindakan reflektif) ===
+ 1. Guru melakukan evaluasi diri secara spesifik, lengkap, dan didukung dengan contoh pengalaman diri sendiri.
+ 2. Guru memiliki jurnal pembelajaran, catatan masukan dari kolega atau hasil penilaian proses pembelajaran sebagai bukti yang menggambarkan kinerjanya.
+ 3. Guru memanfaatkan bukti gambaran kinerjanya untuk mengembangkan perencanaan dan pelaksanaan pembelajaran selanjutnya dalam program Pengembangan Keprofesian Berkelanjutan (PKB).
+ 4. Guru dapat mengaplikasikan pengalaman PKB dalam perencanaan, pelaksanaan, penilaian pembelajaran dan tindak lanjutnya.
+ 5. Guru melakukan penelitian, mengembangkan karya inovasi, mengikuti kegiatan ilmiah (misalnya seminar, konferensi), dan aktif dalam melaksanakan PKB.
+ 6. Guru dapat memanfaatkan TIK dalam berkomunikasi dan pelaksanaan PKB.
+ 7. Guru merefleksikan pembelajaran dengan perspektif cinta dan kebiasaan hidup hebat
+=== GMP_2 (Menguasai teori belajar dan prinsip-prinsip pembelajaran) ===
+ 1. Guru memberi kesempatan kepada peserta didik untuk menguasai materi pembelajaran sesuai usia dan kemampuan belajarnya melalui pengaturan proses pembelajaran dan aktivitas yang bervariasi.
+ 2. Guru selalu memastikan tingkat pemahaman peserta didik terhadap materi pembelajaran tertentu dan menyesuaikan aktivitas pembelajaran berikutnya berdasarkan tingkat pemahaman tersebut.
+ 3. Guru dapat menjelaskan alasan pelaksanaan kegiatan/aktivitas yang dilakukannya, baik yang sesuai maupun yang berbeda dengan rencana, terkait keberhasilan pembelajaran.
+ 4. Guru menggunakan berbagai teknik untuk memotiviasi kemauan belajar peserta didik.
+ 5. Guru merencanakan kegiatan pembelajaran yang saling terkait satu sama lain, dengan memperhatikan tujuan pembelajaran maupun proses belajar peserta didik.
+ 6. Guru memperhatikan respon peserta didik yang belum/kurang memahami materi pembelajaran yang diajarkan dan menggunakannya untuk memperbaiki rancangan pembelajaran berikutnya.
+=== GMP_3 (Pengembangan kurikulum) ===
+ 1. Guru dapat menyusun silabus yang sesuai dengan kurikulum.
+ 2. Guru merancang rencana pembelajaran yang sesuai dengan silabus untuk membahas materi ajar tertentu agar peserta didik dapat mencapai kompetensi dasar yang ditetapkan.
+ 3. Guru mengembangkan materi pembelajaran untuk mencapai kompetensi dasar
+ 4. Guru mengikuti urutan materi pembelajaran dengan memperhatikan tujuan pembelajaran.
+ 5. Guru memilih materi pembelajaran yang: a) sesuai dengan tujuan pembelajaran, b) tepat dan mutakhir, c) sesuai dengan usia dan tingkat kemampuan belajar peserta didik, dan d) dapat dilaksanakan di kelas e) sesuai dengan konteks kehidupan sehari-hari peserta didik.
+ 6. Guru mengintegrasikan Kurikulum Berbasis Cinta dengan nilai kasih sayang, empati, dan keteladanan
+=== GMP_4 (Kegiatan Pembelajaran yang Mendidik) ===
+ 1. Guru melaksanakan aktivitas pembelajaran sesuai dengan rancangan yang telah disusun secara lengkap (termasuk pemberian informasi baru) yang mengindikasikan bahwa guru mengerti tentang tujuannya.
+ 2. Guru melaksanakan aktivitas pembelajaran yang bertujuan untuk membantu proses belajar peserta didik, bukan untuk menguji sehingga membuat peserta didik merasa tertekan.
+ 3. Guru menyikapi kesalahan yang dilakukan peserta didik sebagai tahapan proses pembelajaran, bukan semata-mata kesalahan yang harus dikoreksi. Misalnya: dengan mengetahui terlebih dahulu peserta didik lain yang setuju/tidak setuju dengan jawaban tersebut, sebelum memberikan penjelasan tentang jawaban yang benar
+ 4. Guru melaksanakan kegiatan pembelajaran sesuai isi kurikulum dan mengkaitkannya dengan konteks kehidupan sehari-hari peserta didik.
+ 5. Guru melakukan aktivitas pembelajaran secara bervariasi dengan mempertimbangkan waktu, kondisi kelas, usia dan tingkat kemampuan belajar dan mempertahankan perhatian peserta didik.
+ 6. Guru mengelola kelas dengan efektif tanpa mendominasi atau sibuk dengan kegiatannya sendiri agar semua waktu peserta dapat dimanfaatkan secara produktif.
+ 7. Guru memberikan banyak kesempatan kepada peserta didik untuk bertanya, mempraktikkan dan berinteraksi dengan peserta didik lain
+ 8. Guru mengatur pelaksanaan aktivitas pembelajaran secara sistematis untuk membantu proses belajar peserta didik. Sebagai contoh: guru menambah informasi baru setelah mengevaluasi pemahaman peserta didik terhadap materi sebelumnya
+ 9. Guru menggunakan alat bantu mengajar, dan/atau audio-visual (termasuk TIK) untuk meningkatkan motivasi belajar peserta didik dalam mencapai tujuan pembelajaran.
+ 10. Guru menerapkan strategi deep learning yang melatih berpikir kritis, reflektif, kolaboratif
+=== GMP_5 (Memahami dan mengembangkan potensi) ===
+ 1. Guru menganalisis hasil belajar berdasarkan segala bentuk penilaian terhadap setiap peserta didik untuk mengetahui tingkat kemajuan masing-masing.
+ 2. Guru merancang dan melaksanakan aktivitas pembelajaran yang mendorong peserta didik untuk belajar sesuai dengan kecakapan dan pola belajar masing-masing.
+ 3. Guru merancang dan melaksanakan aktivitas pembelajaran untuk memunculkan daya kreativitas dan kemampuan berfikir kritis peserta didik.
+ 4. Guru secara aktif membantu peserta didik dalam proses pembelajaran dengan memberikan perhatian kepada setiap individu.
+ 5. Guru dapat mengidentifikasi dengan benar tentang bakat, minat, potensi, dan kesulitan belajar
+ 6. Guru membiasakan 7 Kebiasaan Anak Indonesia Hebat dalam aktivitas belajar
+=== GMP_6 (Komunikasi dengan peserta didik) ===
+ 1. Guru menggunakan pertanyaan untuk mengetahui pemahaman dan menjaga partisipasi peserta didik, termasuk memberikan pertanyaan terbuka yang menuntut peserta didik untuk menjawab dengan ide dan pengetahuan mereka.
+ 2. Guru memberikan perhatian dan mendengarkan semua pertanyaan dan tanggapan peserta didik, tanpa menginterupsi, kecuali jika diperlukan untuk membantu atau mengklarifikasi pertanyaan/tanggapan tersebut.
+ 3. Guru menanggapi pertanyaan peserta didik secara tepat, benar, dan mutakhir, sesuai tujuan pembelajaran dan isi kurikulum, tanpa mempermalukannya.
+ 4. Guru menyajikan kegiatan pembelajaran yang dapat menumbuhkan kerja sama yang baik antar pesertadidik.
+ 5. Guru mendengarkan dan memberikan perhatian terhadap semua jawaban peserta didik
+=== GMP_7 (Penilaian dan evaluasi) ===
+ 1. Guru menyusun alat penilaian yang sesuai dengan tujuan pembelajaran untuk mencapai kompetensi tertentu seperti yang tertulis dalam RPP.
+ 2. Guru melaksanakan penilaian dengan berbagai teknik dan jenis penilaian, selain penilaian formal yang dilaksanakan sekolah, dan mengumumkan hasil serta implikasinya kepada peserta didik, tentang tingkat pemahaman terhadap materi pembelajaran yang telah dan akan dipelajari.
+ 3. Guru menganalisis hasil penilaian untuk mengidentifikasi topik/kompetensi dasar yang sulit sehingga diketahui kekuatan dan kelemahan masing-masing peserta didik untuk keperluan remedial dan pengayaan.
+ 4. Guru memanfaatkan masukan dari peserta didik dan merefleksikannya untuk meningkatkan pembelajaran selanjutnya, dan dapat membuktikannya melalui catatan, jurnal pembelajaran, rancangan pembelajaran, materi tambahan, dan sebagainya.
+ 5. Guru melakukan asesmen yang memotivasi, memberi ruang refleksi, dan menumbuhkan cinta belajar
+=== GMP_8 (Bertindak sesuai dengan norma agama, hukum, sosial dan kebudayaan nasional) ===
+ 1. Guru menghargai dan mempromosikan prinsip-prinsip Pancasila sebagai dasar ideologi dan etika bagi semua warga Indonesia.
+ 2. Guru mengembangkan kerjasama dan membina kebersamaan dengan teman sejawat tanpa memperhatikan perbedaan yang ada (misalnya: suku, agama, dan gender).
+ 3. Guru menampilkan keteladanan cinta kepada Allah, Rasulullah, diri sendiri, sesama, dan lingkungan
+=== GMP_9 (Menunjukkan pribadi yang dewasa dan teladan) ===
+ 1. Guru bertingkah laku sopan dalam berbicara, berpenampilan, dan berbuat terhadap semua peserta didik, orang tua, dan teman sejawat.
+ 2. Guru mau membagi pengalamannya dengan teman sejawat, termasuk mengundang mereka untuk mengobservasi cara mengajarnya dan memberikan masukan.
+ 3. Guru mampu mengelola pembelajaran yang membuktikan bahwa guru dihormati oleh peserta didik, sehingga semua peserta didik selalu memperhatikan guru dan berpartisipasi aktif dalam proses pembelajaran.
+ 4. Guru bersikap dewasa dalam menerima masukan dari peserta didik dan memberikan kesempatan kepada peserta didik untuk berpartisipasi dalam proses pembelajaran.
+ 5. Guru sabar, penuh cinta, dan konsisten membimbing dengan kasih sayang
