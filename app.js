@@ -62,6 +62,13 @@ function renderShell() {
           <li class="nav-item"><a class="nav-link" href="#/import"><i class="bi bi-cloud-upload"></i> Import</a></li>
           <li class="nav-item"><a class="nav-link" href="#/instrumen"><i class="bi bi-list-check"></i> Instrumen</a></li>
           <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown"><i class="bi bi-file-earmark-text"></i> Laporan</a>
+            <ul class="dropdown-menu">
+              <li><a class="dropdown-item" href="#/laporan-madrasah"><i class="bi bi-building"></i> Laporan Madrasah</a></li>
+              <li><a class="dropdown-item" href="#/laporan-kkm"><i class="bi bi-diagram-3"></i> Laporan KKM</a></li>
+            </ul>
+          </li>
+          <li class="nav-item dropdown">
             <a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown"><i class="bi bi-shield-check"></i> Backup</a>
             <ul class="dropdown-menu">
               <li><a class="dropdown-item" href="#/backup"><i class="bi bi-building"></i> Backup Madrasah</a></li>
@@ -108,6 +115,10 @@ function render() {
   if (s0 === 'penilaian') return viewPenilaianHub(view);
   if (s0 === 'instrumen') return viewInstrumen(view);
   if (s0 === 'import') return viewImport(view);
+  if (s0 === 'laporan-madrasah') return viewLaporanMadrasahPicker(view);
+  if (s0 === 'laporan-madrasah-view' && s1) return viewLaporanMadrasah(view, decodeURIComponent(s1));
+  if (s0 === 'laporan-kkm') return viewLaporanKKMPicker(view);
+  if (s0 === 'laporan-kkm-view' && s1) return viewLaporanKKM(view, decodeURIComponent(s1));
   if (s0 === 'backup') return viewBackupMadrasah(view);
   if (s0 === 'backup-kabupaten') return viewBackupKabupaten(view);
   if (s0 === 'backup-clear') return viewBackupClear(view);
