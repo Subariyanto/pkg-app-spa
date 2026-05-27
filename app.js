@@ -61,6 +61,7 @@ function renderShell() {
           <li class="nav-item"><a class="nav-link" href="#/rekap"><i class="bi bi-table"></i> Rekap</a></li>
           <li class="nav-item"><a class="nav-link" href="#/import"><i class="bi bi-cloud-upload"></i> Import</a></li>
           <li class="nav-item"><a class="nav-link" href="#/instrumen"><i class="bi bi-list-check"></i> Instrumen</a></li>
+          <li class="nav-item"><a class="nav-link" href="#/panduan"><i class="bi bi-question-circle"></i> Panduan</a></li>
           <li class="nav-item dropdown">
             <a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown"><i class="bi bi-file-earmark-text"></i> Laporan</a>
             <ul class="dropdown-menu">
@@ -114,6 +115,7 @@ function render() {
   if (s0 === 'rekap') return viewRekap(view);
   if (s0 === 'penilaian') return viewPenilaianHub(view);
   if (s0 === 'instrumen') return viewInstrumen(view);
+  if (s0 === 'panduan') return viewPanduan(view);
   if (s0 === 'import') return viewImport(view);
   if (s0 === 'laporan-madrasah') return viewLaporanMadrasahPicker(view);
   if (s0 === 'laporan-madrasah-view' && s1) return viewLaporanMadrasah(view, decodeURIComponent(s1));
@@ -2639,6 +2641,224 @@ function printRekapTab(title, html) {
   <script>window.onload=()=>{setTimeout(()=>window.print(),200);}<\/script>
   </body></html>`);
   w.document.close();
+}
+
+// === PANDUAN PENGGUNAAN =================================================
+function viewPanduan(view) {
+  view.innerHTML = `
+  <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <h4 class="mb-0"><i class="bi bi-question-circle"></i> Panduan Penggunaan Aplikasi PKG</h4>
+    <button id="btn-print-panduan" class="btn btn-sm btn-outline-secondary"><i class="bi bi-printer"></i> Cetak</button>
+  </div>
+
+  <div class="alert alert-success py-2 small"><i class="bi bi-info-circle"></i>
+    Aplikasi PKG ini berjalan <strong>offline-first</strong>. Data tersimpan di browser (localStorage) per perangkat. Pindah perangkat? Pakai menu Backup terlebih dahulu.
+  </div>
+
+  <div class="row g-3">
+    <div class="col-lg-3">
+      <div class="card sticky-summary">
+        <div class="card-header"><i class="bi bi-bookmark"></i> Daftar Isi</div>
+        <div class="list-group list-group-flush small">
+          <a class="list-group-item list-group-item-action" href="#sec-mulai">1. Mulai Cepat</a>
+          <a class="list-group-item list-group-item-action" href="#sec-guru">2. Data Guru</a>
+          <a class="list-group-item list-group-item-action" href="#sec-kamad">3. Data Kamad</a>
+          <a class="list-group-item list-group-item-action" href="#sec-nilai">4. Penilaian</a>
+          <a class="list-group-item list-group-item-action" href="#sec-rekap">5. Rekap</a>
+          <a class="list-group-item list-group-item-action" href="#sec-laporan">6. Laporan Madrasah/KKM</a>
+          <a class="list-group-item list-group-item-action" href="#sec-import">7. Import Excel</a>
+          <a class="list-group-item list-group-item-action" href="#sec-instrumen">8. Instrumen</a>
+          <a class="list-group-item list-group-item-action" href="#sec-backup">9. Backup &amp; Restore</a>
+          <a class="list-group-item list-group-item-action" href="#sec-pwa">10. Install sebagai App (PWA)</a>
+          <a class="list-group-item list-group-item-action" href="#sec-faq">11. FAQ &amp; Troubleshooting</a>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-9" id="panduan-content">
+      <div class="card mb-3" id="sec-mulai">
+        <div class="card-header bg-primary text-white"><i class="bi bi-rocket-takeoff"></i> 1. Mulai Cepat (5 langkah)</div>
+        <div class="card-body">
+          <ol>
+            <li><strong>Tambah Data Guru</strong> di menu <em>Data Guru → + Tambah Guru</em>. Isi nama, NIP, madrasah, peran/jabatan, dan KKM (untuk grouping wilayah).</li>
+            <li><strong>(Opsional) Tambah Data Kamad</strong> di menu <em>Data Kamad</em> agar nama Kepala Madrasah otomatis muncul di Halaman Pengesahan laporan.</li>
+            <li><strong>Lakukan Penilaian</strong> di menu <em>Penilaian</em>: pilih guru → pilih peran → pilih jenis (Sumatif/Formatif) → isi skor per indikator. Auto-save aktif.</li>
+            <li><strong>Lihat Rekap</strong> di menu <em>Rekap</em>. Tersedia tab PKG, KKM, Kabupaten, PKB, Absensi.</li>
+            <li><strong>Generate Laporan</strong> di menu <em>Laporan → Madrasah / KKM</em>. Output HTML A4 (cetak/PDF) atau DOCX.</li>
+          </ol>
+        </div>
+      </div>
+
+      <div class="card mb-3" id="sec-guru">
+        <div class="card-header"><i class="bi bi-people"></i> 2. Data Guru</div>
+        <div class="card-body">
+          <p>Menu untuk mengelola daftar guru sasaran penilaian.</p>
+          <ul>
+            <li><strong>Tambah:</strong> klik tombol <em>+ Tambah Guru</em>. Field penting: Nama, NIP, Nama Madrasah, KKM, Kabupaten, Peran (Guru Mapel/BK/TIK/Pustakawan/Laboran), Tugas Tambahan (Wakil Kepala bidang Kurikulum/Kesiswaan/Sarpras/Humas).</li>
+            <li><strong>Edit:</strong> klik nama guru → tombol Edit. NIP unik per guru, sistem akan menolak duplikat.</li>
+            <li><strong>Hapus:</strong> hati-hati — menghapus guru juga menghapus penilaian, kehadiran, dan PKB-nya.</li>
+            <li><strong>Cari:</strong> kotak pencarian di atas bisa cari berdasarkan nama, NIP, atau nama madrasah.</li>
+            <li><strong>Field KKM &amp; Kabupaten</strong> wajib terisi kalau ingin menggunakan menu Laporan KKM dan Rekap Kabupaten.</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="card mb-3" id="sec-kamad">
+        <div class="card-header"><i class="bi bi-person-badge"></i> 3. Data Kamad (Kepala Madrasah)</div>
+        <div class="card-body">
+          <p>Menu terpisah untuk mengelola data Kepala Madrasah. Data ini dipakai sebagai default Halaman Pengesahan di Laporan Madrasah.</p>
+          <ul>
+            <li>Field: Nama, NIP, Nama Madrasah, Alamat Madrasah, Jenjang, No HP, Email, Catatan.</li>
+            <li><strong>Sync dari Data Guru:</strong> jika field <code>nama_kamad</code> dan <code>nip_kamad</code> sudah terisi di data guru, sistem otomatis membuat record Kamad.</li>
+            <li>Pencocokan Kamad ke Madrasah dilakukan berdasarkan <code>nama_madrasah</code> (case-insensitive).</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="card mb-3" id="sec-nilai">
+        <div class="card-header"><i class="bi bi-clipboard-check"></i> 4. Penilaian</div>
+        <div class="card-body">
+          <p>Mengisi skor PKG per guru per peran.</p>
+          <ul>
+            <li><strong>Jenis penilaian:</strong> Sumatif (akhir tahun, dipakai untuk laporan utama) dan Formatif (awal tahun, sebagai pemetaan awal).</li>
+            <li><strong>Skor:</strong> tergantung peran. Guru Mapel/BK/TIK/Pustakawan/Laboran skor 0-2. Wakil Kepala (Kurikulum/Kesiswaan/Sarpras/Humas) skor 0-4.</li>
+            <li><strong>Auto-save:</strong> setiap perubahan skor tersimpan otomatis ke localStorage. Tidak perlu klik Simpan.</li>
+            <li><strong>Catatan Penggalian Data:</strong> tombol info di tiap indikator menampilkan saran dokumen, observasi, dan wawancara untuk asesor.</li>
+            <li><strong>Nilai Akhir:</strong> rata-rata persentase dari semua kompetensi dalam peran tersebut. Sebutan otomatis: &gt;90 Amat Baik, &gt;75 Baik, &gt;60 Cukup, &gt;50 Sedang, ≤50 Kurang.</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="card mb-3" id="sec-rekap">
+        <div class="card-header"><i class="bi bi-table"></i> 5. Rekap</div>
+        <div class="card-body">
+          <p>Tabel agregat hasil penilaian, dengan beberapa tab:</p>
+          <ul>
+            <li><strong>Penilaian PKG:</strong> daftar semua guru dengan nilai akhir dan sebutan.</li>
+            <li><strong>Penilaian KKM:</strong> agregat per KKM (jumlah madrasah, rata-rata, distribusi sebutan, detail per kamad).</li>
+            <li><strong>Penilaian Kabupaten:</strong> agregat per kabupaten/kota.</li>
+            <li><strong>PKB Guru:</strong> rekomendasi pengembangan keprofesian berkelanjutan per guru, 3 prioritas terlemah.</li>
+            <li><strong>PKB Madrasah:</strong> agregat 3 prioritas terlemah per madrasah, klik jumlah guru untuk lihat daftar nama.</li>
+            <li><strong>Absensi:</strong> rekap kehadiran bulanan per guru.</li>
+          </ul>
+          <p>Setiap tab punya tombol <strong>Cetak</strong>, <strong>Export Excel</strong>, dan <strong>CSV</strong>.</p>
+        </div>
+      </div>
+
+      <div class="card mb-3" id="sec-laporan">
+        <div class="card-header bg-success text-white"><i class="bi bi-file-earmark-text"></i> 6. Laporan Madrasah &amp; KKM</div>
+        <div class="card-body">
+          <p>Generator laporan formal lengkap (BAB I-V) untuk dokumentasi resmi.</p>
+          <ol>
+            <li>Buka menu <em>Laporan → Laporan Madrasah</em> atau <em>Laporan KKM</em>.</li>
+            <li>Pilih madrasah/KKM dari daftar.</li>
+            <li>Isi <strong>Identitas Penanda Tangan</strong> (nama Kepala Madrasah / Pengawas, NIP, kota, tanggal). Untuk Kamad, default-nya otomatis dari record Kamad.</li>
+            <li>Klik salah satu tombol output:
+              <ul>
+                <li><strong>HTML A4</strong> → buka tab baru, langsung Cetak/Simpan PDF dari browser (Ctrl+P).</li>
+                <li><strong>DOCX</strong> → download file Word, bisa diedit lebih lanjut.</li>
+              </ul>
+            </li>
+          </ol>
+          <p><strong>Struktur laporan:</strong> Cover, Kata Pengantar, Daftar Isi, Halaman Pengesahan, BAB I Pendahuluan (Latar Belakang/Dasar Hukum/Tujuan/Manfaat/Ruang Lingkup), BAB II Landasan Teori, BAB III Profil, BAB IV Hasil Penilaian (tabel per guru + distribusi sebutan + analisis per kompetensi + narasi), BAB V Penutup (Kesimpulan/Rekomendasi/Tindak Lanjut), Lampiran.</p>
+          <p><strong>Tanda tangan:</strong></p>
+          <ul>
+            <li><em>Laporan Madrasah:</em> Kepala Madrasah → mengetahui Pengawas Madrasah.</li>
+            <li><em>Laporan KKM:</em> Pengawas Madrasah → mengetahui Ketua Pokjawas Madrasah Kabupaten Jember (otomatis: SUBARIYANTO, S.Pd, M.Pd.I. / NIP. 197002122005011004).</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="card mb-3" id="sec-import">
+        <div class="card-header"><i class="bi bi-cloud-upload"></i> 7. Import Excel</div>
+        <div class="card-body">
+          <p>Mengimpor data dari aplikasi PKG Excel/xlsm legacy:</p>
+          <ul>
+            <li><strong>Single import:</strong> upload satu file .xlsm → sistem ekstrak data guru, skor, dan kehadiran.</li>
+            <li><strong>Batch import:</strong> upload banyak file sekaligus (misal seluruh madrasah binaan), proses paralel, summary di akhir.</li>
+            <li>Mapping NIP otomatis: jika NIP sudah ada, data digabung; jika baru, dibuat record baru.</li>
+            <li>Setelah import, cek di menu Data Guru &amp; Rekap untuk memastikan data masuk sesuai harapan.</li>
+          </ul>
+          <p class="text-muted small"><i class="bi bi-info-circle"></i> Format Excel mengikuti template SK Dirjen Pendis 6673/2019. Sheet, kolom, dan posisi cell harus sesuai template asli agar parser bekerja.</p>
+        </div>
+      </div>
+
+      <div class="card mb-3" id="sec-instrumen">
+        <div class="card-header"><i class="bi bi-list-check"></i> 8. Instrumen</div>
+        <div class="card-body">
+          <p>Viewer untuk melihat seluruh indikator PKG per peran (407 indikator total).</p>
+          <ul>
+            <li>Filter per peran lewat dropdown atau URL <code>#/instrumen?role=GMP</code>.</li>
+            <li><strong>Override teks:</strong> klik tombol pensil untuk menyesuaikan redaksi indikator atau nama kompetensi tanpa mengubah file <code>instrumen.js</code>. Override tersimpan di localStorage.</li>
+            <li>Tombol <em>Reset Override</em> mengembalikan semua teks ke versi default.</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="card mb-3" id="sec-backup">
+        <div class="card-header bg-warning"><i class="bi bi-shield-check"></i> 9. Backup &amp; Restore</div>
+        <div class="card-body">
+          <p><strong>WAJIB lakukan backup berkala</strong> karena data tersimpan di browser (bisa hilang kalau cache dibersihkan, browser di-uninstall, atau ganti perangkat).</p>
+          <ul>
+            <li><strong>Backup Madrasah:</strong> export JSON satu madrasah, untuk arsip per satuan pendidikan.</li>
+            <li><strong>Backup Kabupaten/KKM:</strong> export JSON seluruh data, untuk arsip lengkap atau pindah perangkat.</li>
+            <li><strong>Restore:</strong> mode <em>Replace</em> (timpa data sekarang) atau <em>Merge</em> (gabung, dedup berdasarkan NIP).</li>
+            <li><strong>Hapus Semua Data:</strong> reset total semua tabel. Tidak bisa di-undo, pastikan sudah backup dulu.</li>
+          </ul>
+          <p class="text-success"><i class="bi bi-lightbulb"></i> <strong>Tip:</strong> Simpan file backup ke Google Drive/cloud agar aman dan bisa diakses dari perangkat lain.</p>
+        </div>
+      </div>
+
+      <div class="card mb-3" id="sec-pwa">
+        <div class="card-header"><i class="bi bi-phone"></i> 10. Install sebagai App (PWA)</div>
+        <div class="card-body">
+          <p>Aplikasi ini bisa di-install di HP/laptop seperti aplikasi native, jalan offline.</p>
+          <ul>
+            <li><strong>Chrome/Edge desktop:</strong> klik ikon Install di address bar, atau menu ⋮ → Install "Aplikasi PKG".</li>
+            <li><strong>Android:</strong> menu Chrome ⋮ → Add to Home screen.</li>
+            <li><strong>iOS Safari:</strong> tombol Share → Add to Home Screen.</li>
+            <li>Setelah terpasang, app jalan offline sepenuhnya. Update otomatis saat ada koneksi internet.</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="card mb-3" id="sec-faq">
+        <div class="card-header"><i class="bi bi-question-square"></i> 11. FAQ &amp; Troubleshooting</div>
+        <div class="card-body">
+          <p><strong>Q: Datanya hilang setelah saya bersihkan cache browser, kenapa?</strong><br>
+          A: localStorage termasuk dalam cache. Selalu lakukan Backup sebelum bersihkan cache atau reset browser.</p>
+
+          <p><strong>Q: Menu Laporan KKM kosong padahal data guru sudah ada.</strong><br>
+          A: Field <code>kkm</code> di Data Guru harus terisi. Buka menu Data Guru → Edit → isi field KKM (misal: "KKMA 04 Jember").</p>
+
+          <p><strong>Q: Halaman Pengesahan masih kosong saat generate laporan.</strong><br>
+          A: Untuk Laporan Madrasah, isi field <em>Nama/NIP Kepala Madrasah</em> dan <em>Nama/NIP Pengawas</em> di form generator. Default Kamad otomatis terisi kalau record Kamad ada di menu Data Kamad.</p>
+
+          <p><strong>Q: Tombol HTML A4 tidak membuka tab baru.</strong><br>
+          A: Browser memblokir popup. Klik ikon kunci/info di address bar → Allow popups untuk situs ini, lalu coba lagi.</p>
+
+          <p><strong>Q: DOCX gagal di-download dengan pesan "Library docx belum siap".</strong><br>
+          A: Pastikan koneksi internet aktif (CDN), lalu refresh halaman dengan Ctrl+Shift+R.</p>
+
+          <p><strong>Q: Pindah perangkat, bagaimana caranya?</strong><br>
+          A: Di perangkat lama, buka menu <em>Backup → Backup Kabupaten/KKM → Export</em>. Simpan file JSON. Di perangkat baru, buka aplikasi → menu <em>Backup → Restore</em> → mode Replace, upload file JSON.</p>
+
+          <p><strong>Q: Bisa multi-user?</strong><br>
+          A: Tidak. Aplikasi ini dirancang untuk satu pengawas/satu perangkat. Untuk multi-user, gunakan versi server (Express+SQLite) yang ada di repo internal.</p>
+
+          <p><strong>Q: Aplikasi lambat saat data sangat banyak.</strong><br>
+          A: localStorage dirancang untuk ratusan-ribuan record, bukan jutaan. Kalau total guru &gt;5000, pertimbangkan migrasi ke versi server.</p>
+
+          <hr>
+          <p class="text-muted small mb-0"><i class="bi bi-shield-lock"></i> <strong>Privacy:</strong> Semua data tersimpan lokal di browser Anda. Aplikasi ini tidak mengirim data ke server manapun. Update aplikasi otomatis dari GitHub Pages saat online.</p>
+        </div>
+      </div>
+    </div>
+  </div>`;
+
+  document.getElementById('btn-print-panduan').addEventListener('click', () => {
+    window.print();
+  });
 }
 
 // === INSTRUMEN VIEWER ===================================================
