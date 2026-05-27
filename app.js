@@ -209,7 +209,8 @@ function viewKamadList(view) {
               <td>${e(k.jenjang || '-')}</td>
               <td class="small">${e(k.no_hp || '-')}${k.email ? '<br>' + e(k.email) : ''}</td>
               <td class="text-end">
-                <a class="btn btn-sm btn-outline-primary" href="#/kamad/${k.id}/edit"><i class="bi bi-pencil"></i></a>
+                <a class="btn btn-sm btn-outline-primary" href="#/kamad/${k.id}/edit" title="Edit"><i class="bi bi-pencil"></i></a>
+                <button class="btn btn-sm btn-outline-danger" data-del-kamad="${k.id}" data-del-name="${e(k.nama || k.nama_madrasah)}" title="Hapus"><i class="bi bi-trash"></i></button>
               </td>
             </tr>
           `).join('')}
@@ -233,6 +234,18 @@ function viewKamadList(view) {
     } else {
       toast('Tidak ada kamad baru. Semua sudah tersinkron.', 'info');
     }
+  });
+
+  $$('[data-del-kamad]').forEach(b => {
+    b.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      const id = b.dataset.delKamad;
+      const nm = b.dataset.delName;
+      if (!confirm(`Hapus data kepala madrasah "${nm}"?\n\nData ini akan dihapus permanen dari device ini.`)) return;
+      PKGDB.deleteKamad(id);
+      toast('Kamad dihapus');
+      viewKamadList(view);
+    });
   });
 }
 
@@ -696,8 +709,9 @@ function viewGuruList(view) {
               <td>${e(g.mapel_kelas || '-')}</td>
               <td class="small">${e(g.tahun_pelajaran || '-')}</td>
               <td class="text-end">
-                <a class="btn btn-sm btn-outline-secondary" href="#/guru/${g.id}"><i class="bi bi-eye"></i></a>
-                <a class="btn btn-sm btn-outline-primary" href="#/guru/${g.id}/edit"><i class="bi bi-pencil"></i></a>
+                <a class="btn btn-sm btn-outline-secondary" href="#/guru/${g.id}" title="Lihat Detail"><i class="bi bi-eye"></i></a>
+                <a class="btn btn-sm btn-outline-primary" href="#/guru/${g.id}/edit" title="Edit"><i class="bi bi-pencil"></i></a>
+                <button class="btn btn-sm btn-outline-danger" data-del-guru="${g.id}" data-del-name="${e(g.nama)}" title="Hapus"><i class="bi bi-trash"></i></button>
               </td>
             </tr>
           `).join('')}
@@ -711,6 +725,23 @@ function viewGuruList(view) {
     history.replaceState(null, '', '#/guru' + (v ? `?q=${encodeURIComponent(v)}` : ''));
     viewGuruList(view); // re-render
     setTimeout(() => $('#search').focus(), 0);
+  });
+
+  $$('[data-del-guru]').forEach(b => {
+    b.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      const id = b.dataset.delGuru;
+      const nm = b.dataset.delName;
+      // Cek apakah ada penilaian terkait
+      const penilaianCount = PKGDB.listPenilaianByGuru(id).length;
+      const warn = penilaianCount > 0
+        ? `\n\n⚠️ Guru ini punya ${penilaianCount} penilaian aktif. Penilaian & skornya juga akan IKUT TERHAPUS.`
+        : '';
+      if (!confirm(`Hapus data guru "${nm}"?${warn}\n\nAksi ini tidak bisa dibatalkan.`)) return;
+      PKGDB.deleteGuru(id);
+      toast('Guru dihapus');
+      viewGuruList(view);
+    });
   });
 }
 
