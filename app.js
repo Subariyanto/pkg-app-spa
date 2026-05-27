@@ -2659,18 +2659,18 @@ function viewPanduan(view) {
     <div class="col-lg-3">
       <div class="card sticky-summary">
         <div class="card-header"><i class="bi bi-bookmark"></i> Daftar Isi</div>
-        <div class="list-group list-group-flush small">
-          <a class="list-group-item list-group-item-action" href="#sec-mulai">1. Mulai Cepat</a>
-          <a class="list-group-item list-group-item-action" href="#sec-guru">2. Data Guru</a>
-          <a class="list-group-item list-group-item-action" href="#sec-kamad">3. Data Kamad</a>
-          <a class="list-group-item list-group-item-action" href="#sec-nilai">4. Penilaian</a>
-          <a class="list-group-item list-group-item-action" href="#sec-rekap">5. Rekap</a>
-          <a class="list-group-item list-group-item-action" href="#sec-laporan">6. Laporan Madrasah/KKM</a>
-          <a class="list-group-item list-group-item-action" href="#sec-import">7. Import Excel</a>
-          <a class="list-group-item list-group-item-action" href="#sec-instrumen">8. Instrumen</a>
-          <a class="list-group-item list-group-item-action" href="#sec-backup">9. Backup &amp; Restore</a>
-          <a class="list-group-item list-group-item-action" href="#sec-pwa">10. Install sebagai App (PWA)</a>
-          <a class="list-group-item list-group-item-action" href="#sec-faq">11. FAQ &amp; Troubleshooting</a>
+        <div class="list-group list-group-flush small" id="panduan-toc">
+          <a class="list-group-item list-group-item-action" href="javascript:void(0)" data-target="sec-mulai">1. Mulai Cepat</a>
+          <a class="list-group-item list-group-item-action" href="javascript:void(0)" data-target="sec-guru">2. Data Guru</a>
+          <a class="list-group-item list-group-item-action" href="javascript:void(0)" data-target="sec-kamad">3. Data Kamad</a>
+          <a class="list-group-item list-group-item-action" href="javascript:void(0)" data-target="sec-nilai">4. Penilaian</a>
+          <a class="list-group-item list-group-item-action" href="javascript:void(0)" data-target="sec-rekap">5. Rekap</a>
+          <a class="list-group-item list-group-item-action" href="javascript:void(0)" data-target="sec-laporan">6. Laporan Madrasah/KKM</a>
+          <a class="list-group-item list-group-item-action" href="javascript:void(0)" data-target="sec-import">7. Import Excel</a>
+          <a class="list-group-item list-group-item-action" href="javascript:void(0)" data-target="sec-instrumen">8. Instrumen</a>
+          <a class="list-group-item list-group-item-action" href="javascript:void(0)" data-target="sec-backup">9. Backup &amp; Restore</a>
+          <a class="list-group-item list-group-item-action" href="javascript:void(0)" data-target="sec-pwa">10. Install sebagai App (PWA)</a>
+          <a class="list-group-item list-group-item-action" href="javascript:void(0)" data-target="sec-faq">11. FAQ &amp; Troubleshooting</a>
         </div>
       </div>
     </div>
@@ -2858,6 +2858,16 @@ function viewPanduan(view) {
 
   document.getElementById('btn-print-panduan').addEventListener('click', () => {
     window.print();
+  });
+
+  // Smooth-scroll daftar isi tanpa intercept hash router
+  document.querySelectorAll('#panduan-toc a[data-target]').forEach(a => {
+    a.addEventListener('click', (ev) => {
+      ev.preventDefault();
+      const id = a.getAttribute('data-target');
+      const target = document.getElementById(id);
+      if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
   });
 }
 
