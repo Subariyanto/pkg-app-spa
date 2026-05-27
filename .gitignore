@@ -4,3 +4,5 @@ Thumbs.db
 .vscode/
 .idea/
 *.log
+
+.gmp-indikator.txt
