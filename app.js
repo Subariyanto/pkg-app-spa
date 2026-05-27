@@ -61,7 +61,6 @@ function renderShell() {
           <li class="nav-item"><a class="nav-link" href="#/rekap"><i class="bi bi-table"></i> Rekap</a></li>
           <li class="nav-item"><a class="nav-link" href="#/import"><i class="bi bi-cloud-upload"></i> Import</a></li>
           <li class="nav-item"><a class="nav-link" href="#/instrumen"><i class="bi bi-list-check"></i> Instrumen</a></li>
-          <li class="nav-item"><a class="nav-link" href="#/panduan"><i class="bi bi-question-circle"></i> Panduan</a></li>
           <li class="nav-item dropdown">
             <a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown"><i class="bi bi-file-earmark-text"></i> Laporan</a>
             <ul class="dropdown-menu">
@@ -78,6 +77,7 @@ function renderShell() {
               <li><a class="dropdown-item text-danger" href="#/backup-clear"><i class="bi bi-trash"></i> Hapus Semua Data</a></li>
             </ul>
           </li>
+          <li class="nav-item"><a class="nav-link" href="#/panduan"><i class="bi bi-question-circle"></i> Panduan</a></li>
         </ul>
         <span class="navbar-text small text-white-50">Kemenag Jember &middot; Pokjawas</span>
       </div>
