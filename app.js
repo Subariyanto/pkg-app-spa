@@ -132,13 +132,15 @@ function viewBeranda(view) {
           <div class="row g-2">
             ${PKGDB.ROLES.map(r => `
               <div class="col-md-6 col-lg-4">
-                <div class="card role-card h-100">
-                  <div class="card-body">
-                    <div class="role-icon text-primary"><i class="bi bi-person-badge"></i></div>
-                    <div class="fw-semibold">${e(r.role_label)}</div>
-                    <div class="small text-muted">${e(r.role_code)} &middot; skor 0-${r.max_score}</div>
+                <a href="#/instrumen?role=${encodeURIComponent(r.role_code)}" class="text-decoration-none text-dark">
+                  <div class="card role-card h-100">
+                    <div class="card-body">
+                      <div class="role-icon text-primary"><i class="bi bi-person-badge"></i></div>
+                      <div class="fw-semibold">${e(r.role_label)}</div>
+                      <div class="small text-muted">${e(r.role_code)} &middot; skor 0-${r.max_score}</div>
+                    </div>
                   </div>
-                </div>
+                </a>
               </div>
             `).join('')}
           </div>
@@ -724,9 +726,11 @@ function viewRekap(view) {
 
 // === INSTRUMEN VIEWER ===================================================
 function viewInstrumen(view) {
+  const { query } = parseHash();
+  const focusRole = query.role || null;
   view.innerHTML = `
   <h4 class="mb-3"><i class="bi bi-list-check"></i> Instrumen PKG</h4>
-  <div class="alert alert-info small">Total ${window.INSTRUMEN.length} indikator dari ${PKGDB.ROLES.length} peran.</div>
+  <div class="alert alert-info small">Total ${window.INSTRUMEN.length} indikator dari ${PKGDB.ROLES.length} peran. Klik kepala kartu untuk lihat detail.</div>
   ${PKGDB.ROLES.map(r => {
     const items = PKGDB.getInstrumen(r.role_code);
     const grouped = [];
@@ -738,13 +742,14 @@ function viewInstrumen(view) {
       }
       cur.items.push(it);
     }
+    const isOpen = focusRole === r.role_code;
     return `
-    <div class="card mb-3">
+    <div class="card mb-3" id="role-${r.role_code}">
       <div class="card-header d-flex justify-content-between" data-bs-toggle="collapse" data-bs-target="#col-${r.role_code}" style="cursor: pointer;">
         <span><i class="bi bi-chevron-down"></i> ${e(r.role_label)} <span class="text-muted small">(${e(r.role_code)} &middot; skor 0-${r.max_score})</span></span>
         <span class="badge bg-light text-dark">${items.length} indikator</span>
       </div>
-      <div class="collapse" id="col-${r.role_code}">
+      <div class="collapse${isOpen ? ' show' : ''}" id="col-${r.role_code}">
         <div class="card-body p-0">
           ${grouped.map(k => `
             <div class="border-bottom p-3">
@@ -756,6 +761,13 @@ function viewInstrumen(view) {
       </div>
     </div>`;
   }).join('')}`;
+
+  if (focusRole) {
+    setTimeout(() => {
+      const el = document.getElementById(`role-${focusRole}`);
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 100);
+  }
 }
 
 // === IMPORT =============================================================
