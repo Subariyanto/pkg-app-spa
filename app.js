@@ -56,6 +56,7 @@ function renderShell() {
         <ul class="navbar-nav me-auto">
           <li class="nav-item"><a class="nav-link" href="#/"><i class="bi bi-house"></i> Beranda</a></li>
           <li class="nav-item"><a class="nav-link" href="#/guru"><i class="bi bi-people"></i> Data Guru</a></li>
+          <li class="nav-item"><a class="nav-link" href="#/kamad"><i class="bi bi-person-badge"></i> Data Kamad</a></li>
           <li class="nav-item"><a class="nav-link" href="#/rekap"><i class="bi bi-table"></i> Rekap</a></li>
           <li class="nav-item"><a class="nav-link" href="#/import"><i class="bi bi-cloud-upload"></i> Import</a></li>
           <li class="nav-item"><a class="nav-link" href="#/instrumen"><i class="bi bi-list-check"></i> Instrumen</a></li>
@@ -82,6 +83,12 @@ function render() {
   const [s0, s1, s2, s3] = segments;
 
   if (s0 === 'guru' && !s1) return viewGuruList(view);
+  if (s0 === 'kamad') {
+    if (!s1) return viewKamadList(view);
+    if (s1 === 'new') return viewKamadForm(view, null);
+    if (s2 === 'edit') return viewKamadForm(view, s1);
+    return viewKamadDetail(view, s1);
+  }
   if (s0 === 'guru' && s1 === 'new') return viewGuruForm(view, null);
   if (s0 === 'guru' && s1 && s2 === 'edit') return viewGuruForm(view, s1);
   if (s0 === 'guru' && s1 && s2 === 'nilai' && s3) return viewNilai(view, s1, s3, query.jenis || 'sumatif');
@@ -165,6 +172,230 @@ function viewBeranda(view) {
       </div>
     </div>
   </div>`;
+}
+
+// === KAMAD LIST =========================================================
+function viewKamadList(view) {
+  const { query } = parseHash();
+  const q = query.q || '';
+  const rows = PKGDB.listKamad(q);
+  view.innerHTML = `
+  <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <h4 class="mb-0"><i class="bi bi-person-badge"></i> Data Kepala Madrasah <span class="badge bg-secondary">${rows.length}</span></h4>
+    <div class="d-flex gap-2">
+      <button id="btn-sync" class="btn btn-outline-secondary btn-sm" title="Auto-import dari data guru yang sudah punya nama_kamad"><i class="bi bi-arrow-repeat"></i> Sync dari Data Guru</button>
+      <a href="#/kamad/new" class="btn btn-primary"><i class="bi bi-plus-lg"></i> Tambah</a>
+    </div>
+  </div>
+  <div class="card mb-3"><div class="card-body py-2">
+    <input id="search" class="form-control form-control-sm" placeholder="Cari nama, NIP, atau madrasah..." value="${e(q)}">
+  </div></div>
+  <div class="card">
+    <div class="table-responsive">
+      <table class="table table-sm table-hover mb-0 align-middle">
+        <thead class="table-light"><tr>
+          <th>#</th><th>Nama Madrasah</th><th>Kepala Madrasah</th><th>NIP</th><th>Jenjang</th><th>Kontak</th><th></th>
+        </tr></thead>
+        <tbody>
+          ${rows.length === 0 ? '<tr><td colspan="7" class="text-center text-muted py-4">Belum ada data. Klik "Tambah" atau "Sync dari Data Guru".</td></tr>' : ''}
+          ${rows.map((k, i) => `
+            <tr>
+              <td>${i + 1}</td>
+              <td><a href="#/kamad/${k.id}" class="fw-semibold">${e(k.nama_madrasah || '-')}</a><div class="small text-muted">${e(k.alamat_madrasah || '')}</div></td>
+              <td>${e(k.nama || '-')}</td>
+              <td class="small">${e(k.nip || '-')}</td>
+              <td>${e(k.jenjang || '-')}</td>
+              <td class="small">${e(k.no_hp || '-')}${k.email ? '<br>' + e(k.email) : ''}</td>
+              <td class="text-end">
+                <a class="btn btn-sm btn-outline-primary" href="#/kamad/${k.id}/edit"><i class="bi bi-pencil"></i></a>
+              </td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
+  </div>`;
+
+  $('#search').addEventListener('input', (ev) => {
+    const v = ev.target.value;
+    history.replaceState(null, '', '#/kamad' + (v ? `?q=${encodeURIComponent(v)}` : ''));
+    viewKamadList(view);
+    setTimeout(() => $('#search').focus(), 0);
+  });
+
+  $('#btn-sync').addEventListener('click', () => {
+    const added = PKGDB.syncKamadFromGuru();
+    if (added > 0) {
+      toast(`${added} kamad ditambahkan dari data guru`);
+      viewKamadList(view);
+    } else {
+      toast('Tidak ada kamad baru. Semua sudah tersinkron.', 'info');
+    }
+  });
+}
+
+// === KAMAD FORM =========================================================
+function viewKamadForm(view, editId) {
+  const isNew = !editId;
+  const k = isNew ? {} : (PKGDB.getKamad(editId) || {});
+  if (!isNew && !k.id) {
+    view.innerHTML = '<div class="alert alert-warning">Kamad tidak ditemukan</div>';
+    return;
+  }
+  const field = (name, label, type, opts) => {
+    opts = opts || {};
+    const val = k[name] !== undefined && k[name] !== null ? k[name] : '';
+    if (type === 'select') {
+      return `<label class="form-label">${label}</label><select class="form-select" name="${name}">
+        <option value="">-</option>
+        ${opts.options.map(o => `<option ${val === o ? 'selected' : ''}>${o}</option>`).join('')}
+      </select>`;
+    }
+    if (type === 'textarea') {
+      return `<label class="form-label">${label}</label><textarea class="form-control" name="${name}" rows="2">${e(val)}</textarea>`;
+    }
+    return `<label class="form-label">${label}${opts.required ? ' *' : ''}</label><input type="${type || 'text'}" class="form-control" name="${name}" value="${e(val)}" ${opts.required ? 'required' : ''}>`;
+  };
+
+  view.innerHTML = `
+  <h4 class="mb-3"><i class="bi bi-person-${isNew ? 'plus' : 'gear'}"></i> ${isNew ? 'Tambah' : 'Edit'} Data Kepala Madrasah</h4>
+  <form id="form-kamad" class="card">
+    <div class="card-body">
+      <h6 class="text-muted text-uppercase small mb-3">Madrasah</h6>
+      <div class="row g-3 mb-4">
+        <div class="col-md-8">${field('nama_madrasah', 'Nama Madrasah', 'text', { required: true })}</div>
+        <div class="col-md-4">${field('jenjang', 'Jenjang', 'select', { options: ['RA', 'MI', 'MTs', 'MA', 'MAK'] })}</div>
+        <div class="col-md-12">${field('alamat_madrasah', 'Alamat Madrasah', 'text')}</div>
+        <div class="col-md-4">${field('nsm', 'NSM', 'text')}</div>
+        <div class="col-md-4">${field('npsn', 'NPSN', 'text')}</div>
+        <div class="col-md-4">${field('akreditasi', 'Akreditasi', 'select', { options: ['A', 'B', 'C', 'Belum'] })}</div>
+      </div>
+      <h6 class="text-muted text-uppercase small mb-3">Identitas Kepala Madrasah</h6>
+      <div class="row g-3 mb-4">
+        <div class="col-md-6">${field('nama', 'Nama Lengkap', 'text', { required: true })}</div>
+        <div class="col-md-6">${field('gelar', 'Gelar (mis. M.Pd, S.Ag)', 'text')}</div>
+        <div class="col-md-4">${field('nip', 'NIP', 'text')}</div>
+        <div class="col-md-4">${field('nuptk', 'NUPTK', 'text')}</div>
+        <div class="col-md-4">${field('jenis_kelamin', 'Jenis Kelamin', 'select', { options: ['L', 'P'] })}</div>
+        <div class="col-md-4">${field('tempat_lahir', 'Tempat Lahir', 'text')}</div>
+        <div class="col-md-4">${field('tanggal_lahir', 'Tanggal Lahir', 'date')}</div>
+        <div class="col-md-4">${field('pendidikan', 'Pendidikan Terakhir', 'text')}</div>
+        <div class="col-md-4">${field('pangkat_gol', 'Pangkat / Gol', 'text')}</div>
+        <div class="col-md-4">${field('tmt_kamad', 'TMT Sebagai Kamad', 'date')}</div>
+        <div class="col-md-4">${field('periode', 'Periode (mis. 2024-2028)', 'text')}</div>
+      </div>
+      <h6 class="text-muted text-uppercase small mb-3">Kontak</h6>
+      <div class="row g-3">
+        <div class="col-md-4">${field('no_hp', 'No. HP / WhatsApp', 'text')}</div>
+        <div class="col-md-4">${field('email', 'Email', 'email')}</div>
+        <div class="col-md-4">${field('alamat_rumah', 'Alamat Rumah', 'text')}</div>
+        <div class="col-md-12">${field('catatan', 'Catatan', 'textarea')}</div>
+      </div>
+    </div>
+    <div class="card-footer text-end bg-white">
+      <a href="${isNew ? '#/kamad' : '#/kamad/' + k.id}" class="btn btn-light">Batal</a>
+      <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg"></i> Simpan</button>
+    </div>
+  </form>`;
+
+  $('#form-kamad').addEventListener('submit', (ev) => {
+    ev.preventDefault();
+    const fd = new FormData(ev.target);
+    const data = {};
+    for (const [k2, v] of fd.entries()) data[k2] = v;
+    const row = PKGDB.saveKamad(data, isNew ? null : editId);
+    toast(isNew ? 'Kamad ditambahkan' : 'Perubahan disimpan');
+    navigate('/kamad/' + row.id);
+  });
+}
+
+// === KAMAD DETAIL =======================================================
+function viewKamadDetail(view, id) {
+  const k = PKGDB.getKamad(id);
+  if (!k) {
+    view.innerHTML = '<div class="alert alert-warning">Kamad tidak ditemukan. <a href="#/kamad">Kembali</a></div>';
+    return;
+  }
+  // Cari guru di madrasah yang sama
+  const guruDiMadrasah = PKGDB.listGuru().filter(g => (g.nama_madrasah || '').toLowerCase().trim() === (k.nama_madrasah || '').toLowerCase().trim());
+
+  view.innerHTML = `
+  <div class="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-2">
+    <div>
+      <div class="small"><a href="#/kamad"><i class="bi bi-arrow-left"></i> Daftar Kamad</a></div>
+      <h4 class="mb-1"><i class="bi bi-person-vcard"></i> ${e(k.nama || '-')}${k.gelar ? ', ' + e(k.gelar) : ''}</h4>
+      <div class="text-muted">${e(k.nip || 'NIP -')} &middot; Kepala ${e(k.nama_madrasah || '-')}</div>
+    </div>
+    <div class="d-flex gap-2">
+      <a href="#/kamad/${k.id}/edit" class="btn btn-outline-secondary btn-sm"><i class="bi bi-pencil"></i> Edit</a>
+      <button id="btn-delete" class="btn btn-outline-danger btn-sm"><i class="bi bi-trash"></i> Hapus</button>
+    </div>
+  </div>
+
+  <div class="row g-3">
+    <div class="col-lg-7">
+      <div class="card mb-3">
+        <div class="card-header">Identitas</div>
+        <div class="card-body">
+          <dl class="row mb-0">
+            <dt class="col-sm-4">Nama Lengkap</dt><dd class="col-sm-8">${e(k.nama || '-')}${k.gelar ? ', ' + e(k.gelar) : ''}</dd>
+            <dt class="col-sm-4">NIP / NUPTK</dt><dd class="col-sm-8">${e(k.nip || '-')} / ${e(k.nuptk || '-')}</dd>
+            <dt class="col-sm-4">Jenis Kelamin</dt><dd class="col-sm-8">${e(k.jenis_kelamin || '-')}</dd>
+            <dt class="col-sm-4">Tempat, Tgl Lahir</dt><dd class="col-sm-8">${e(k.tempat_lahir || '-')}, ${e(k.tanggal_lahir || '-')}</dd>
+            <dt class="col-sm-4">Pendidikan</dt><dd class="col-sm-8">${e(k.pendidikan || '-')}</dd>
+            <dt class="col-sm-4">Pangkat / Gol</dt><dd class="col-sm-8">${e(k.pangkat_gol || '-')}</dd>
+            <dt class="col-sm-4">TMT Sebagai Kamad</dt><dd class="col-sm-8">${e(k.tmt_kamad || '-')}</dd>
+            <dt class="col-sm-4">Periode</dt><dd class="col-sm-8">${e(k.periode || '-')}</dd>
+          </dl>
+        </div>
+      </div>
+      <div class="card mb-3">
+        <div class="card-header">Kontak</div>
+        <div class="card-body">
+          <dl class="row mb-0">
+            <dt class="col-sm-4">No. HP / WA</dt><dd class="col-sm-8">${e(k.no_hp || '-')}</dd>
+            <dt class="col-sm-4">Email</dt><dd class="col-sm-8">${e(k.email || '-')}</dd>
+            <dt class="col-sm-4">Alamat Rumah</dt><dd class="col-sm-8">${e(k.alamat_rumah || '-')}</dd>
+          </dl>
+          ${k.catatan ? `<hr><div class="small text-muted"><strong>Catatan:</strong> ${e(k.catatan)}</div>` : ''}
+        </div>
+      </div>
+    </div>
+    <div class="col-lg-5">
+      <div class="card mb-3">
+        <div class="card-header">Madrasah</div>
+        <div class="card-body">
+          <dl class="row mb-0">
+            <dt class="col-sm-5">Nama</dt><dd class="col-sm-7">${e(k.nama_madrasah || '-')}</dd>
+            <dt class="col-sm-5">Jenjang</dt><dd class="col-sm-7">${e(k.jenjang || '-')}</dd>
+            <dt class="col-sm-5">NSM / NPSN</dt><dd class="col-sm-7">${e(k.nsm || '-')} / ${e(k.npsn || '-')}</dd>
+            <dt class="col-sm-5">Akreditasi</dt><dd class="col-sm-7">${e(k.akreditasi || '-')}</dd>
+            <dt class="col-sm-5">Alamat</dt><dd class="col-sm-7">${e(k.alamat_madrasah || '-')}</dd>
+          </dl>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header">Guru di Madrasah Ini <span class="badge bg-secondary">${guruDiMadrasah.length}</span></div>
+        <ul class="list-group list-group-flush small">
+          ${guruDiMadrasah.length === 0 ? '<li class="list-group-item text-muted text-center py-3">Belum ada data guru</li>' : ''}
+          ${guruDiMadrasah.map(g => `
+            <li class="list-group-item d-flex justify-content-between">
+              <a href="#/guru/${g.id}">${e(g.nama)}</a>
+              <span class="text-muted">${e(g.mapel_kelas || '-')}</span>
+            </li>
+          `).join('')}
+        </ul>
+      </div>
+    </div>
+  </div>`;
+
+  $('#btn-delete').addEventListener('click', () => {
+    if (confirm(`Hapus data kamad "${k.nama}"?`)) {
+      PKGDB.deleteKamad(id);
+      toast('Kamad dihapus');
+      navigate('/kamad');
+    }
+  });
 }
 
 // === GURU LIST ==========================================================

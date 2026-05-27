@@ -3,6 +3,7 @@
 
 const KEYS = {
   guru: 'pkg_v1_guru',
+  kamad: 'pkg_v1_kamad',
   penilaian: 'pkg_v1_penilaian',
   skor: 'pkg_v1_skor',
   kehadiran: 'pkg_v1_kehadiran',
@@ -129,6 +130,77 @@ function deleteGuru(id) {
   save(KEYS.skor, load(KEYS.skor, []).filter(s => allPenIds.has(s.penilaian_id)));
   save(KEYS.kehadiran, load(KEYS.kehadiran, []).filter(k => k.guru_id !== id));
   save(KEYS.pkb, load(KEYS.pkb, []).filter(p => p.guru_id !== id));
+}
+
+// === KAMAD (Kepala Madrasah) ===========================================
+function listKamad(query) {
+  const all = load(KEYS.kamad, []);
+  if (!query) return all.sort((a, b) => (a.nama_madrasah || '').localeCompare(b.nama_madrasah || ''));
+  const q = query.toLowerCase();
+  return all
+    .filter(k =>
+      (k.nama || '').toLowerCase().includes(q) ||
+      (k.nip || '').toLowerCase().includes(q) ||
+      (k.nama_madrasah || '').toLowerCase().includes(q)
+    )
+    .sort((a, b) => (a.nama_madrasah || '').localeCompare(b.nama_madrasah || ''));
+}
+
+function getKamad(id) {
+  return load(KEYS.kamad, []).find(k => k.id === Number(id));
+}
+
+function saveKamad(data, existingId) {
+  const all = load(KEYS.kamad, []);
+  if (existingId) {
+    const idx = all.findIndex(k => k.id === Number(existingId));
+    if (idx === -1) throw new Error('Kamad not found');
+    all[idx] = { ...all[idx], ...data, updated_at: nowLocal() };
+    save(KEYS.kamad, all);
+    return all[idx];
+  }
+  const id = nextId('kamad');
+  const row = { id, ...data, created_at: nowLocal(), updated_at: nowLocal() };
+  all.push(row);
+  save(KEYS.kamad, all);
+  return row;
+}
+
+function deleteKamad(id) {
+  id = Number(id);
+  save(KEYS.kamad, load(KEYS.kamad, []).filter(k => k.id !== id));
+}
+
+// Auto-import kamad dari data guru (kalau ada nama_kamad/nip_kamad/nama_madrasah)
+function syncKamadFromGuru() {
+  const gurus = load(KEYS.guru, []);
+  const existing = load(KEYS.kamad, []);
+  const seenByMadrasah = new Map(existing.map(k => [(k.nama_madrasah || '').toLowerCase(), k]));
+  let added = 0;
+  for (const g of gurus) {
+    const mad = (g.nama_madrasah || '').trim();
+    if (!mad || !g.nama_kamad) continue;
+    const key = mad.toLowerCase();
+    if (seenByMadrasah.has(key)) continue;
+    const row = {
+      id: nextId('kamad'),
+      nama: g.nama_kamad,
+      nip: g.nip_kamad || '',
+      nama_madrasah: mad,
+      alamat_madrasah: g.alamat_madrasah || '',
+      jenjang: '',
+      no_hp: '',
+      email: '',
+      catatan: '',
+      created_at: nowLocal(),
+      updated_at: nowLocal(),
+    };
+    existing.push(row);
+    seenByMadrasah.set(key, row);
+    added++;
+  }
+  save(KEYS.kamad, existing);
+  return added;
 }
 
 // === PENILAIAN ==========================================================
@@ -284,11 +356,13 @@ function replacePKB(guruId, items) {
 // === STATS ==============================================================
 function getStats() {
   const guru = load(KEYS.guru, []).length;
+  const kamad = load(KEYS.kamad, []).length;
   const penilaian = load(KEYS.penilaian, []).length;
   const skor = load(KEYS.skor, []);
   const penIds = new Set(skor.map(s => s.penilaian_id));
   return {
     guru,
+    kamad,
     penilaian,
     selesai: penIds.size,
     indikator: window.INSTRUMEN.length,
@@ -308,6 +382,7 @@ function exportAll() {
     exported_at: new Date().toISOString(),
     data: {
       guru: load(KEYS.guru, []),
+      kamad: load(KEYS.kamad, []),
       penilaian: load(KEYS.penilaian, []),
       skor: load(KEYS.skor, []),
       kehadiran: load(KEYS.kehadiran, []),
@@ -359,6 +434,7 @@ function importAll(json, mode) {
   }
   // Replace
   save(KEYS.guru, d.guru || []);
+  save(KEYS.kamad, d.kamad || []);
   save(KEYS.penilaian, d.penilaian || []);
   save(KEYS.skor, d.skor || []);
   save(KEYS.kehadiran, d.kehadiran || []);
@@ -396,6 +472,7 @@ window.PKGDB = {
   KEYS, ROLES,
   getRoleMeta, getInstrumen,
   listGuru, getGuru, findGuruByNIP, saveGuru, deleteGuru,
+  listKamad, getKamad, saveKamad, deleteKamad, syncKamadFromGuru,
   listPenilaianByGuru, getOrCreatePenilaian, updatePenilaianMeta,
   getSkorMap, setSkor, countSkor,
   hitungNilai,

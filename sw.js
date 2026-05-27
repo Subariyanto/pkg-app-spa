@@ -1,5 +1,5 @@
 // sw.js - Service worker for PKG app (offline-first cache)
-const CACHE_VERSION = 'pkg-v1-2026-05-27-r3';
+const CACHE_VERSION = 'pkg-v1-2026-05-27-r4';
 const ASSETS = [
   './',
   './index.html',
