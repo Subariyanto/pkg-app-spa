@@ -78,6 +78,14 @@ function renderShell() {
             </ul>
           </li>
           <li class="nav-item"><a class="nav-link" href="#/panduan"><i class="bi bi-question-circle"></i> Panduan</a></li>
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown"><i class="bi bi-person-circle"></i> Akun</a>
+            <ul class="dropdown-menu dropdown-menu-end">
+              <li><a class="dropdown-item" href="#/pengaturan-pin"><i class="bi bi-shield-lock"></i> Pengaturan PIN</a></li>
+              <li><hr class="dropdown-divider"></li>
+              <li><a class="dropdown-item text-danger" href="#" id="nav-logout"><i class="bi bi-box-arrow-right"></i> Logout</a></li>
+            </ul>
+          </li>
         </ul>
         <span class="navbar-text small text-white-50">Kemenag Jember &middot; Pokjawas</span>
       </div>
@@ -116,6 +124,7 @@ function render() {
   if (s0 === 'penilaian') return viewPenilaianHub(view);
   if (s0 === 'instrumen') return viewInstrumen(view);
   if (s0 === 'panduan') return viewPanduan(view);
+  if (s0 === 'pengaturan-pin') return window.PKGAuth.viewPengaturanPIN(view);
   if (s0 === 'import') return viewImport(view);
   if (s0 === 'laporan-madrasah') return viewLaporanMadrasahPicker(view);
   if (s0 === 'laporan-madrasah-view' && s1) return viewLaporanMadrasah(view, decodeURIComponent(s1));
@@ -3656,10 +3665,27 @@ function viewCetak(view, guruId, role, jenis) {
 }
 
 // === BOOT ===============================================================
+window.render = render;
 window.addEventListener('hashchange', render);
-window.addEventListener('DOMContentLoaded', () => {
+window.addEventListener('DOMContentLoaded', async () => {
   renderShell();
+
+  // PIN gate: kalau PIN aktif tapi belum unlock, tampilkan lock screen.
+  // PKGAuth.init() resolve setelah unlocked.
+  if (window.PKGAuth) {
+    await window.PKGAuth.init();
+  }
+
   render();
+
+  // Wire up tombol Logout di navbar (event delegation karena renderShell
+  // dipanggil sekali saja, tapi link ada di shell).
+  document.body.addEventListener('click', (ev) => {
+    const t = ev.target.closest('#nav-logout');
+    if (!t) return;
+    ev.preventDefault();
+    if (window.PKGAuth) window.PKGAuth.logout();
+  });
 
   // Service worker (PWA) with auto-update
   if ('serviceWorker' in navigator) {

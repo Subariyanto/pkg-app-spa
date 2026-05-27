@@ -1,6 +1,6 @@
 // sw.js - Service worker for PKG app
 // Strategy: network-first for app code (instant updates), cache-first for static assets.
-const CACHE_VERSION = 'pkg-v1-2026-05-28-r33';
+const CACHE_VERSION = 'pkg-v1-2026-05-28-r34';
 
 const NETWORK_FIRST = [
   // Same-origin app code: always try network first so updates show immediately
@@ -12,6 +12,7 @@ const NETWORK_FIRST = [
   'saran-dokumen.js',
   'saran-indikator.js',
   'laporan.js',
+  'auth.js',
   'style.css',
   'manifest.json',
 ];
@@ -26,6 +27,7 @@ const PRECACHE = [
   './db.js',
   './importer.js',
   './laporan.js',
+  './auth.js',
   './app.js',
   './manifest.json',
   './icon-192.png',
