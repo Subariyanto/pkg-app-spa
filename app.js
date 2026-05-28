@@ -48,7 +48,7 @@ const NAMA_BLN_SHORT = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Ag
 // === LAYOUT =============================================================
 function renderShell() {
   const html = `
-  <nav class="navbar navbar-expand-lg navbar-dark bg-primary mb-3 no-print">
+  <nav class="navbar navbar-expand-xl navbar-dark bg-primary mb-3 no-print">
     <div class="container-fluid">
       <a class="navbar-brand fw-bold d-flex flex-column lh-1" href="#/" style="line-height:1.1;">
         <span>Aplikasi PKG</span>

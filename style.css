@@ -145,6 +145,22 @@ a:hover { color: var(--pkg-primary-dark); }
   }
 }
 
+/* Navbar: rapikan jadi satu baris */
+.navbar .navbar-nav { flex-wrap: nowrap; }
+.navbar .nav-link { padding-left: .55rem !important; padding-right: .55rem !important; white-space: nowrap; }
+.navbar .nav-item { white-space: nowrap; }
+@media (min-width: 1200px) {
+  .navbar .navbar-collapse { flex-wrap: nowrap; }
+  .navbar .navbar-nav { font-size: .9rem; }
+  .navbar .nav-link i.bi { margin-right: 2px; }
+  .navbar .navbar-brand { font-size: 1rem; }
+  .navbar .nav-link { padding-left: .5rem !important; padding-right: .5rem !important; }
+}
+@media (min-width: 1400px) {
+  .navbar .navbar-nav { font-size: .95rem; }
+  .navbar .nav-link { padding-left: .65rem !important; padding-right: .65rem !important; }
+}
+
 /* Print */
 @media print {
   .no-print, nav, footer, .navbar { display: none !important; }
