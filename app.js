@@ -64,7 +64,6 @@ function renderShell() {
           <li class="nav-item"><a class="nav-link" href="#/rekap"><i class="bi bi-table"></i> Rekap</a></li>
           <li class="nav-item"><a class="nav-link" href="#/import"><i class="bi bi-cloud-upload"></i> Import</a></li>
           <li class="nav-item"><a class="nav-link" href="#/instrumen"><i class="bi bi-list-check"></i> Instrumen</a></li>
-          <li class="nav-item"><a class="nav-link" href="#/periode"><i class="bi bi-calendar3"></i> Periode</a></li>
           <li class="nav-item dropdown">
             <a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown"><i class="bi bi-file-earmark-text"></i> Laporan</a>
             <ul class="dropdown-menu">
@@ -108,14 +107,14 @@ function renderNavPeriodeSelector() {
   const all = window.PKGDB.listPeriode();
   const active = window.PKGDB.getActivePeriode();
   if (!all.length) {
-    return `<a href="#/periode" class="btn btn-sm btn-warning"><i class="bi bi-calendar-plus"></i> Atur Periode</a>`;
+    return `<a href="#/periode" class="btn btn-sm btn-warning ms-auto"><i class="bi bi-calendar-plus"></i> Atur Periode</a>`;
   }
   const opts = all.map(p => `<option value="${p.tahun}" ${active && p.tahun === active.tahun ? 'selected' : ''}>${e(p.label || ('Tahun ' + p.tahun))}</option>`).join('');
   return `
-  <div class="d-flex align-items-center gap-2 ms-auto">
-    <span class="navbar-text small text-white-50"><i class="bi bi-calendar3"></i> Periode:</span>
-    <select id="nav-periode-select" class="form-select form-select-sm" style="width:auto;">
+  <div class="d-flex align-items-center ms-auto">
+    <select id="nav-periode-select" class="form-select form-select-sm" style="width:auto;" title="Periode aktif (klik untuk ganti)">
       ${opts}
+      <option value="__manage__">⚙ Kelola Periode...</option>
     </select>
   </div>`;
 }
@@ -124,10 +123,16 @@ function wireNavPeriodeSelector() {
   const sel = document.getElementById('nav-periode-select');
   if (!sel) return;
   sel.addEventListener('change', () => {
+    if (sel.value === '__manage__') {
+      // restore selection sebelum navigate
+      const active = window.PKGDB.getActivePeriode();
+      if (active) sel.value = String(active.tahun);
+      navigate('/periode');
+      return;
+    }
     try {
       window.PKGDB.setActivePeriode(sel.value);
       toast(`Periode aktif: ${sel.options[sel.selectedIndex].text}`);
-      // Re-render shell + view supaya rekap/laporan ikut filter
       const shell = document.querySelector('nav.navbar');
       if (shell) shell.remove();
       renderShell();
