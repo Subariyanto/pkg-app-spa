@@ -95,7 +95,8 @@ function renderShell() {
   </nav>
   <div class="container-fluid pb-5" id="view"></div>
   <footer class="text-center text-muted small py-3 no-print">
-    Aplikasi PKG &middot; berbasis SK Dirjen Pendis No. 6673 Tahun 2019 &middot; data tersimpan di browser
+    Aplikasi PKG &middot; berbasis SK Dirjen Pendis No. 6673 Tahun 2019
+    <div class="mt-1">Aplikasi ini dibuat oleh : Subariyanto, S.Pd, M.Pd.I. Ketua Pokjawas Madrasah Kab. Jember</div>
   </footer>`;
   document.body.insertAdjacentHTML('afterbegin', html);
 }
