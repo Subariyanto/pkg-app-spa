@@ -382,10 +382,10 @@ Laporan ini disusun sebagai dokumentasi resmi pelaksanaan PKG pada ${obj} untuk 
       <div style="text-align:center; padding-top:2em;">
         <h1 style="margin:0; letter-spacing:3px;">LAPORAN</h1>
         <h1 style="margin:0; letter-spacing:3px;">PENILAIAN KINERJA GURU</h1>
-        <h2 style="margin-top:0.5em;">(PKG)</h2>
+        <h1 style="margin:0.4em 0 0; letter-spacing:3px;">(PKG)</h1>
       </div>
       <div style="text-align:center; margin-top:2.5em;">
-        <p>Tahun Pelajaran ${tahunAkademik()}</p>
+        <h1 style="margin:0; letter-spacing:3px;">Tahun Pelajaran ${tahunAkademik()}</h1>
       </div>
       <div style="text-align:center; margin-top:5em;">
         <div style="width:140px; height:140px; border:2px solid #555; border-radius:50%; display:inline-block; line-height:140px;">LOGO</div>
@@ -408,11 +408,11 @@ Laporan ini disusun sebagai dokumentasi resmi pelaksanaan PKG pada ${obj} untuk 
       <div style="text-align:center; padding-top:2em;">
         <h1 style="margin:0; letter-spacing:3px;">LAPORAN</h1>
         <h1 style="margin:0; letter-spacing:3px;">PENILAIAN KINERJA GURU</h1>
-        <h2 style="margin-top:0.5em;">(PKG)</h2>
+        <h1 style="margin:0.4em 0 0; letter-spacing:3px;">(PKG)</h1>
         <p style="margin-top:0.5em; font-style:italic;">Tingkat Kelompok Kerja Madrasah</p>
       </div>
       <div style="text-align:center; margin-top:2em;">
-        <p>Tahun Pelajaran ${tahunAkademik()}</p>
+        <h1 style="margin:0; letter-spacing:3px;">Tahun Pelajaran ${tahunAkademik()}</h1>
       </div>
       <div style="text-align:center; margin-top:5em;">
         <div style="width:140px; height:140px; border:2px solid #555; border-radius:50%; display:inline-block; line-height:140px;">LOGO</div>
@@ -430,19 +430,34 @@ Laporan ini disusun sebagai dokumentasi resmi pelaksanaan PKG pada ${obj} untuk 
     </div>`;
   }
 
-  function renderKataPengantar(scope, scopeValue) {
+  function renderKataPengantar(scope, scopeValue, opts) {
+    opts = opts || {};
     const obj = scope === 'madrasah' ? `Madrasah ${scopeValue}` :
                 scope === 'kkm' ? `KKM ${scopeValue}` :
                 `Kabupaten ${scopeValue}`;
     const penyusun = scope === 'madrasah' ? 'Kepala Madrasah' : 'Pengawas Madrasah';
+    const namaTtd = scope === 'madrasah' ? (opts.nama_kamad || '') : (opts.nama_pengawas || '');
+    const nipTtd = scope === 'madrasah' ? (opts.nip_kamad || '') : (opts.nip_pengawas || '');
+    const namaLine = namaTtd ? `<div style="margin-top:0.2em;"><strong><u>${e(namaTtd)}</u></strong></div>` : `<div style="margin-top:0.2em;"><strong><u>....................</u></strong></div>`;
+    const nipLine = nipTtd ? `<div>NIP. ${e(nipTtd)}</div>` : '';
     return `<div class="page-break"></div>
     <h2 style="text-align:center; letter-spacing:2px;">KATA PENGANTAR</h2>
     <p style="text-indent:2em;">Puji syukur kami panjatkan ke hadirat Allah SWT yang telah melimpahkan rahmat dan hidayah-Nya, sehingga penyusunan Laporan Penilaian Kinerja Guru (PKG) pada ${e(obj)} Tahun Pelajaran ${tahunAkademik()} dapat diselesaikan dengan baik. Shalawat serta salam senantiasa tercurah kepada Nabi Muhammad SAW beserta keluarga, sahabat, dan pengikutnya.</p>
     <p style="text-indent:2em;">Laporan ini disusun sebagai bentuk pertanggungjawaban pelaksanaan Penilaian Kinerja Guru sebagaimana diamanatkan dalam Peraturan Menteri Agama Nomor 38 Tahun 2018. Penyusunan laporan ini bertujuan memberikan gambaran objektif terhadap profil kompetensi guru, sekaligus menjadi dasar pembinaan dan pengembangan keprofesian berkelanjutan.</p>
     <p style="text-indent:2em;">Kami menyampaikan terima kasih kepada seluruh pihak yang telah berkontribusi dalam pelaksanaan PKG, terutama kepada para guru sebagai sasaran penilaian, asesor, kepala madrasah, pengawas pembina, serta jajaran Kementerian Agama yang memberikan dukungan teknis maupun administratif.</p>
     <p style="text-indent:2em;">Kami menyadari laporan ini masih jauh dari sempurna. Oleh karena itu, kritik dan saran konstruktif sangat kami harapkan demi penyempurnaan pelaksanaan PKG pada periode-periode berikutnya. Semoga laporan ini bermanfaat dan dapat menjadi rujukan dalam upaya peningkatan mutu pendidikan madrasah.</p>
-    <p style="text-align:right; margin-top:2em;">Jember, ${fmtTanggalID(new Date())}</p>
-    <p style="text-align:right;">${e(penyusun)},</p>`;
+    <table style="width:100%; border:0; margin-top:2em;">
+      <tr>
+        <td style="width:55%;"></td>
+        <td style="width:45%; text-align:center;">
+          <div>${e(opts.kota || 'Jember')}, ${e(opts.tanggal || fmtTanggalID(new Date()))}</div>
+          <div style="margin-top:0.4em;"><strong>${e(penyusun)},</strong></div>
+          <div style="height:90px;"></div>
+          ${namaLine}
+          ${nipLine}
+        </td>
+      </tr>
+    </table>`;
   }
 
   // === LANDASAN HUKUM ================================================
@@ -459,7 +474,12 @@ Laporan ini disusun sebagai dokumentasi resmi pelaksanaan PKG pada ${obj} untuk 
     const data = getPenilaianGuruAtScope('madrasah', scopeValue);
     const k = (opts.kamad || {});
     const cover = renderCoverMadrasah({ nama_madrasah: scopeValue, alamat_madrasah: k.alamat_madrasah });
-    const kataPengantar = renderKataPengantar('madrasah', scopeValue);
+    const kataPengantar = renderKataPengantar('madrasah', scopeValue, {
+      nama_kamad: k.nama || opts.nama_kamad,
+      nip_kamad: k.nip || opts.nip_kamad,
+      kota: opts.kota,
+      tanggal: opts.tanggal,
+    });
     const sectionsForToc = [
       { label: 'KATA PENGANTAR', page: 'i' },
       { label: 'DAFTAR ISI', page: 'ii' },
@@ -567,7 +587,12 @@ Laporan ini disusun sebagai dokumentasi resmi pelaksanaan PKG pada ${obj} untuk 
   function buildLaporanKKMHTML(scopeValue, opts) {
     const data = getPenilaianGuruAtScope('kkm', scopeValue);
     const cover = renderCoverKKM({ nama_kkm: scopeValue, wilayah: opts.wilayah });
-    const kataPengantar = renderKataPengantar('kkm', scopeValue);
+    const kataPengantar = renderKataPengantar('kkm', scopeValue, {
+      nama_pengawas: opts.nama_pengawas,
+      nip_pengawas: opts.nip_pengawas,
+      kota: opts.kota,
+      tanggal: opts.tanggal,
+    });
     const sectionsForToc = [
       { label: 'KATA PENGANTAR', page: 'i' },
       { label: 'DAFTAR ISI', page: 'ii' },
