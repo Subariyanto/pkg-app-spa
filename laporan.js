@@ -333,19 +333,20 @@ Laporan ini disusun sebagai dokumentasi resmi pelaksanaan PKG pada ${obj} untuk 
     <strong>${e(opts.nama_madrasah || '-')}</strong><br>
     Tahun Pelajaran ${tahunAkademik()}</p>
     <p style="margin-top:2.5em;">Telah diperiksa dan disahkan untuk digunakan sebagai dokumen resmi pelaksanaan Penilaian Kinerja Guru pada satuan pendidikan tersebut di atas.</p>
-    <p style="text-align:right; margin-top:1.5em;">${e(opts.kota || 'Jember')}, ${e(tgl)}</p>
-    <table style="width:100%; margin-top:1em; border:0;"><tr>
-      <td style="width:50%; vertical-align:top; text-align:center;">
-        <div>Mengetahui,<br><strong>Pengawas Madrasah</strong></div>
+    <table style="width:100%; margin-top:2em; border:0;"><tr>
+      <td style="width:50%; vertical-align:top; text-align:center; line-height:1.4;">
+        <div>Mengetahui,</div>
+        <div><strong>Pengawas Madrasah</strong></div>
         <div style="height:90px;"></div>
-        <div><strong><u>${e(opts.nama_pengawas || '....................')}</u></strong></div>
-        <div>NIP. ${e(opts.nip_pengawas || '....................')}</div>
+        <div style="margin:0;"><strong><u>${e(opts.nama_pengawas || '....................')}</u></strong></div>
+        <div style="margin:0;">NIP. ${e(opts.nip_pengawas || '....................')}</div>
       </td>
-      <td style="width:50%; vertical-align:top; text-align:center;">
+      <td style="width:50%; vertical-align:top; text-align:center; line-height:1.4;">
+        <div>${e(opts.kota || 'Jember')}, ${e(tgl)}</div>
         <div><strong>Kepala Madrasah</strong></div>
         <div style="height:90px;"></div>
-        <div><strong><u>${e(opts.nama_kamad || '....................')}</u></strong></div>
-        <div>NIP. ${e(opts.nip_kamad || '....................')}</div>
+        <div style="margin:0;"><strong><u>${e(opts.nama_kamad || '....................')}</u></strong></div>
+        <div style="margin:0;">NIP. ${e(opts.nip_kamad || '....................')}</div>
       </td>
     </tr></table>`;
   }
@@ -359,19 +360,22 @@ Laporan ini disusun sebagai dokumentasi resmi pelaksanaan PKG pada ${obj} untuk 
     <strong>Kelompok Kerja Madrasah (KKM) ${e(opts.nama_kkm || '-')}</strong><br>
     Tahun Pelajaran ${tahunAkademik()}</p>
     <p style="margin-top:2.5em;">Telah diperiksa dan disahkan untuk digunakan sebagai dokumen resmi pelaksanaan Penilaian Kinerja Guru pada wilayah binaan tersebut di atas.</p>
-    <p style="text-align:right; margin-top:1.5em;">${e(opts.kota || 'Jember')}, ${e(tgl)}</p>
-    <table style="width:100%; margin-top:1em; border:0;"><tr>
-      <td style="width:50%; vertical-align:top; text-align:center;">
-        <div>Mengetahui,<br><strong>Ketua Pokjawas Madrasah</strong><br>${e(KEMENAG.kabupaten)}</div>
+    <table style="width:100%; margin-top:2em; border:0;"><tr>
+      <td style="width:50%; vertical-align:top; text-align:center; line-height:1.4;">
+        <div>Mengetahui,</div>
+        <div><strong>Ketua Pokjawas Madrasah</strong></div>
+        <div>${e(KEMENAG.kabupaten)}</div>
         <div style="height:90px;"></div>
-        <div><strong><u>${e(POKJAWAS.nama)}</u></strong></div>
-        <div>NIP. ${e(POKJAWAS.nip)}</div>
+        <div style="margin:0;"><strong><u>${e(POKJAWAS.nama)}</u></strong></div>
+        <div style="margin:0;">NIP. ${e(POKJAWAS.nip)}</div>
       </td>
-      <td style="width:50%; vertical-align:top; text-align:center;">
+      <td style="width:50%; vertical-align:top; text-align:center; line-height:1.4;">
+        <div>${e(opts.kota || 'Jember')}, ${e(tgl)}</div>
         <div><strong>Pengawas Madrasah</strong></div>
+        <div>&nbsp;</div>
         <div style="height:90px;"></div>
-        <div><strong><u>${e(opts.nama_pengawas || '....................')}</u></strong></div>
-        <div>NIP. ${e(opts.nip_pengawas || '....................')}</div>
+        <div style="margin:0;"><strong><u>${e(opts.nama_pengawas || '....................')}</u></strong></div>
+        <div style="margin:0;">NIP. ${e(opts.nip_pengawas || '....................')}</div>
       </td>
     </tr></table>`;
   }
