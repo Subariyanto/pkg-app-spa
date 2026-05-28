@@ -1,47 +1,97 @@
-/* PKG App SPA - Kemenag green theme */
+/* PKG App SPA - Tema Kuning Keemasan + Hijau Tua */
 :root {
-  --pkg-primary: #047a3a;
-  --pkg-primary-dark: #035a2a;
-  --pkg-primary-light: #d6efd9;
-  --pkg-soft: #f4faf5;
-  --pkg-accent: #f8b500;
+  --pkg-primary: #c9a227;          /* kuning keemasan (gold) */
+  --pkg-primary-dark: #a8861a;     /* gold gelap untuk hover */
+  --pkg-primary-light: #fdf3c5;    /* gold sangat pucat */
+  --pkg-soft: #fffbe9;             /* background lembut */
+  --pkg-accent: #1f5d3a;           /* hijau tua sebagai aksen */
+  --pkg-accent-dark: #143d26;
+  --pkg-accent-light: #d6efd9;
   --pkg-danger: #c0392b;
+  --pkg-text-on-primary: #1f5d3a;  /* teks gelap di atas tombol gold */
 }
 
 body {
   background: var(--pkg-soft);
   font-size: 14px;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  color: #2a2a2a;
 }
 
-/* Override Bootstrap primary */
+/* Override Bootstrap primary jadi gold */
 .btn-primary {
   background-color: var(--pkg-primary);
   border-color: var(--pkg-primary);
+  color: var(--pkg-text-on-primary);
 }
-.btn-primary:hover, .btn-primary:focus {
+.btn-primary:hover, .btn-primary:focus, .btn-primary:active {
   background-color: var(--pkg-primary-dark);
   border-color: var(--pkg-primary-dark);
+  color: #fff;
 }
 .btn-outline-primary {
-  color: var(--pkg-primary);
+  color: var(--pkg-accent);
   border-color: var(--pkg-primary);
 }
 .btn-outline-primary:hover {
   background-color: var(--pkg-primary);
   border-color: var(--pkg-primary);
+  color: var(--pkg-text-on-primary);
 }
-.bg-primary { background-color: var(--pkg-primary) !important; }
-.text-primary { color: var(--pkg-primary) !important; }
-a { color: var(--pkg-primary); }
-a:hover { color: var(--pkg-primary-dark); }
-.navbar-dark.bg-primary { background-color: var(--pkg-primary) !important; }
+
+/* Hijau tua sebagai "accent / success" */
+.btn-success {
+  background-color: var(--pkg-accent);
+  border-color: var(--pkg-accent);
+  color: #fff;
+}
+.btn-success:hover, .btn-success:focus {
+  background-color: var(--pkg-accent-dark);
+  border-color: var(--pkg-accent-dark);
+}
+.btn-outline-success {
+  color: var(--pkg-accent);
+  border-color: var(--pkg-accent);
+}
+.btn-outline-success:hover {
+  background-color: var(--pkg-accent);
+  color: #fff;
+}
+
+.bg-primary { background-color: var(--pkg-primary) !important; color: var(--pkg-text-on-primary) !important; }
+.bg-success { background-color: var(--pkg-accent) !important; }
+.text-primary { color: var(--pkg-accent) !important; } /* judul/teks aksen pakai hijau tua biar terbaca */
+.text-success { color: var(--pkg-accent) !important; }
+
+a { color: var(--pkg-accent); }
+a:hover { color: var(--pkg-accent-dark); }
+
+/* Navbar: hijau tua dengan teks emas */
+.navbar-dark.bg-primary {
+  background: linear-gradient(135deg, var(--pkg-accent) 0%, var(--pkg-accent-dark) 100%) !important;
+  color: var(--pkg-primary) !important;
+}
+.navbar-dark.bg-primary .navbar-brand,
+.navbar-dark.bg-primary .nav-link {
+  color: var(--pkg-primary-light) !important;
+}
+.navbar-dark.bg-primary .nav-link:hover,
+.navbar-dark.bg-primary .nav-link.active {
+  color: var(--pkg-primary) !important;
+}
+.navbar-dark.bg-primary .navbar-brand small {
+  color: rgba(253, 243, 197, .75) !important;
+}
+.navbar-dark.bg-primary .navbar-text {
+  color: rgba(253, 243, 197, .75) !important;
+}
+
 .form-control:focus, .form-select:focus {
   border-color: var(--pkg-primary);
-  box-shadow: 0 0 0 .2rem rgba(4, 122, 58, .15);
+  box-shadow: 0 0 0 .2rem rgba(201, 162, 39, .2);
 }
 .nav-tabs .nav-link.active {
-  color: var(--pkg-primary);
+  color: var(--pkg-accent);
   border-bottom-color: var(--pkg-primary);
 }
 
@@ -52,7 +102,7 @@ a:hover { color: var(--pkg-primary-dark); }
 }
 .card-header {
   background: #fff;
-  border-bottom: 1px solid #e8efe9;
+  border-bottom: 1px solid #f0e9c8;
   font-weight: 600;
 }
 
@@ -67,7 +117,7 @@ a:hover { color: var(--pkg-primary-dark); }
   align-items: flex-start;
   gap: .75rem;
 }
-.indikator-row:hover { background: #fafcfa; }
+.indikator-row:hover { background: #fff8dc; }
 .indikator-row:last-child { border-bottom: 0; }
 
 .skor-pill {
@@ -91,9 +141,9 @@ a:hover { color: var(--pkg-primary-dark); }
   margin-bottom: 0;
 }
 .skor-pill input:checked + label {
-  background: var(--pkg-primary);
+  background: var(--pkg-accent);
   color: #fff;
-  border-color: var(--pkg-primary);
+  border-color: var(--pkg-accent);
 }
 .skor-pill .lbl-0 { color: #b22; }
 .skor-pill .lbl-1 { color: #c80; }
@@ -107,7 +157,7 @@ a:hover { color: var(--pkg-primary-dark); }
 .skor-pill input:checked + .lbl-4 { color: #fff; }
 
 .nilai-akhir-box {
-  background: linear-gradient(135deg, var(--pkg-primary), #06a04c);
+  background: linear-gradient(135deg, var(--pkg-primary), var(--pkg-accent));
   color: white;
   border-radius: .5rem;
 }
@@ -115,11 +165,11 @@ a:hover { color: var(--pkg-primary-dark); }
 .role-card {
   transition: transform .15s, box-shadow .15s;
   cursor: pointer;
-  border: 1px solid #e8efe9;
+  border: 1px solid #f0e9c8;
 }
 .role-card:hover {
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(4, 122, 58, .15);
+  box-shadow: 0 4px 12px rgba(201, 162, 39, .25);
   border-color: var(--pkg-primary);
 }
 .role-icon { font-size: 2rem; }
@@ -184,7 +234,7 @@ a:hover { color: var(--pkg-primary-dark); }
 }
 
 /* Status save indicator */
-.save-status-saved { color: var(--pkg-primary); }
+.save-status-saved { color: var(--pkg-accent); }
 .save-status-saving { color: #888; }
 .save-status-error { color: var(--pkg-danger); }
 
@@ -207,8 +257,8 @@ a:hover { color: var(--pkg-primary-dark); }
   right: 1rem;
   max-width: 480px;
   margin: 0 auto;
-  background: var(--pkg-primary);
-  color: white;
+  background: var(--pkg-accent);
+  color: var(--pkg-primary);
   padding: .75rem 1rem;
   border-radius: .5rem;
   display: flex;
@@ -218,8 +268,8 @@ a:hover { color: var(--pkg-primary-dark); }
   z-index: 1070;
 }
 .install-banner button {
-  background: white;
-  color: var(--pkg-primary);
+  background: var(--pkg-primary);
+  color: var(--pkg-text-on-primary);
   border: 0;
   padding: .35rem .75rem;
   border-radius: .35rem;
