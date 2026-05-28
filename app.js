@@ -64,6 +64,7 @@ function renderShell() {
           <li class="nav-item"><a class="nav-link" href="#/rekap"><i class="bi bi-table"></i> Rekap</a></li>
           <li class="nav-item"><a class="nav-link" href="#/import"><i class="bi bi-cloud-upload"></i> Import</a></li>
           <li class="nav-item"><a class="nav-link" href="#/instrumen"><i class="bi bi-list-check"></i> Instrumen</a></li>
+          <li class="nav-item"><a class="nav-link" href="#/periode"><i class="bi bi-calendar3"></i> Periode</a></li>
           <li class="nav-item dropdown">
             <a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown"><i class="bi bi-file-earmark-text"></i> Laporan</a>
             <ul class="dropdown-menu">
@@ -90,6 +91,7 @@ function renderShell() {
             </ul>
           </li>
         </ul>
+        ${renderNavPeriodeSelector()}
       </div>
     </div>
   </nav>
@@ -99,6 +101,42 @@ function renderShell() {
     <div class="mt-1">Aplikasi ini dibuat oleh : Subariyanto, S.Pd, M.Pd.I. Ketua Pokjawas Madrasah Kab. Jember</div>
   </footer>`;
   document.body.insertAdjacentHTML('afterbegin', html);
+}
+
+// Selector periode aktif di pojok kanan navbar
+function renderNavPeriodeSelector() {
+  const all = window.PKGDB.listPeriode();
+  const active = window.PKGDB.getActivePeriode();
+  if (!all.length) {
+    return `<a href="#/periode" class="btn btn-sm btn-warning"><i class="bi bi-calendar-plus"></i> Atur Periode</a>`;
+  }
+  const opts = all.map(p => `<option value="${p.tahun}" ${active && p.tahun === active.tahun ? 'selected' : ''}>${e(p.label || ('Tahun ' + p.tahun))}</option>`).join('');
+  return `
+  <div class="d-flex align-items-center gap-2 ms-auto">
+    <span class="navbar-text small text-white-50"><i class="bi bi-calendar3"></i> Periode:</span>
+    <select id="nav-periode-select" class="form-select form-select-sm" style="width:auto;">
+      ${opts}
+    </select>
+  </div>`;
+}
+
+function wireNavPeriodeSelector() {
+  const sel = document.getElementById('nav-periode-select');
+  if (!sel) return;
+  sel.addEventListener('change', () => {
+    try {
+      window.PKGDB.setActivePeriode(sel.value);
+      toast(`Periode aktif: ${sel.options[sel.selectedIndex].text}`);
+      // Re-render shell + view supaya rekap/laporan ikut filter
+      const shell = document.querySelector('nav.navbar');
+      if (shell) shell.remove();
+      renderShell();
+      wireNavPeriodeSelector();
+      render();
+    } catch (e) {
+      alert(e.message || 'Gagal ganti periode');
+    }
+  });
 }
 
 // === ROUTER =============================================================
@@ -128,6 +166,7 @@ function render() {
   if (s0 === 'instrumen') return viewInstrumen(view);
   if (s0 === 'panduan') return viewPanduan(view);
   if (s0 === 'pengaturan-pin') return window.PKGAuth.viewPengaturanPIN(view);
+  if (s0 === 'periode') return viewPeriode(view);
   if (s0 === 'import') return viewImport(view);
   if (s0 === 'laporan-madrasah') return viewLaporanMadrasahPicker(view);
   if (s0 === 'laporan-madrasah-view' && s1) return viewLaporanMadrasah(view, decodeURIComponent(s1));
@@ -2655,6 +2694,134 @@ function printRekapTab(title, html) {
   w.document.close();
 }
 
+// === PERIODE ============================================================
+function viewPeriode(view) {
+  const all = window.PKGDB.listPeriode();
+  const active = window.PKGDB.getActivePeriode();
+  const tahunIni = new Date().getFullYear();
+
+  view.innerHTML = `
+  <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <h4 class="mb-0"><i class="bi bi-calendar3"></i> Periode Penilaian</h4>
+    <button id="btn-add-periode" class="btn btn-sm btn-success"><i class="bi bi-plus-circle"></i> Tambah Periode</button>
+  </div>
+  <div class="alert alert-info py-2 small"><i class="bi bi-info-circle"></i>
+    Periode = tahun kalender. Tiap penilaian, kehadiran, dan PKB akan dikaitkan dengan periode aktif. Rekap & Laporan otomatis di-filter ke periode terpilih.
+  </div>
+
+  ${all.length === 0 ? `
+    <div class="alert alert-warning"><i class="bi bi-exclamation-triangle"></i>
+      Belum ada periode. Klik <strong>Tambah Periode</strong> untuk membuat periode pertama (default tahun ${tahunIni}).
+    </div>
+  ` : `
+    <div class="card">
+      <div class="table-responsive">
+        <table class="table table-sm table-hover mb-0 align-middle">
+          <thead class="table-light"><tr>
+            <th style="width:30px;">#</th>
+            <th style="width:80px;">Tahun</th>
+            <th>Label</th>
+            <th class="text-center" style="width:90px;">Penilaian</th>
+            <th class="text-center" style="width:90px;">Kehadiran</th>
+            <th class="text-center" style="width:60px;">PKB</th>
+            <th class="text-center" style="width:90px;">Status</th>
+            <th style="width:200px;"></th>
+          </tr></thead>
+          <tbody>
+            ${all.map((p, i) => {
+              const cnt = window.PKGDB.countDataPerPeriode(p.tahun);
+              const isActive = active && p.tahun === active.tahun;
+              return `<tr ${isActive ? 'class="table-success"' : ''}>
+                <td>${i + 1}</td>
+                <td><strong>${p.tahun}</strong></td>
+                <td>
+                  ${e(p.label || '-')}
+                  ${p.catatan ? `<div class="text-muted small">${e(p.catatan)}</div>` : ''}
+                </td>
+                <td class="text-center">${cnt.penilaian}</td>
+                <td class="text-center">${cnt.kehadiran}</td>
+                <td class="text-center">${cnt.pkb}</td>
+                <td class="text-center">${isActive
+                  ? '<span class="badge bg-success"><i class="bi bi-check-circle"></i> Aktif</span>'
+                  : '<span class="badge bg-light text-muted">Non-aktif</span>'}</td>
+                <td class="text-end">
+                  ${!isActive ? `<button class="btn btn-sm btn-primary me-1 btn-set-active" data-tahun="${p.tahun}"><i class="bi bi-check2"></i> Aktifkan</button>` : ''}
+                  <button class="btn btn-sm btn-outline-secondary me-1 btn-edit-periode" data-tahun="${p.tahun}" title="Edit label"><i class="bi bi-pencil"></i></button>
+                  <button class="btn btn-sm btn-outline-danger btn-delete-periode" data-tahun="${p.tahun}" title="Hapus"><i class="bi bi-trash"></i></button>
+                </td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="text-muted small mt-3">
+      <i class="bi bi-lightbulb"></i> Tip: gunakan selector di pojok kanan navbar untuk berpindah periode dengan cepat. Saat mulai tahun baru, klik <strong>Tambah Periode</strong> dan buat tahun baru, lalu Aktifkan.
+    </div>
+  `}`;
+
+  document.getElementById('btn-add-periode').addEventListener('click', () => {
+    const tInput = prompt('Tahun periode baru (mis. ' + tahunIni + '):', String(tahunIni));
+    if (tInput == null) return;
+    const tahun = parseInt(String(tInput).trim(), 10);
+    if (!tahun || tahun < 2000 || tahun > 2100) { alert('Tahun tidak valid.'); return; }
+    const labelInput = prompt('Label periode (opsional):', `Tahun ${tahun}`);
+    if (labelInput == null) return;
+    try {
+      window.PKGDB.addPeriode(tahun, { label: labelInput.trim() || `Tahun ${tahun}` });
+      toast(`Periode ${tahun} ditambahkan.`);
+      const shell = document.querySelector('nav.navbar'); if (shell) shell.remove();
+      renderShell(); wireNavPeriodeSelector();
+      render();
+    } catch (err) { alert(err.message || 'Gagal menambah periode'); }
+  });
+
+  document.querySelectorAll('.btn-set-active').forEach(b => {
+    b.addEventListener('click', () => {
+      try {
+        window.PKGDB.setActivePeriode(b.dataset.tahun);
+        toast(`Periode aktif: ${b.dataset.tahun}`);
+        const shell = document.querySelector('nav.navbar'); if (shell) shell.remove();
+        renderShell(); wireNavPeriodeSelector();
+        render();
+      } catch (err) { alert(err.message); }
+    });
+  });
+
+  document.querySelectorAll('.btn-edit-periode').forEach(b => {
+    b.addEventListener('click', () => {
+      const tahun = Number(b.dataset.tahun);
+      const cur = all.find(p => p.tahun === tahun);
+      if (!cur) return;
+      const newLabel = prompt('Label baru:', cur.label || `Tahun ${tahun}`);
+      if (newLabel == null) return;
+      const newCat = prompt('Catatan (opsional):', cur.catatan || '');
+      if (newCat == null) return;
+      try {
+        window.PKGDB.updatePeriode(tahun, { label: newLabel.trim(), catatan: newCat.trim() });
+        toast('Periode diperbarui.');
+        const shell = document.querySelector('nav.navbar'); if (shell) shell.remove();
+        renderShell(); wireNavPeriodeSelector();
+        render();
+      } catch (err) { alert(err.message); }
+    });
+  });
+
+  document.querySelectorAll('.btn-delete-periode').forEach(b => {
+    b.addEventListener('click', () => {
+      const tahun = Number(b.dataset.tahun);
+      if (!confirm(`Hapus periode ${tahun}? Hanya bisa kalau periode tersebut belum punya data.`)) return;
+      try {
+        window.PKGDB.deletePeriode(tahun);
+        toast(`Periode ${tahun} dihapus.`);
+        const shell = document.querySelector('nav.navbar'); if (shell) shell.remove();
+        renderShell(); wireNavPeriodeSelector();
+        render();
+      } catch (err) { alert(err.message); }
+    });
+  });
+}
+
 // === PANDUAN PENGGUNAAN =================================================
 function viewPanduan(view) {
   view.innerHTML = `
@@ -3672,6 +3839,7 @@ window.render = render;
 window.addEventListener('hashchange', render);
 window.addEventListener('DOMContentLoaded', async () => {
   renderShell();
+  wireNavPeriodeSelector();
 
   // PIN gate: kalau PIN aktif tapi belum unlock, tampilkan lock screen.
   // PKGAuth.init() resolve setelah unlocked.

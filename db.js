@@ -12,6 +12,9 @@ const KEYS = {
   instrumen_overrides: 'pkg_v1_instrumen_overrides',
   kompetensi_overrides: 'pkg_v1_kompetensi_overrides',
   penggalian: 'pkg_v1_penggalian_data',
+  periode: 'pkg_v1_periode',
+  periode_active: 'pkg_v1_periode_active',
+  schema_version: 'pkg_v1_schema_version',
 };
 
 function load(key, def) {
@@ -50,6 +53,157 @@ function nowLocal() {
   const pad = n => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 }
+
+// === PERIODE ============================================================
+// Periode = tahun kalender (2025, 2026, ...). Tiap penilaian/kehadiran/PKB di-tag
+// dengan field `periode` (number tahun). Migrasi otomatis tag data lama ke
+// tahun berjalan.
+
+const CURRENT_SCHEMA_VERSION = 2;
+
+function listPeriode() {
+  const arr = load(KEYS.periode, []);
+  return arr.slice().sort((a, b) => b.tahun - a.tahun);
+}
+
+function getActivePeriode() {
+  const all = load(KEYS.periode, []);
+  const id = load(KEYS.periode_active, null);
+  let p = id != null ? all.find(x => x.tahun === Number(id)) : null;
+  if (!p) p = all.find(x => x.aktif) || all[0] || null;
+  return p;
+}
+
+function setActivePeriode(tahun) {
+  tahun = Number(tahun);
+  const all = load(KEYS.periode, []);
+  if (!all.some(p => p.tahun === tahun)) throw new Error('Periode tidak ditemukan: ' + tahun);
+  for (const p of all) p.aktif = (p.tahun === tahun);
+  save(KEYS.periode, all);
+  save(KEYS.periode_active, tahun);
+  return getActivePeriode();
+}
+
+function addPeriode(tahun, opts) {
+  tahun = Number(tahun);
+  if (!tahun || tahun < 2000 || tahun > 2100) throw new Error('Tahun tidak valid');
+  const all = load(KEYS.periode, []);
+  if (all.some(p => p.tahun === tahun)) throw new Error('Periode ' + tahun + ' sudah ada');
+  const row = {
+    tahun,
+    label: (opts && opts.label) || `Tahun ${tahun}`,
+    catatan: (opts && opts.catatan) || '',
+    aktif: !all.length,  // jadi aktif kalau ini pertama
+    created_at: nowLocal(),
+  };
+  all.push(row);
+  save(KEYS.periode, all);
+  if (row.aktif) save(KEYS.periode_active, tahun);
+  return row;
+}
+
+function updatePeriode(tahun, fields) {
+  tahun = Number(tahun);
+  const all = load(KEYS.periode, []);
+  const idx = all.findIndex(p => p.tahun === tahun);
+  if (idx < 0) throw new Error('Periode tidak ditemukan');
+  const allowed = ['label', 'catatan'];
+  for (const k of allowed) if (fields[k] !== undefined) all[idx][k] = fields[k];
+  save(KEYS.periode, all);
+  return all[idx];
+}
+
+function deletePeriode(tahun) {
+  tahun = Number(tahun);
+  const all = load(KEYS.periode, []);
+  const target = all.find(p => p.tahun === tahun);
+  if (!target) throw new Error('Periode tidak ditemukan');
+  // Cek apakah ada data
+  const pen = load(KEYS.penilaian, []).filter(p => Number(p.periode) === tahun);
+  const keh = load(KEYS.kehadiran, []).filter(k => Number(k.periode) === tahun);
+  const pkb = load(KEYS.pkb, []).filter(p => Number(p.periode) === tahun);
+  if (pen.length || keh.length || pkb.length) {
+    throw new Error(`Periode ${tahun} masih punya data (${pen.length} penilaian, ${keh.length} kehadiran, ${pkb.length} PKB). Hapus data dulu sebelum hapus periode.`);
+  }
+  const filtered = all.filter(p => p.tahun !== tahun);
+  // Kalau yang dihapus aktif, pindahkan aktif ke periode terbaru
+  if (target.aktif && filtered.length) {
+    filtered.sort((a, b) => b.tahun - a.tahun);
+    filtered[0].aktif = true;
+    save(KEYS.periode_active, filtered[0].tahun);
+  } else if (!filtered.length) {
+    save(KEYS.periode_active, null);
+  }
+  save(KEYS.periode, filtered);
+}
+
+function countDataPerPeriode(tahun) {
+  tahun = Number(tahun);
+  return {
+    penilaian: load(KEYS.penilaian, []).filter(p => Number(p.periode) === tahun).length,
+    kehadiran: load(KEYS.kehadiran, []).filter(k => Number(k.periode) === tahun).length,
+    pkb: load(KEYS.pkb, []).filter(p => Number(p.periode) === tahun).length,
+  };
+}
+
+// Migrasi otomatis: kalau schema_version < CURRENT, jalankan migrasi.
+function runMigrations() {
+  const cur = Number(load(KEYS.schema_version, 1));
+  if (cur >= CURRENT_SCHEMA_VERSION) return;
+
+  // v1 -> v2: tambah field periode di semua data, tag dengan tahun berjalan.
+  const tahunIni = new Date().getFullYear();
+  let periodes = load(KEYS.periode, []);
+  if (!periodes.length) {
+    // Cek apakah ada data lama -> bikin periode default
+    const adaPenilaian = load(KEYS.penilaian, []).length > 0;
+    const adaKehadiran = load(KEYS.kehadiran, []).length > 0;
+    const adaPkb = load(KEYS.pkb, []).length > 0;
+    if (adaPenilaian || adaKehadiran || adaPkb) {
+      periodes = [{
+        tahun: tahunIni,
+        label: `Tahun ${tahunIni}`,
+        catatan: 'Otomatis dibuat saat migrasi data lama (sebelum fitur Periode).',
+        aktif: true,
+        created_at: nowLocal(),
+      }];
+    } else {
+      // Belum ada data sama sekali → buat periode default tetap, biar UI tidak kosong
+      periodes = [{
+        tahun: tahunIni,
+        label: `Tahun ${tahunIni}`,
+        catatan: 'Periode default.',
+        aktif: true,
+        created_at: nowLocal(),
+      }];
+    }
+    save(KEYS.periode, periodes);
+    save(KEYS.periode_active, tahunIni);
+  }
+
+  // Tag data lama tanpa periode → ke tahunIni
+  const pen = load(KEYS.penilaian, []);
+  let changedPen = false;
+  for (const p of pen) if (p.periode == null) { p.periode = tahunIni; changedPen = true; }
+  if (changedPen) save(KEYS.penilaian, pen);
+
+  const keh = load(KEYS.kehadiran, []);
+  let changedKeh = false;
+  for (const k of keh) if (k.periode == null) { k.periode = tahunIni; changedKeh = true; }
+  if (changedKeh) save(KEYS.kehadiran, keh);
+
+  const pkb = load(KEYS.pkb, []);
+  let changedPkb = false;
+  for (const p of pkb) if (p.periode == null) { p.periode = tahunIni; changedPkb = true; }
+  if (changedPkb) save(KEYS.pkb, pkb);
+
+  save(KEYS.schema_version, CURRENT_SCHEMA_VERSION);
+  console.info('[PKG] Migrasi v1→v2 selesai. Data lama di-tag ke periode', tahunIni);
+}
+
+// Jalankan migrasi sekali saat modul load
+try { runMigrations(); } catch (e) { console.error('Migrasi gagal:', e); }
+
 
 // === ROLES (derived from INSTRUMEN) =====================================
 const ROLES = (() => {
@@ -279,9 +433,11 @@ function syncKamadFromGuru() {
 }
 
 // === PENILAIAN ==========================================================
-function listPenilaianByGuru(guruId) {
+function listPenilaianByGuru(guruId, periode) {
   guruId = Number(guruId);
-  return load(KEYS.penilaian, []).filter(p => p.guru_id === guruId);
+  const all = load(KEYS.penilaian, []).filter(p => p.guru_id === guruId);
+  if (periode == null) return all;
+  return all.filter(p => Number(p.periode) === Number(periode));
 }
 
 function deletePenilaian(penId) {
@@ -297,16 +453,27 @@ function deletePenilaianMany(ids) {
   save(KEYS.skor, load(KEYS.skor, []).filter(s => !idSet.has(s.penilaian_id)));
 }
 
-function getOrCreatePenilaian(guruId, role, jenis) {
+function getOrCreatePenilaian(guruId, role, jenis, periode) {
   guruId = Number(guruId);
+  if (periode == null) {
+    const ap = getActivePeriode();
+    periode = ap ? ap.tahun : new Date().getFullYear();
+  }
+  periode = Number(periode);
   const all = load(KEYS.penilaian, []);
-  let p = all.find(x => x.guru_id === guruId && x.role_code === role && x.jenis === jenis);
+  let p = all.find(x =>
+    x.guru_id === guruId &&
+    x.role_code === role &&
+    x.jenis === jenis &&
+    Number(x.periode) === periode
+  );
   if (p) return p;
   p = {
     id: nextId('penilaian'),
     guru_id: guruId,
     role_code: role,
     jenis,
+    periode,
     tanggal: null,
     catatan: null,
     created_at: nowLocal(),
@@ -384,20 +551,31 @@ function hitungNilai(penId, role) {
 }
 
 // === KEHADIRAN ==========================================================
-function listKehadiran(guruId) {
+function listKehadiran(guruId, periode) {
   guruId = Number(guruId);
-  return load(KEYS.kehadiran, [])
-    .filter(k => k.guru_id === guruId)
-    .sort((a, b) => a.tahun - b.tahun || a.bulan - b.bulan);
+  let arr = load(KEYS.kehadiran, []).filter(k => k.guru_id === guruId);
+  if (periode != null) arr = arr.filter(k => Number(k.periode) === Number(periode));
+  return arr.sort((a, b) => a.tahun - b.tahun || a.bulan - b.bulan);
 }
 
-function upsertKehadiran(guruId, data) {
+function upsertKehadiran(guruId, data, periode) {
   guruId = Number(guruId);
+  if (periode == null) {
+    const ap = getActivePeriode();
+    periode = ap ? ap.tahun : new Date().getFullYear();
+  }
+  periode = Number(periode);
   const all = load(KEYS.kehadiran, []);
-  const idx = all.findIndex(k => k.guru_id === guruId && k.bulan === Number(data.bulan) && k.tahun === Number(data.tahun));
+  const idx = all.findIndex(k =>
+    k.guru_id === guruId &&
+    k.bulan === Number(data.bulan) &&
+    k.tahun === Number(data.tahun) &&
+    Number(k.periode) === periode
+  );
   const row = {
     id: idx >= 0 ? all[idx].id : nextId('kehadiran'),
     guru_id: guruId,
+    periode,
     bulan: Number(data.bulan),
     tahun: Number(data.tahun),
     hadir: Number(data.hadir) || 0,
@@ -418,19 +596,28 @@ function deleteKehadiran(id) {
 }
 
 // === PKB ================================================================
-function listPKB(guruId) {
+function listPKB(guruId, periode) {
   guruId = Number(guruId);
-  return load(KEYS.pkb, []).filter(p => p.guru_id === guruId).sort((a, b) => a.prioritas - b.prioritas);
+  let arr = load(KEYS.pkb, []).filter(p => p.guru_id === guruId);
+  if (periode != null) arr = arr.filter(p => Number(p.periode) === Number(periode));
+  return arr.sort((a, b) => a.prioritas - b.prioritas);
 }
 
-function replacePKB(guruId, items) {
+function replacePKB(guruId, items, periode) {
   guruId = Number(guruId);
-  const all = load(KEYS.pkb, []).filter(p => p.guru_id !== guruId);
+  if (periode == null) {
+    const ap = getActivePeriode();
+    periode = ap ? ap.tahun : new Date().getFullYear();
+  }
+  periode = Number(periode);
+  // Replace hanya untuk periode tersebut
+  const all = load(KEYS.pkb, []).filter(p => !(p.guru_id === guruId && Number(p.periode) === periode));
   for (const it of items) {
     if (it.kompetensi || it.rencana || it.target) {
       all.push({
         id: nextId('pkb'),
         guru_id: guruId,
+        periode,
         prioritas: Number(it.prioritas),
         kompetensi: it.kompetensi || null,
         rencana: it.rencana || null,
@@ -467,6 +654,7 @@ function getRecentGuru(limit) {
 function exportAll() {
   return {
     schema: 'pkg_v1',
+    schema_version: load(KEYS.schema_version, 1),
     exported_at: new Date().toISOString(),
     data: {
       guru: load(KEYS.guru, []),
@@ -479,6 +667,8 @@ function exportAll() {
       instrumen_overrides: load(KEYS.instrumen_overrides, {}),
       kompetensi_overrides: load(KEYS.kompetensi_overrides, {}),
       penggalian: load(KEYS.penggalian, {}),
+      periode: load(KEYS.periode, []),
+      periode_active: load(KEYS.periode_active, null),
     },
   };
 }
@@ -534,6 +724,10 @@ function importAll(json, mode) {
   save(KEYS.instrumen_overrides, d.instrumen_overrides || {});
   save(KEYS.kompetensi_overrides, d.kompetensi_overrides || {});
   save(KEYS.penggalian, d.penggalian || {});
+  if (d.periode) save(KEYS.periode, d.periode);
+  if (d.periode_active != null) save(KEYS.periode_active, d.periode_active);
+  // Migrasi data backup yang belum punya field periode
+  try { runMigrations(); } catch (e) { console.error('Post-import migration failed:', e); }
   return { mode: 'replace', count: (d.guru || []).length };
 }
 
@@ -702,9 +896,16 @@ function mergeBackups(backups, opts) {
 }
 
 // === REKAP ==============================================================
-function getRekap() {
+// Filter rekap berdasarkan periode aktif (default) atau periode tertentu.
+// Pass periode = null untuk no-filter (semua periode).
+function getRekap(periode) {
+  if (periode === undefined) {
+    const ap = getActivePeriode();
+    periode = ap ? ap.tahun : null;
+  }
   const gurus = load(KEYS.guru, []).sort((a, b) => (a.nama || '').localeCompare(b.nama || ''));
-  const allPen = load(KEYS.penilaian, []);
+  let allPen = load(KEYS.penilaian, []);
+  if (periode != null) allPen = allPen.filter(p => Number(p.periode) === Number(periode));
   return gurus.map(g => {
     const pen = allPen.filter(p => p.guru_id === g.id);
     const peran = pen.map(p => {
@@ -735,6 +936,9 @@ window.PKGDB = {
   listKehadiran, upsertKehadiran, deleteKehadiran,
   listPKB, replacePKB,
   getStats, getRecentGuru,
+  // Periode
+  listPeriode, getActivePeriode, setActivePeriode,
+  addPeriode, updatePeriode, deletePeriode, countDataPerPeriode,
   exportAll, importAll, mergeBackups, clearAll,
   getRekap,
 };
