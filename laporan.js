@@ -394,9 +394,8 @@ Laporan ini disusun sebagai dokumentasi resmi pelaksanaan PKG pada ${obj} untuk 
         <strong>${e(opts.nama_madrasah || 'NAMA MADRASAH')}</strong><br>
         ${e(opts.alamat_madrasah || '')}
       </div>
-      <div style="text-align:center; margin-top:auto; padding-bottom:2em;">
-        <strong>${e(KEMENAG.instansi)}</strong><br>
-        <strong>${e(KEMENAG.kabupaten)}</strong><br>
+      <div style="text-align:center; margin-top:auto; padding-bottom:2em; font-size:14pt;">
+        <strong>${e(KEMENAG.instansi)} ${e(KEMENAG.kabupaten)}</strong><br>
         <strong>${e(KEMENAG.provinsi)}</strong><br>
         <strong>TAHUN ${TAHUN_DEFAULT}</strong>
       </div>
@@ -421,9 +420,8 @@ Laporan ini disusun sebagai dokumentasi resmi pelaksanaan PKG pada ${obj} untuk 
         <strong>KKM ${e(opts.nama_kkm || 'NAMA KKM')}</strong><br>
         ${e(opts.wilayah || KEMENAG.kabupaten)}
       </div>
-      <div style="text-align:center; margin-top:auto; padding-bottom:2em;">
-        <strong>${e(KEMENAG.instansi)}</strong><br>
-        <strong>${e(KEMENAG.kabupaten)}</strong><br>
+      <div style="text-align:center; margin-top:auto; padding-bottom:2em; font-size:14pt;">
+        <strong>${e(KEMENAG.instansi)} ${e(KEMENAG.kabupaten)}</strong><br>
         <strong>${e(KEMENAG.provinsi)}</strong><br>
         <strong>TAHUN ${TAHUN_DEFAULT}</strong>
       </div>
