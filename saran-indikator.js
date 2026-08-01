@@ -826,3 +826,41 @@ window.SARAN_INDIKATOR.PUS = {
     3: { metode:['observasi','wawancara'], sumber:'Catatan keterlibatan kegiatan bersama; foto; testimoni rekan', catatan:'Cek partisipasi aktif dlm aktivitas tim.' },
   },
 };
+// === KMA 1503 — SARAN INDIKATOR BARU (Deep Learning + KBC + 8 DPL) ===
+
+// GMP new indicators
+window.SARAN_INDIKATOR.GMP[2][7] = { metode:['observasi','dokumen'], sumber:'RPP/modul ajar yang menunjukkan strategi project-based/inquiry/problem-based learning; catatan pelaksanaan; foto/video kegiatan; hasil kerja siswa', catatan:'Cek bukti perancangan & implementasi strategi deep learning. Verifikasi siswa benar-benar berpikir kritis, bukan sekadar aktif.' };
+window.SARAN_INDIKATOR.GMP[3][7] = { metode:['dokumen','wawancara'], sumber:'RPP/modul ajar dengan label 8 DPL & KBC; dokumen pemetaan integrasi nilai cinta; refleksi guru', catatan:'Cek apakah 8 DPL & KBC eksplisit dalam rancangan, bukan hanya tempelan. Tanya guru: nilai cinta mana yang diintegrasikan hari ini?' };
+window.SARAN_INDIKATOR.GMP[4][11] = { metode:['observasi','wawancara'], sumber:'Observasi iklim kelas; aturan kelas anti-bullying; catatan penanganan konflik; angket persepsi keamanan siswa; jurnal anekdotal', catatan:'Cek apakah ada aturan tertulis anti-bullying. Observasi: apakah siswa berani bertanya tanpa takut? Apakah guru menanggapi kesalahan dengan cinta?' };
+window.SARAN_INDIKATOR.GMP[5][7] = { metode:['dokumen','wawancara'], sumber:'Profil belajar individual siswa (gaya belajar, kecepatan, minat); catatan diferensiasi; portofolio progres siswa', catatan:'Cek bukti profil personalia per siswa. Verifikasi: apakah benar dipakai untuk membedakan pembelajaran?' };
+window.SARAN_INDIKATOR.GMP[7][6] = { metode:['dokumen','observasi'], sumber:'Rubrik penilaian performa/projek; koleksi portofolio siswa; hasil projek; refleksi siswa; rubrik 8 DPL', catatan:'Cek apakah asesmen menilai proses & produk (bukan hanya pilihan ganda). Verifikasi keterkaitan dengan 8 DPL.' };
+window.SARAN_INDIKATOR.GMP[11][5] = { metode:['observasi','dokumen','wawancara'], sumber:'SOP anti-bullying kelas; catatan intervensi perundungan; angket iklim kelas; testimoni siswa; jurnal penanganan kasus', catatan:'Cek bukti tindakan konkret guru saat melihat/mendengar perundungan. Bukan hanya "saya melarang" tapi intervensi aktif.' };
+window.SARAN_INDIKATOR.GMP[14][8] = { metode:['dokumen','wawancara'], sumber:'Jurnal refleksi guru; catatan evaluasi penerapan KBC; rencana perbaikan berdasarkan refleksi; portofolio pengembangan profesional', catatan:'Cek apakah refleksi KBC & deep learning dilakukan rutin (bukan akhir tahun). Verifikasi tindak lanjut konkret.' };
+
+// BK new indicators
+window.SARAN_INDIKATOR.BK[12][7] = { metode:['dokumen','wawancara'], sumber:'Program BK dengan label KBC; layanan BK terintegrasi 8 DPL; catatan konseling; materi layanan', catatan:'Cek apakah prinsip KBC terlihat dalam program & praktik BK. Tanya konselor: bagaimana KBC mengubah pendekatan layanan?' };
+window.SARAN_INDIKATOR.BK[14][5] = { metode:['dokumen','observasi'], sumber:'Program anti-bullying madrasah; modul pendampingan psikososial; catatan kasus perundungan; angket keamanan siswa; foto kegiatan', catatan:'Cek bukti program terstruktur (bukan insidental). Verifikasi dampak: apakah kasus perundungan menurun?' };
+window.SARAN_INDIKATOR.BK[17][5] = { metode:['dokumen'], sumber:'Laporan action research; instrumen penelitian; data pre-post intervensi; presentasi hasil; publikasi/jurnal', catatan:'Cek minimal 1 action research tentang KBC/deep learning. Verifikasi metodologi & rekomendasi tindak lanjut.' };
+
+// TIK new indicators
+window.SARAN_INDIKATOR.TIK[3][8] = { metode:['observasi','dokumen'], sumber:'Modul pembimbingan TIK berbasis projek digital; hasil karya digital siswa; kolaborasi online (Google Classroom, Padlet, dll); refleksi siswa', catatan:'Cek apakah teknologi dipakai untuk kreasi & kolaborasi (bukan konsumsi). Lihat hasil karya digital siswa.' };
+window.SARAN_INDIKATOR.TIK[8][9] = { metode:['dokumen','observasi'], sumber:'Modul/silabus Koding & AI; hasil projek siswa (kode sederhana, eksperimen AI); sertifikat pelatihan Koding/AI guru; portofolio digital', catatan:'Cek bukti materi Koding/AI dalam kurikulum TIK. Sesuai KMA 1503: mata pelajaran pilihan. Verifikasi kompetensi guru.' };
+
+// WKKUR new indicators
+window.SARAN_INDIKATOR.WKKUR[5][4] = { metode:['dokumen','observasi','wawancara'], sumber:'Jadwal supervisi KBC; instrumen supervisi; laporan hasil supervisi; RPP guru dengan label KBC/8 DPL; catatan tindak lanjut', catatan:'Cek apakah supervisi KBC benar-benar dilakukan (bukan hanya jadwal). Wawancarai 2-3 guru: apakah supervisi membantu?' };
+window.SARAN_INDIKATOR.WKKUR[5][5] = { metode:['dokumen','observasi'], sumber:'Daftar hadir workshop; materi workshop deep learning/KBC; foto kegiatan; evaluasi peserta; rencana tindak lanjut', catatan:'Cek minimal 1 workshop deep learning/KBC per semester. Verifikasi materi & dampak ke praktik guru.' };
+
+// WKSIS new indicator
+window.SARAN_INDIKATOR.WKSIS[5][4] = { metode:['dokumen','observasi'], sumber:'Program anti-bullying kesiswaan; SK tim anti-bullying; catatan sosialisasi; angket persepsi siswa; foto kampanye anti-bullying; modul karakter 8 DPL', catatan:'Cek bukti program berkelanjutan (bukan sekali jalan). Verifikasi pelibatan siswa sebagai agen perubahan.' };
+
+// WKHUM new indicator
+window.SARAN_INDIKATOR.WKHUM[5][4] = { metode:['dokumen','observasi'], sumber:'Materi sosialisasi KBC & 8 DPL untuk ortu; undangan pertemuan ortu; foto kegiatan; angket kepuasan ortu; newsletter/buletin madrasah', catatan:'Cek bukti sosialisasi rutin kepada orang tua. Verifikasi pesan KBC & 8 DPL tersampaikan dengan bahasa yang dipahami ortu.' };
+
+// WKSAR new indicator
+window.SARAN_INDIKATOR.WKSAR[5][4] = { metode:['observasi','dokumen'], sumber:'Denah ruang belajar; foto kondisi ruang kelas; checklist standar ruang aman; anglet kenyamanan siswa; catatan perbaikan', catatan:'Verifikasi langsung: pencahayaan, ventilasi, tata ruang. Apakah mendukung pembelajaran mendalam (kolaborasi, diskusi, projek)?' };
+
+// LAB new indicator
+window.SARAN_INDIKATOR.LAB[5][5] = { metode:['dokumen','observasi'], sumber:'Modul praktikum berbasis projek; instruksi kerja lab; hasil/pr laporan praktikum siswa; foto kegiatan lab; jurnal inovasi lab', catatan:'Cek apakah kegiatan lab project-based (bukan resep langkah). Verifikasi keterkaitan dengan nilai cinta ilmu & lingkungan.' };
+
+// PUS new indicator
+window.SARAN_INDIKATOR.PUS[4][5] = { metode:['dokumen','observasi'], sumber:'Daftar koleksi buku/material KBC & 8 DPL; display literasi cinta; program literasi mendalam; angket pemanfaatan; foto sudut baca', catatan:'Cek koleksi yang mendukung deep learning & KBC. Verifikasi pemanfaatan oleh siswa & guru.' };

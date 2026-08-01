@@ -96,7 +96,7 @@ function renderShell() {
   </nav>
   <div class="container-fluid pb-5" id="view"></div>
   <footer class="text-center text-muted small py-3 no-print">
-    Aplikasi PKG &middot; berbasis SK Dirjen Pendis No. 6673 Tahun 2019
+    Aplikasi PKG &middot; berbasis SK Dirjen Pendis No. 6673 Tahun 2019 &middot; disesuaikan dengan KMA No. 1503 Tahun 2025 (Kurikulum Berbasis Cinta &amp; Pembelajaran Mendalam)
     <div class="mt-1">Aplikasi ini dibuat oleh : Subariyanto, S.Pd, M.Pd.I. Ketua Pokjawas Madrasah Kab. Jember</div>
   </footer>`;
   document.body.insertAdjacentHTML('afterbegin', html);
@@ -2970,7 +2970,8 @@ function viewPanduan(view) {
       <div class="card mb-3" id="sec-instrumen">
         <div class="card-header"><i class="bi bi-list-check"></i> 8. Instrumen</div>
         <div class="card-body">
-          <p>Viewer untuk melihat seluruh indikator PKG per peran (407 indikator total).</p>
+          <p>Viewer untuk melihat seluruh indikator PKG per peran (433 indikator total).</p>
+          <div class="alert alert-info py-2 small mt-2"><i class="bi bi-stars"></i> <strong>KMA 1503 Tahun 2025:</strong> Indikator telah diperkaya dengan penguatan <strong>Pembelajaran Mendalam</strong> (deep learning), <strong>Kurikulum Berbasis Cinta</strong> (KBC), <strong>Delapan Profil Lulusan</strong> (8 DPL), pencegahan perundungan (anti-bullying), serta integrasi Koding/AI pada peran TIK.</div>
           <ul>
             <li>Filter per peran lewat dropdown atau URL <code>#/instrumen?role=GMP</code>.</li>
             <li><strong>Override teks:</strong> klik tombol pensil untuk menyesuaikan redaksi indikator atau nama kompetensi tanpa mengubah file <code>instrumen.js</code>. Override tersimpan di localStorage.</li>
