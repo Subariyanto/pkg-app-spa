@@ -58,13 +58,23 @@ function renderShell() {
       <div class="collapse navbar-collapse" id="nav">
         <ul class="navbar-nav me-auto">
           <li class="nav-item"><a class="nav-link" href="#/"><i class="bi bi-house"></i> Beranda</a></li>
-          <li class="nav-item"><a class="nav-link" href="#/guru"><i class="bi bi-people"></i> Data Guru</a></li>
-          <li class="nav-item"><a class="nav-link" href="#/kamad"><i class="bi bi-person-badge"></i> Data Kamad</a></li>
-          <li class="nav-item"><a class="nav-link" href="#/penilaian"><i class="bi bi-clipboard-check"></i> Penilaian</a></li>
-          <li class="nav-item"><a class="nav-link" href="#/rekap"><i class="bi bi-table"></i> Rekap</a></li>
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown"><i class="bi bi-database"></i> Data</a>
+            <ul class="dropdown-menu">
+              <li><a class="dropdown-item" href="#/guru"><i class="bi bi-people"></i> Data Guru</a></li>
+              <li><a class="dropdown-item" href="#/kamad"><i class="bi bi-person-badge"></i> Data Kamad</a></li>
+            </ul>
+          </li>
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown"><i class="bi bi-clipboard-check"></i> Penilaian</a>
+            <ul class="dropdown-menu">
+              <li><a class="dropdown-item" href="#/penilaian"><i class="bi bi-clipboard-check"></i> Penilaian</a></li>
+              <li><a class="dropdown-item" href="#/instrumen"><i class="bi bi-list-check"></i> Instrumen</a></li>
+              <li><a class="dropdown-item" href="#/rekap"><i class="bi bi-table"></i> Rekap</a></li>
+            </ul>
+          </li>
           <li class="nav-item"><a class="nav-link" href="#/monitoring-kbc"><i class="bi bi-graph-up-arrow"></i> Monitoring KBC</a></li>
           <li class="nav-item"><a class="nav-link" href="#/import"><i class="bi bi-cloud-upload"></i> Import</a></li>
-          <li class="nav-item"><a class="nav-link" href="#/instrumen"><i class="bi bi-list-check"></i> Instrumen</a></li>
           <li class="nav-item dropdown">
             <a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown"><i class="bi bi-file-earmark-text"></i> Laporan</a>
             <ul class="dropdown-menu">
