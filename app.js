@@ -62,6 +62,7 @@ function renderShell() {
           <li class="nav-item"><a class="nav-link" href="#/kamad"><i class="bi bi-person-badge"></i> Data Kamad</a></li>
           <li class="nav-item"><a class="nav-link" href="#/penilaian"><i class="bi bi-clipboard-check"></i> Penilaian</a></li>
           <li class="nav-item"><a class="nav-link" href="#/rekap"><i class="bi bi-table"></i> Rekap</a></li>
+          <li class="nav-item"><a class="nav-link" href="#/monitoring-kbc"><i class="bi bi-graph-up-arrow"></i> Monitoring KBC</a></li>
           <li class="nav-item"><a class="nav-link" href="#/import"><i class="bi bi-cloud-upload"></i> Import</a></li>
           <li class="nav-item"><a class="nav-link" href="#/instrumen"><i class="bi bi-list-check"></i> Instrumen</a></li>
           <li class="nav-item dropdown">
@@ -167,6 +168,7 @@ function render() {
   if (s0 === 'guru' && s1) return viewGuruDetail(view, s1);
 
   if (s0 === 'rekap') return viewRekap(view);
+  if (s0 === 'monitoring-kbc') return viewMonitoringKBC(view);
   if (s0 === 'penilaian') return viewPenilaianHub(view);
   if (s0 === 'instrumen') return viewInstrumen(view);
   if (s0 === 'panduan') return viewPanduan(view);
@@ -2828,6 +2830,432 @@ function viewPeriode(view) {
 }
 
 // === PANDUAN PENGGUNAAN =================================================
+// === MONITORING KBC (KMA 1503) ==========================================
+const KBC_KEYWORDS = ['cinta', 'kbc', '8 dpl', 'delapan profil lulusan', 'deep learning', 'pembelajaran mendalam', 'anti-bullying', 'perundungan', 'ruang aman', 'kasih sayang', 'empati', 'keteladanan', 'kebiasaan hidup hebat', 'profil belajar personal'];
+
+function isKBCIndikator(text) {
+  if (!text) return false;
+  const t = text.toLowerCase();
+  return KBC_KEYWORDS.some(k => t.includes(k));
+}
+
+function getKBCIndikatorIds() {
+  const ids = new Set();
+  const items = [];
+  for (const it of window.INSTRUMEN) {
+    if (isKBCIndikator(it.indikator)) {
+      const id = `${it.role_code}_${it.kompetensi_no}_${it.indikator_no}`;
+      ids.add(id);
+      items.push({ ...it, id });
+    }
+  }
+  return { ids, items };
+}
+
+function viewMonitoringKBC(view) {
+  const { query } = parseHash();
+  const tab = query.tab || 'dashboard';
+  const data = PKGDB.getRekap();
+  const { ids: kbcIds, items: kbcItems } = getKBCIndikatorIds();
+  const ap = PKGDB.getActivePeriode();
+  const periodeLabel = ap ? ap.nama || ap.tahun : '-';
+
+  // Compute KBC scores per guru
+  const guruKBC = [];
+  for (const g of data) {
+    if (!g.peran || g.peran.length === 0) continue;
+    for (const p of g.peran) {
+      const skorMap = PKGDB.getSkorMap(p.id);
+      const meta = PKGDB.getRoleMeta(p.role_code) || { max_score: 2 };
+      const max = meta.max_score;
+      const instrumen = PKGDB.getInstrumen(p.role_code);
+      const kbcInstr = instrumen.filter(i => kbcIds.has(i.id));
+      if (kbcInstr.length === 0) continue;
+      let sum = 0, count = 0, filled = 0;
+      const detailSkor = kbcInstr.map(i => {
+        const s = Number(skorMap[i.id]) || 0;
+        if (skorMap[i.id] != null) filled++;
+        sum += s;
+        count++;
+        return { id: i.id, indikator: i.indikator, kompetensi_no: i.kompetensi_no, kompetensi_nama: i.kompetensi_nama, skor: s, max, pct: max ? (s / max) * 100 : 0 };
+      });
+      const maksTotal = count * max;
+      const pct = maksTotal ? (sum / maksTotal) * 100 : 0;
+      guruKBC.push({
+        guru_id: g.id, nama: g.nama, nip: g.nip, madrasah: g.nama_madrasah, kkm: g.kkm || '-',
+        kabupaten: g.kabupaten || '-', role_code: p.role_code, role_label: p.role_label,
+        jenis: p.jenis, penilaian_id: p.id, sum, count, filled, maksTotal, pct,
+        detailSkor, max
+      });
+    }
+  }
+
+  // Aggregate per indikator
+  const perIndikator = {};
+  for (const gk of guruKBC) {
+    for (const d of gk.detailSkor) {
+      if (!perIndikator[d.id]) perIndikator[d.id] = { ...d, sumSkor: 0, countGuru: 0, filledGuru: 0 };
+      perIndikator[d.id].sumSkor += d.skor;
+      perIndikator[d.id].countGuru++;
+      if (gk.filled > 0) perIndikator[d.id].filledGuru++;
+    }
+  }
+  const indikatorRows = Object.values(perIndikator).map(r => ({
+    ...r, avgSkor: r.countGuru ? r.sumSkor / r.countGuru : 0, avgPct: r.max ? (r.countGuru ? (r.sumSkor / r.countGuru) / r.max : 0) * 100 : 0
+  })).sort((a, b) => a.role_code.localeCompare(b.role_code) || a.kompetensi_no - b.kompetensi_no);
+
+  // Aggregate per madrasah
+  const perMadrasah = {};
+  for (const gk of guruKBC) {
+    const key = gk.madrasah || '(Tanpa Madrasah)';
+    if (!perMadrasah[key]) perMadrasah[key] = { madrasah: key, kkm: gk.kkm, kabupaten: gk.kabupaten, sumPct: 0, count: 0, guruList: [] };
+    perMadrasah[key].sumPct += gk.pct;
+    perMadrasah[key].count++;
+    perMadrasah[key].guruList.push(gk);
+  }
+  const madrasahRows = Object.values(perMadrasah).map(r => ({ ...r, avgPct: r.count ? r.sumPct / r.count : 0 })).sort((a, b) => b.avgPct - a.avgPct);
+
+  // Formative vs Summative
+  const fvs = { formatif: { sum: 0, count: 0 }, sumatif: { sum: 0, count: 0 } };
+  for (const gk of guruKBC) {
+    const j = (gk.jenis || 'sumatif').toLowerCase();
+    if (fvs[j]) { fvs[j].sum += gk.pct; fvs[j].count++; }
+  }
+
+  view.innerHTML = `
+  <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <div>
+      <h4 class="mb-0"><i class="bi bi-graph-up-arrow"></i> Monitoring Kurikulum Berbasis Cinta</h4>
+      <small class="text-muted">Periode: ${periodeLabel} &middot; ${kbcItems.length} indikator KBC teridentifikasi dari ${window.INSTRUMEN.length} total</small>
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+      <button id="btn-print-kbc" class="btn btn-sm btn-outline-secondary"><i class="bi bi-printer"></i> Cetak</button>
+      <button id="btn-csv-kbc" class="btn btn-sm btn-outline-success"><i class="bi bi-file-earmark-spreadsheet"></i> CSV</button>
+    </div>
+  </div>
+
+  <div class="alert alert-info py-2 small mb-3"><i class="bi bi-info-circle"></i>
+    Monitoring KBC memfilter indikator yang mengandung kata kunci: Cinta, KBC, 8 DPL, Deep Learning, Anti-Bullying, Kasih Sayang, Empati, Keteladanan, dll. Skor dihitung dari data penilaian PKG yang sudah diisi.
+  </div>
+
+  <ul class="nav nav-tabs mb-3">
+    <li class="nav-item"><a class="nav-link ${tab === 'dashboard' ? 'active' : ''}" href="#/monitoring-kbc?tab=dashboard"><i class="bi bi-speedometer2"></i> Dashboard</a></li>
+    <li class="nav-item"><a class="nav-link ${tab === 'indikator' ? 'active' : ''}" href="#/monitoring-kbc?tab=indikator"><i class="bi bi-list-check"></i> Per Indikator</a></li>
+    <li class="nav-item"><a class="nav-link ${tab === 'madrasah' ? 'active' : ''}" href="#/monitoring-kbc?tab=madrasah"><i class="bi bi-building"></i> Ranking Madrasah</a></li>
+    <li class="nav-item"><a class="nav-link ${tab === 'progress' ? 'active' : ''}" href="#/monitoring-kbc?tab=progress"><i class="bi bi-arrow-left-right"></i> Formative vs Summative</a></li>
+  </ul>
+
+  <div id="kbc-content"></div>`;
+
+  const content = document.getElementById('kbc-content');
+  if (tab === 'indikator') renderKBCIndikator(content, indikatorRows);
+  else if (tab === 'madrasah') renderKBCMadrasah(content, madrasahRows);
+  else if (tab === 'progress') renderKBCProgress(content, fvs, guruKBC);
+  else renderKBCDashboard(content, guruKBC, madrasahRows, indikatorRows, fvs);
+
+  $('#btn-print-kbc')?.addEventListener('click', () => {
+    const titles = { dashboard: 'Dashboard Monitoring KBC', indikator: 'Detail Indikator KBC', madrasah: 'Ranking Madrasah KBC', progress: 'Progress Formative vs Summative KBC' };
+    printRekapTab(titles[tab] || 'Monitoring KBC', content.innerHTML);
+  });
+  $('#btn-csv-kbc')?.addEventListener('click', () => exportKBCCSV(tab, guruKBC, indikatorRows, madrasahRows, fvs));
+}
+
+function renderKBCDashboard(content, guruKBC, madrasahRows, indikatorRows, fvs) {
+  const totalGuru = guruKBC.length;
+  const avgPct = totalGuru ? guruKBC.reduce((a, b) => a + b.pct, 0) / totalGuru : 0;
+  const totalMadrasah = madrasahRows.length;
+  const totalIndikator = indikatorRows.length;
+  const sumatifAvg = fvs.sumatif.count ? fvs.sumatif.sum / fvs.sumatif.count : 0;
+  const formatifAvg = fvs.formatif.count ? fvs.formatif.sum / fvs.formatif.count : 0;
+
+  // 5 Pilar Cinta aggregation (keyword-based grouping)
+  const pilarMap = {
+    'Cinta Allah & Rasul': ['allah', 'rasul', 'ibadah', 'keteladanan', 'teladan'],
+    'Cinta Diri & Sesama': ['diri', 'sesama', 'empati', 'kasih sayang', 'anti-bullying', 'perundungan', 'ruang aman', 'inklusif'],
+    'Cinta Ilmu': ['ilmu', 'belajar', 'deep learning', 'pembelajaran mendalam', 'penelitian', ' refleksi'],
+    'Cinta Lingkungan': ['lingkungan', 'alam', 'sarpras', 'laboratorium'],
+    'Cinta Tanah Air': ['pancasila', 'tanah air', 'nasional', 'bangsa']
+  };
+  const pilarData = Object.entries(pilarMap).map(([pilar, kws]) => {
+    const matching = guruKBC.flatMap(gk => gk.detailSkor.filter(d => {
+      const t = (d.indikator || '').toLowerCase();
+      return kws.some(k => t.includes(k));
+    }));
+    const sum = matching.reduce((a, b) => a + b.skor, 0);
+    const maks = matching.length ? matching.length * (matching[0]?.max || 2) : 1;
+    return { pilar, pct: maks ? (sum / maks) * 100 : 0, count: matching.length };
+  });
+
+  // 8 DPL aggregation
+  const dplLabels = ['Bertaqwa', 'Berakhlak Mulia', 'Mandiri', 'Bergotong Royong', 'Bernalar Kritis', 'Kreatif', 'Berkebinekaan Global', 'Berkomunikasi'];
+  const dplMap = {
+    'Bertaqwa': ['allah', 'rasul', 'ibadah', 'taqwa', 'keteladanan'],
+    'Berakhlak Mulia': ['akhlak', 'sopan', 'kasih sayang', 'empati', 'cinta'],
+    'Mandiri': ['mandiri', 'kemandirian', 'resiliensi', 'profil belajar personal'],
+    'Bergotong Royong': ['kolaborasi', 'gotong royong', 'kerjasama', 'tim', 'kebersamaan'],
+    'Bernalar Kritis': ['kritis', 'analisis', 'inquiry', 'problem-based', 'deep learning', 'pembelajaran mendalam'],
+    'Kreatif': ['kreatif', 'inovasi', 'kreasi', 'project-based', 'projek digital'],
+    'Berkebinekaan Global': ['kebinekaan', 'perbedaan', 'inklusif', 'tidak diskriminatif', 'diversity'],
+    'Berkomunikasi': ['komunikasi', 'literasi', 'ekspresikan', 'menyampaikan']
+  };
+  const dplData = Object.entries(dplMap).map(([dpl, kws]) => {
+    const matching = guruKBC.flatMap(gk => gk.detailSkor.filter(d => {
+      const t = (d.indikator || '').toLowerCase();
+      return kws.some(k => t.includes(k));
+    }));
+    const sum = matching.reduce((a, b) => a + b.skor, 0);
+    const maks = matching.length ? matching.length * (matching[0]?.max || 2) : 1;
+    return { dpl, pct: maks ? (sum / maks) * 100 : 0, count: matching.length };
+  });
+
+  function pctBar(pct, color) {
+    const c = color || (pct >= 80 ? 'success' : pct >= 60 ? 'warning' : 'danger');
+    return `<div class="progress" style="height:8px;"><div class="progress-bar bg-${c}" style="width:${Math.min(pct, 100)}%"></div></div>`;
+  }
+  function pctColor(pct) { return pct >= 80 ? 'text-success' : pct >= 60 ? 'text-warning' : 'text-danger'; }
+  function pctLabel(pct) { return pct >= 80 ? 'Baik' : pct >= 60 ? 'Cukup' : pct < 1 ? 'Belum Dinilai' : 'Perlu Perhatian'; }
+
+  content.innerHTML = `
+  <div class="row g-3 mb-3">
+    <div class="col-md-3"><div class="card text-center"><div class="card-body"><i class="bi bi-people fs-2 text-primary"></i><div class="fs-3 fw-bold">${totalGuru}</div><small class="text-muted">Guru Dinilai</small></div></div></div>
+    <div class="col-md-3"><div class="card text-center"><div class="card-body"><i class="bi bi-building fs-2 text-info"></i><div class="fs-3 fw-bold">${totalMadrasah}</div><small class="text-muted">Madrasah</small></div></div></div>
+    <div class="col-md-3"><div class="card text-center"><div class="card-body"><i class="bi bi-list-check fs-2 text-warning"></i><div class="fs-3 fw-bold">${totalIndikator}</div><small class="text-muted">Indikator KBC</small></div></div></div>
+    <div class="col-md-3"><div class="card text-center"><div class="card-body"><i class="bi bi-graph-up fs-2 ${pctColor(avgPct)}"></i><div class="fs-3 fw-bold ${pctColor(avgPct)}">${avgPct.toFixed(1)}%</div><small class="text-muted">Rata-rata KBC</small></div></div></div>
+  </div>
+
+  <div class="row g-3">
+    <div class="col-lg-6">
+      <div class="card h-100"><div class="card-header bg-success text-white"><i class="bi bi-heart-fill"></i> 5 Pilar Kurikulum Berbasis Cinta</div>
+      <div class="card-body">
+        ${pilarData.map(p => `
+          <div class="mb-3">
+            <div class="d-flex justify-content-between align-items-center mb-1">
+              <span class="small fw-medium">${p.pilar}</span>
+              <span class="small ${pctColor(p.pct)}">${p.pct.toFixed(1)}% <span class="text-muted">(${p.count} ind)</span></span>
+            </div>
+            ${pctBar(p.pct)}
+          </div>
+        `).join('')}
+      </div></div>
+    </div>
+    <div class="col-lg-6">
+      <div class="card h-100"><div class="card-header bg-primary text-white"><i class="bi bi-star-fill"></i> Delapan Profil Lulusan (8 DPL)</div>
+      <div class="card-body">
+        ${dplData.map(d => `
+          <div class="mb-3">
+            <div class="d-flex justify-content-between align-items-center mb-1">
+              <span class="small fw-medium">${d.dpl}</span>
+              <span class="small ${pctColor(d.pct)}">${d.pct.toFixed(1)}% <span class="text-muted">(${d.count} ind)</span></span>
+            </div>
+            ${pctBar(d.pct)}
+          </div>
+        `).join('')}
+      </div></div>
+    </div>
+  </div>
+
+  <div class="row g-3 mt-1">
+    <div class="col-lg-6">
+      <div class="card h-100"><div class="card-header"><i class="bi bi-trophy"></i> Top 5 Madrasah (Implementasi KBC)</div>
+      <div class="card-body p-0">
+        <table class="table table-sm table-hover mb-0 align-middle">
+          <thead class="table-light"><tr><th>#</th><th>Madrasah</th><th>KKM</th><th class="text-end">Skor KBC</th></tr></thead>
+          <tbody>
+            ${madrasahRows.slice(0, 5).map((m, i) => `<tr><td>${i+1}</td><td>${m.madrasah}</td><td>${m.kkm}</td><td class="text-end fw-bold ${pctColor(m.avgPct)}">${m.avgPct.toFixed(1)}%</td></tr>`).join('') || '<tr><td colspan="4" class="text-center text-muted py-3">Belum ada data</td></tr>'}
+          </tbody>
+        </table>
+      </div></div>
+    </div>
+    <div class="col-lg-6">
+      <div class="card h-100"><div class="card-header bg-danger text-white"><i class="bi bi-exclamation-triangle"></i> Perlu Pendampingan (Bottom 5)</div>
+      <div class="card-body p-0">
+        <table class="table table-sm table-hover mb-0 align-middle">
+          <thead class="table-light"><tr><th>#</th><th>Madrasah</th><th>KKM</th><th class="text-end">Skor KBC</th></tr></thead>
+          <tbody>
+            ${madrasahRows.slice(-5).reverse().map((m, i) => `<tr><td>${i+1}</td><td>${m.madrasah}</td><td>${m.kkm}</td><td class="text-end fw-bold ${pctColor(m.avgPct)}">${m.avgPct.toFixed(1)}%</td></tr>`).join('') || '<tr><td colspan="4" class="text-center text-muted py-3">Belum ada data</td></tr>'}
+          </tbody>
+        </table>
+      </div></div>
+    </div>
+  </div>
+
+  <div class="row g-3 mt-1">
+    <div class="col-12">
+      <div class="card"><div class="card-header"><i class="bi bi-arrow-left-right"></i> Progress Formative vs Summative</div>
+      <div class="card-body">
+        <div class="row text-center">
+          <div class="col-md-6">
+            <div class="fs-5 text-muted">Formatif (Awal Tahun)</div>
+            <div class="fs-2 fw-bold ${pctColor(formatifAvg)}">${formatifAvg.toFixed(1)}%</div>
+            <small class="text-muted">${fvs.formatif.count} guru dinilai</small>
+          </div>
+          <div class="col-md-6">
+            <div class="fs-5 text-muted">Sumatif (Akhir Tahun)</div>
+            <div class="fs-2 fw-bold ${pctColor(sumatifAvg)}">${sumatifAvg.toFixed(1)}%</div>
+            <small class="text-muted">${fvs.sumatif.count} guru dinilai</small>
+          </div>
+        </div>
+        ${formatifAvg > 0 && sumatifAvg > 0 ? `<div class="text-center mt-2"><span class="badge ${sumatifAvg >= formatifAvg ? 'bg-success' : 'bg-danger'}">${sumatifAvg >= formatifAvg ? '↗' : '↘'} ${Math.abs(sumatifAvg - formatifAvg).toFixed(1)}% ${sumatifAvg >= formatifAvg ? 'peningkatan' : 'penurunan'}</span></div>` : ''}
+      </div></div>
+    </div>
+  </div>`;
+}
+
+function renderKBCIndikator(content, rows) {
+  const total = rows.length;
+  content.innerHTML = `
+  <div class="card"><div class="card-header"><i class="bi bi-list-check"></i> Detail Skor per Indikator KBC (${total} indikator)</div>
+    <div class="table-responsive">
+      <table class="table table-sm table-hover mb-0 align-middle">
+        <thead class="table-light sticky-top"><tr>
+          <th>Peran</th><th>Komp.</th><th>Indikator</th><th class="text-end">Avg Skor</th><th class="text-end">Max</th><th class="text-end">%</th><th>Status</th>
+        </tr></thead>
+        <tbody>
+          ${total === 0 ? '<tr><td colspan="7" class="text-center text-muted py-4">Belum ada data penilaian</td></tr>' : ''}
+          ${rows.map(r => {
+            const pct = r.avgPct;
+            const color = pct >= 80 ? 'success' : pct >= 60 ? 'warning' : pct < 1 ? 'secondary' : 'danger';
+            const label = pct >= 80 ? 'Baik' : pct >= 60 ? 'Cukup' : pct < 1 ? '-' : 'Rendah';
+            const indikatorShort = r.indikator.length > 80 ? r.indikator.substring(0, 80) + '...' : r.indikator;
+            return `<tr>
+              <td><span class="badge bg-secondary">${r.role_code}</span></td>
+              <td class="small">K${r.kompetensi_no}</td>
+              <td class="small" title="${r.indikator.replace(/"/g, '&quot;')}">${indikatorShort}</td>
+              <td class="text-end">${r.avgSkor.toFixed(2)}</td>
+              <td class="text-end text-muted">${r.max}</td>
+              <td class="text-end fw-bold text-${color}">${pct.toFixed(1)}%</td>
+              <td><span class="badge bg-${color}">${label}</span></td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>
+  </div>`;
+}
+
+function renderKBCMadrasah(content, rows) {
+  content.innerHTML = `
+  <div class="card"><div class="card-header"><i class="bi bi-building"></i> Ranking Madrasah berdasarkan Implementasi KBC</div>
+    <div class="table-responsive">
+      <table class="table table-sm table-hover mb-0 align-middle">
+        <thead class="table-light"><tr>
+          <th>#</th><th>Madrasah</th><th>KKM</th><th>Kabupaten</th><th class="text-end">Guru</th><th class="text-end">Skor KBC</th><th class="text-end">Status</th>
+        </tr></thead>
+        <tbody>
+          ${rows.length === 0 ? '<tr><td colspan="7" class="text-center text-muted py-4">Belum ada data</td></tr>' : ''}
+          ${rows.map((m, i) => {
+            const pct = m.avgPct;
+            const color = pct >= 80 ? 'success' : pct >= 60 ? 'warning' : pct < 1 ? 'secondary' : 'danger';
+            const label = pct >= 80 ? 'Baik' : pct >= 60 ? 'Cukup' : pct < 1 ? '-' : 'Perlu Pendampingan';
+            const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : '';
+            return `<tr>
+              <td>${medal || (i+1)}</td>
+              <td class="fw-medium">${m.madrasah}</td>
+              <td>${m.kkm}</td>
+              <td>${m.kabupaten}</td>
+              <td class="text-end">${m.count}</td>
+              <td class="text-end fw-bold text-${color}">${pct.toFixed(1)}%</td>
+              <td><span class="badge bg-${color}">${label}</span></td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>
+  </div>`;
+}
+
+function renderKBCProgress(content, fvs, guruKBC) {
+  const formatifGuru = guruKBC.filter(g => (g.jenis || '').toLowerCase() === 'formatif');
+  const sumatifGuru = guruKBC.filter(g => (g.jenis || '').toLowerCase() === 'sumatif');
+  const fmtAvg = fvs.formatif.count ? fvs.formatif.sum / fvs.formatif.count : 0;
+  const sumAvg = fvs.sumatif.count ? fvs.sumatif.sum / fvs.sumatif.count : 0;
+  const delta = sumAvg - fmtAvg;
+
+  content.innerHTML = `
+  <div class="row g-3 mb-3">
+    <div class="col-md-4">
+      <div class="card text-center h-100"><div class="card-body">
+        <i class="bi bi-flag-start fs-2 text-info"></i>
+        <div class="fs-5 text-muted mt-1">Formatif</div>
+        <div class="fs-1 fw-bold ${fmtAvg >= 80 ? 'text-success' : fmtAvg >= 60 ? 'text-warning' : 'text-danger'}">${fmtAvg.toFixed(1)}%</div>
+        <small class="text-muted">${fvs.formatif.count} guru</small>
+      </div></div>
+    </div>
+    <div class="col-md-4">
+      <div class="card text-center h-100"><div class="card-body">
+        <i class="bi bi-flag-fill fs-2 text-success"></i>
+        <div class="fs-5 text-muted mt-1">Sumatif</div>
+        <div class="fs-1 fw-bold ${sumAvg >= 80 ? 'text-success' : sumAvg >= 60 ? 'text-warning' : 'text-danger'}">${sumAvg.toFixed(1)}%</div>
+        <small class="text-muted">${fvs.sumatif.count} guru</small>
+      </div></div>
+    </div>
+    <div class="col-md-4">
+      <div class="card text-center h-100"><div class="card-body">
+        <i class="bi bi-arrow-${delta >= 0 ? 'up' : 'down'}-circle fs-2 ${delta >= 0 ? 'text-success' : 'text-danger'}"></i>
+        <div class="fs-5 text-muted mt-1">Selisih</div>
+        <div class="fs-1 fw-bold ${delta >= 0 ? 'text-success' : 'text-danger'}">${delta >= 0 ? '+' : ''}${delta.toFixed(1)}%</div>
+        <small class="text-muted">${delta >= 0 ? 'Peningkatan' : 'Penurunan'}</small>
+      </div></div>
+    </div>
+  </div>
+
+  <div class="card"><div class="card-header"><i class="bi bi-table"></i> Detail per Guru</div>
+    <div class="table-responsive">
+      <table class="table table-sm table-hover mb-0 align-middle">
+        <thead class="table-light"><tr>
+          <th>Nama</th><th>Madrasah</th><th>Peran</th><th>Jenis</th><th class="text-end">Skor KBC</th><th class="text-end">%</th>
+        </tr></thead>
+        <tbody>
+          ${guruKBC.length === 0 ? '<tr><td colspan="6" class="text-center text-muted py-4">Belum ada data</td></tr>' : ''}
+          ${guruKBC.sort((a,b) => a.nama.localeCompare(b.nama)).map(g => {
+            const color = g.pct >= 80 ? 'success' : g.pct >= 60 ? 'warning' : g.pct < 1 ? 'secondary' : 'danger';
+            return `<tr>
+              <td class="fw-medium">${g.nama}</td>
+              <td class="small">${g.madrasah}</td>
+              <td><span class="badge bg-secondary">${g.role_code}</span></td>
+              <td><span class="badge bg-${g.jenis === 'formatif' ? 'info' : 'success'}">${g.jenis || 'sumatif'}</span></td>
+              <td class="text-end">${g.sum}/${g.maksTotal}</td>
+              <td class="text-end fw-bold text-${color}">${g.pct.toFixed(1)}%</td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>
+  </div>`;
+}
+
+function exportKBCCSV(tab, guruKBC, indikatorRows, madrasahRows, fvs) {
+  let headers = [], rows = [];
+  if (tab === 'indikator') {
+    headers = ['Peran', 'Kompetensi', 'Indikator', 'Avg Skor', 'Max', '%', 'Status'];
+    rows = indikatorRows.map(r => [r.role_code, 'K'+r.kompetensi_no, r.indikator, r.avgSkor.toFixed(2), r.max, r.avgPct.toFixed(1)+'%', r.avgPct >= 80 ? 'Baik' : r.avgPct >= 60 ? 'Cukup' : 'Rendah']);
+  } else if (tab === 'madrasah') {
+    headers = ['Ranking', 'Madrasah', 'KKM', 'Kabupaten', 'Jumlah Guru', 'Skor KBC', 'Status'];
+    rows = madrasahRows.map((m, i) => [i+1, m.madrasah, m.kkm, m.kabupaten, m.count, m.avgPct.toFixed(1)+'%', m.avgPct >= 80 ? 'Baik' : m.avgPct >= 60 ? 'Cukup' : 'Perlu Pendampingan']);
+  } else if (tab === 'progress') {
+    headers = ['Nama', 'Madrasah', 'Peran', 'Jenis', 'Skor', 'Max', '%'];
+    rows = guruKBC.sort((a,b) => a.nama.localeCompare(b.nama)).map(g => [g.nama, g.madrasah, g.role_code, g.jenis || 'sumatif', g.sum, g.maksTotal, g.pct.toFixed(1)+'%']);
+  } else {
+    // dashboard summary
+    headers = ['Metrik', 'Nilai'];
+    const totalGuru = guruKBC.length;
+    const avgPct = totalGuru ? guruKBC.reduce((a,b) => a + b.pct, 0) / totalGuru : 0;
+    rows = [
+      ['Total Guru Dinilai', totalGuru],
+      ['Total Madrasah', madrasahRows.length],
+      ['Total Indikator KBC', indikatorRows.length],
+      ['Rata-rata Skor KBC', avgPct.toFixed(1)+'%'],
+      ['Formatif Avg', (fvs.formatif.count ? fvs.formatif.sum/fvs.formatif.count : 0).toFixed(1)+'%'],
+      ['Sumatif Avg', (fvs.sumatif.count ? fvs.sumatif.sum/fvs.sumatif.count : 0).toFixed(1)+'%'],
+    ];
+  }
+  const csv = [headers.join(','), ...rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(','))].join('\n');
+  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = `monitoring-kbc-${tab}.csv`; a.click();
+  URL.revokeObjectURL(a.href);
+}
+
 function viewPanduan(view) {
   view.innerHTML = `
   <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
