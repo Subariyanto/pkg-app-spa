@@ -11,17 +11,46 @@
   const KEY_UNLOCKED = 'pkg_v1_unlocked';
 
   async function sha256(text) {
-    const buf = new TextEncoder().encode(text);
-    const hash = await crypto.subtle.digest('SHA-256', buf);
-    return Array.from(new Uint8Array(hash))
-      .map(b => b.toString(16).padStart(2, '0'))
-      .join('');
+    // Fallback: crypto.subtle hanya tersedia di secure context (HTTPS/localhost)
+    if (window.crypto && window.crypto.subtle) {
+      const buf = new TextEncoder().encode(text);
+      const hash = await crypto.subtle.digest('SHA-256', buf);
+      return Array.from(new Uint8Array(hash))
+        .map(b => b.toString(16).padStart(2, '0'))
+        .join('');
+    }
+    // Fallback hash sederhana (FNV-1a + salt) untuk non-secure context
+    return fnv1aHash(text);
+  }
+
+  function fnv1aHash(str) {
+    let h = 0x811c9dc5;
+    for (let i = 0; i < str.length; i++) {
+      h ^= str.charCodeAt(i);
+      h = Math.imul(h, 0x01000193);
+    }
+    // Double pass untuk distribusi lebih baik
+    let h2 = 0x811c9dc5;
+    const s2 = h.toString(16) + str;
+    for (let i = 0; i < s2.length; i++) {
+      h2 ^= s2.charCodeAt(i);
+      h2 = Math.imul(h2, 0x01000193);
+    }
+    return h.toString(16).padStart(8, '0') + h2.toString(16).padStart(8, '0');
   }
 
   function randomSalt() {
-    const arr = new Uint8Array(16);
-    crypto.getRandomValues(arr);
-    return Array.from(arr).map(b => b.toString(16).padStart(2, '0')).join('');
+    if (window.crypto && window.crypto.getRandomValues) {
+      const arr = new Uint8Array(16);
+      crypto.getRandomValues(arr);
+      return Array.from(arr).map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+    // Fallback: Math.random-based salt
+    let s = '';
+    for (let i = 0; i < 32; i++) {
+      s += Math.floor(Math.random() * 16).toString(16);
+    }
+    return s;
   }
 
   async function setPin(pin) {
