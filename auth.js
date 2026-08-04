@@ -317,6 +317,12 @@
           Device ID: ${getDeviceId()}<br>
           Satu Kode Aktivasi hanya berlaku untuk satu perangkat browser ini.
         </div>
+
+        ${(localStorage.getItem(KEY_USER_USERNAME) || localStorage.getItem(KEY_TRIAL_START)) ? `
+        <div style="text-align:center; margin-top:1rem; font-size:.85rem;">
+          <a id="link-to-login" style="color:#1f5d3a; cursor:pointer; text-decoration:none; font-weight:600;">Sudah Memiliki Akun? Login di sini</a>
+        </div>
+        ` : ''}
       </div>
     `;
 
@@ -329,6 +335,16 @@
         groupMadrasah.style.display = 'block';
       }
     });
+
+    // Link "Sudah Memiliki Akun" → ke halaman login
+    const linkLogin = document.getElementById('link-to-login');
+    if (linkLogin) {
+      linkLogin.addEventListener('click', () => {
+        // Set flag activated agar init() lewat ke login screen
+        localStorage.setItem(KEY_ACTIVATED, 'true');
+        location.reload();
+      });
+    }
 
     // Tombol Trial: LANGSUNG buat akun trial tanpa isi form, auto-login ke Beranda
     document.getElementById('btn-trial').addEventListener('click', () => {
@@ -493,6 +509,18 @@
         </div>
 
         <button class="btn-auth-submit" id="btn-login-submit">Login Masuk</button>
+
+        ${(localStorage.getItem(KEY_USER_ROLE) === 'trial') ? `
+        <div style="text-align:center; margin-top:1rem;">
+          <button id="btn-trial-quick-login" type="button" style="width:100%; background:transparent; border:2px solid #1f5d3a; color:#1f5d3a; padding:.65rem; border-radius:8px; cursor:pointer; font-weight:600; font-size:.95rem;">
+            🎁 Masuk Akun Trial
+          </button>
+        </div>
+        ` : ''}
+
+        <div style="text-align:center; margin-top:1.25rem; font-size:.85rem;">
+          <a id="link-to-aktivasi" style="color:#1e40af; cursor:pointer; text-decoration:none;">Buat Akun Baru / Reset Aktivasi</a>
+        </div>
       </div>
     `;
 
@@ -536,6 +564,31 @@
     inputPass.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') { e.preventDefault(); tryLogin(); }
     });
+
+    // Tombol quick-login untuk akun trial (tidak perlu input password)
+    const btnTrialLogin = document.getElementById('btn-trial-quick-login');
+    if (btnTrialLogin) {
+      btnTrialLogin.addEventListener('click', () => {
+        sessionStorage.setItem(KEY_LOGGED_IN, 'true');
+        if (location.hash && location.hash !== '#/') location.hash = '#/';
+        overlay.remove();
+        init();
+      });
+    }
+
+    // Link ke halaman aktivasi (Buat Akun Baru / Reset)
+    const linkAktivasi = document.getElementById('link-to-aktivasi');
+    if (linkAktivasi) {
+      linkAktivasi.addEventListener('click', () => {
+        if (!confirm('Pindah ke halaman Aktivasi?\n\nJika Anda membuat akun baru, data akun lama di browser ini akan ditimpa.')) return;
+        // Hapus flag aktivasi agar init() menampilkan layar aktivasi
+        localStorage.removeItem(KEY_ACTIVATED);
+        localStorage.removeItem(KEY_ACTIVATION_CODE);
+        localStorage.removeItem(KEY_DEVICE_BINDING);
+        sessionStorage.removeItem(KEY_LOGGED_IN);
+        location.reload();
+      });
+    }
   }
 
   // 3. Lock screen: full-page overlay untuk PIN
