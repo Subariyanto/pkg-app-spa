@@ -329,9 +329,10 @@
     const linkLogin = document.getElementById('link-to-login');
     if (linkLogin) {
       linkLogin.addEventListener('click', () => {
-        // Set flag bypass agar init() lewat ke login screen
-        localStorage.setItem('pkg_v1_skip_activation', 'true');
-        location.reload();
+        // Langsung render login screen tanpa reload
+        const oldOverlay = document.getElementById('pkg-auth-overlay');
+        if (oldOverlay) oldOverlay.remove();
+        renderLoginScreen();
       });
     }
 
@@ -600,10 +601,11 @@
     if (linkAktivasi) {
       linkAktivasi.addEventListener('click', () => {
         if (!confirm('Pindah ke halaman Aktivasi?\n\nJika Anda membuat akun baru, data akun lama di browser ini akan ditimpa.')) return;
-        // Set flag force activation
-        localStorage.setItem('pkg_v1_force_activation', 'true');
+        // Langsung render activation screen tanpa reload
         sessionStorage.removeItem(KEY_LOGGED_IN);
-        location.reload();
+        const oldOverlay = document.getElementById('pkg-auth-overlay');
+        if (oldOverlay) oldOverlay.remove();
+        renderActivationScreen();
       });
     }
   }
