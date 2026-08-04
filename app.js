@@ -48,7 +48,8 @@ const NAMA_BLN_SHORT = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Ag
 // === LAYOUT =============================================================
 function renderShell() {
   const userInfo = window.PKGAuth ? window.PKGAuth.getUserInfo() : { role: 'kamad' };
-  const isAdmin = userInfo.role === 'admin';
+  const isAdmin = userInfo.role === 'admin'; // Ketua Pokjawas
+  const isPengawas = userInfo.role === 'admin' || userInfo.role === 'pengawas'; // admin & pengawas
   const html = `
   <nav class="navbar navbar-expand-xl navbar-dark bg-primary mb-3 no-print">
     <div class="container-fluid">
@@ -64,7 +65,7 @@ function renderShell() {
             <a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown"><i class="bi bi-database"></i> Data</a>
             <ul class="dropdown-menu">
               <li><a class="dropdown-item" href="#/guru"><i class="bi bi-people"></i> Data Guru</a></li>
-              ${isAdmin ? `<li><a class="dropdown-item" href="#/kamad"><i class="bi bi-person-badge"></i> Data Kamad</a></li>` : ''}
+              ${isPengawas ? `<li><a class="dropdown-item" href="#/kamad"><i class="bi bi-person-badge"></i> Data Kamad</a></li>` : ''}
             </ul>
           </li>
           <li class="nav-item dropdown">
@@ -81,14 +82,14 @@ function renderShell() {
             <a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown"><i class="bi bi-file-earmark-text"></i> Laporan</a>
             <ul class="dropdown-menu">
               <li><a class="dropdown-item" href="#/laporan-madrasah"><i class="bi bi-building"></i> Laporan Madrasah</a></li>
-              ${isAdmin ? `<li><a class="dropdown-item" href="#/laporan-kkm"><i class="bi bi-diagram-3"></i> Laporan KKM</a></li>` : ''}
+              ${isPengawas ? `<li><a class="dropdown-item" href="#/laporan-kkm"><i class="bi bi-diagram-3"></i> Laporan KKM</a></li>` : ''}
             </ul>
           </li>
           <li class="nav-item dropdown">
             <a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown"><i class="bi bi-shield-check"></i> Backup</a>
             <ul class="dropdown-menu">
               <li><a class="dropdown-item" href="#/backup"><i class="bi bi-building"></i> Backup Madrasah</a></li>
-              ${isAdmin ? `<li><a class="dropdown-item" href="#/backup-kabupaten"><i class="bi bi-geo-alt-fill"></i> Backup Kabupaten / KKM</a></li>` : ''}
+              ${isPengawas ? `<li><a class="dropdown-item" href="#/backup-kabupaten"><i class="bi bi-geo-alt-fill"></i> Backup Kabupaten / KKM</a></li>` : ''}
               <li><hr class="dropdown-divider"></li>
               <li><a class="dropdown-item text-danger" href="#/backup-clear"><i class="bi bi-trash"></i> Hapus Semua Data</a></li>
             </ul>
@@ -4364,7 +4365,7 @@ window.addEventListener('DOMContentLoaded', async () => {
 function viewKelolaAktivasi(view) {
   const userInfo = window.PKGAuth ? window.PKGAuth.getUserInfo() : { role: 'kamad' };
   if (userInfo.role !== 'admin') {
-    view.innerHTML = `<div class="alert alert-danger"><i class="bi bi-exclamation-triangle"></i> Halaman ini hanya dapat diakses oleh Admin Pokjawas.</div>`;
+    view.innerHTML = `<div class="alert alert-danger"><i class="bi bi-exclamation-triangle"></i> Halaman ini hanya dapat diakses oleh Admin (Ketua Pokjawas).</div>`;
     return;
   }
 

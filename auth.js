@@ -311,6 +311,9 @@
           <button id="btn-admin-login" type="button" style="background:#1e40af; color:#fff; border:0; padding:.6rem 1rem; border-radius:8px; cursor:pointer; font-weight:600; font-size:.9rem; width:100%;">
             🔑 Login Pengawas
           </button>
+          <button id="btn-superadmin-login" type="button" style="background:transparent; color:#6c757d; border:1px solid #dee2e6; padding:.4rem 1rem; border-radius:8px; cursor:pointer; font-weight:500; font-size:.8rem; width:100%; margin-top:.5rem;">
+            🛡️ Login Ketua Pokjawas (Admin)
+          </button>
         </div>
         
         <div class="device-info-text">
@@ -339,6 +342,29 @@
 
     // Tombol Login Pengawas — langsung login tanpa aktivasi
     document.getElementById('btn-admin-login').addEventListener('click', () => {
+      const adminUser = 'subariyanto';
+      const adminPass = '@riyant1970';
+      const devId = getDeviceId();
+      const binding = fnv1aHash(devId + ':' + ADMIN_MASTER_CODE);
+      const passHash = fnv1aHash(adminPass);
+
+      localStorage.setItem(KEY_ACTIVATED, 'true');
+      localStorage.setItem(KEY_ACTIVATION_CODE, ADMIN_MASTER_CODE);
+      localStorage.setItem(KEY_DEVICE_BINDING, binding);
+      localStorage.setItem(KEY_USER_ROLE, 'pengawas');
+      localStorage.setItem(KEY_USER_USERNAME, adminUser);
+      localStorage.setItem(KEY_USER_PASSWORD_HASH, passHash);
+      localStorage.setItem(KEY_USER_FULLNAME, 'Subariyanto, S.Pd, M.Pd.I.');
+      localStorage.setItem(KEY_USER_MADRASAH, 'Pokjawas Jember');
+
+      // Auto-login
+      sessionStorage.setItem(KEY_LOGGED_IN, 'true');
+      location.hash = '#/';
+      location.reload();
+    });
+
+    // Tombol Login Ketua Pokjawas (Admin) — hanya admin yang bisa generate kode aktivasi
+    document.getElementById('btn-superadmin-login').addEventListener('click', () => {
       const adminUser = 'subariyanto';
       const adminPass = '@riyant1970';
       const devId = getDeviceId();
