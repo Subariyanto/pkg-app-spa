@@ -432,6 +432,7 @@
       } else {
         alert('Aktivasi berhasil! Silakan login menggunakan akun yang baru saja dibuat.');
       }
+      location.hash = '#/';
       location.reload();
     });
   }
@@ -556,9 +557,9 @@
         localStorage.setItem(KEY_USER_MADRASAH, 'Pokjawas Jember');
         localStorage.removeItem(KEY_TRIAL_START);
         sessionStorage.setItem(KEY_LOGGED_IN, 'true');
-        if (location.hash && location.hash !== '#/') location.hash = '#/';
+        location.hash = '#/';
         overlay.remove();
-        init();
+        init().then(() => { if (window.render) window.render(); });
         return;
       }
 
@@ -571,13 +572,11 @@
       sessionStorage.setItem(KEY_LOGGED_IN, 'true');
 
       // Pastikan ke Beranda setelah login
-      if (location.hash && location.hash !== '#/') {
-        location.hash = '#/';
-      }
-      
+      location.hash = '#/';
+
       // Remove overlay and boot PIN gate / main application
       overlay.remove();
-      init();
+      init().then(() => { if (window.render) window.render(); });
     }
 
     document.getElementById('btn-login-submit').addEventListener('click', tryLogin);
@@ -590,9 +589,9 @@
     if (btnTrialLogin) {
       btnTrialLogin.addEventListener('click', () => {
         sessionStorage.setItem(KEY_LOGGED_IN, 'true');
-        if (location.hash && location.hash !== '#/') location.hash = '#/';
+        location.hash = '#/';
         overlay.remove();
-        init();
+        init().then(() => { if (window.render) window.render(); });
       });
     }
 
