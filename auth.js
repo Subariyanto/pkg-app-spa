@@ -109,7 +109,7 @@
 
   // --- TRIAL ACCOUNT LOGIC ---
   function isTrial() {
-    return localStorage.getItem(KEY_USER_ROLE) === 'trial' || !!localStorage.getItem(KEY_TRIAL_START);
+    return localStorage.getItem(KEY_USER_ROLE) === 'trial';
   }
 
   function isTrialExpired() {
@@ -356,6 +356,8 @@
       localStorage.setItem(KEY_USER_PASSWORD_HASH, passHash);
       localStorage.setItem(KEY_USER_FULLNAME, 'Subariyanto, S.Pd, M.Pd.I.');
       localStorage.setItem(KEY_USER_MADRASAH, 'Pokjawas Jember');
+      // Bersihkan sisa trial
+      localStorage.removeItem(KEY_TRIAL_START);
 
       // Auto-login
       sessionStorage.setItem(KEY_LOGGED_IN, 'true');
@@ -379,6 +381,8 @@
       localStorage.setItem(KEY_USER_PASSWORD_HASH, passHash);
       localStorage.setItem(KEY_USER_FULLNAME, 'Subariyanto, S.Pd, M.Pd.I.');
       localStorage.setItem(KEY_USER_MADRASAH, 'Pokjawas Jember');
+      // Bersihkan sisa trial
+      localStorage.removeItem(KEY_TRIAL_START);
 
       // Auto-login
       sessionStorage.setItem(KEY_LOGGED_IN, 'true');
