@@ -600,10 +600,8 @@
     if (linkAktivasi) {
       linkAktivasi.addEventListener('click', () => {
         if (!confirm('Pindah ke halaman Aktivasi?\n\nJika Anda membuat akun baru, data akun lama di browser ini akan ditimpa.')) return;
-        // Hapus flag aktivasi agar init() menampilkan layar aktivasi
-        localStorage.removeItem(KEY_ACTIVATED);
-        localStorage.removeItem(KEY_ACTIVATION_CODE);
-        localStorage.removeItem(KEY_DEVICE_BINDING);
+        // Set flag force activation
+        localStorage.setItem('pkg_v1_force_activation', 'true');
         sessionStorage.removeItem(KEY_LOGGED_IN);
         location.reload();
       });
@@ -1076,7 +1074,15 @@
 
   // --- INITIALIZATION ---
   async function init() {
-    // 0. Kalau sudah punya akun terdaftar tapi belum aktivasi di device ini → langsung ke login
+    // 0. Kalau diminta ke halaman aktivasi (dari link 'Buat Akun Baru')
+    const forceActivation = localStorage.getItem('pkg_v1_force_activation') === 'true';
+    if (forceActivation) {
+      localStorage.removeItem('pkg_v1_force_activation');
+      renderActivationScreen();
+      return new Promise(() => {});
+    }
+
+    // 0b. Kalau sudah punya akun terdaftar tapi belum aktivasi di device ini → langsung ke login
     const hasAccount = localStorage.getItem(KEY_USER_USERNAME);
     const skipActivation = localStorage.getItem('pkg_v1_skip_activation') === 'true';
     if (skipActivation || hasAccount) {
