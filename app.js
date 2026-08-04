@@ -1831,6 +1831,10 @@ function openPenilaianBaruDialog() {
               <label class="btn btn-outline-primary" for="pn-form">Formatif</label>
             </div>
           </div>
+          <div class="form-check mt-3">
+            <input type="checkbox" class="form-check-input" id="pn-clear" checked>
+            <label class="form-check-label small" for="pn-clear">Kosongkan skor sebelumnya (mulai dari nol)</label>
+          </div>
         </div>
         <div class="modal-footer">
           <button class="btn btn-light" data-bs-dismiss="modal">Batal</button>
@@ -1848,7 +1852,21 @@ function openPenilaianBaruDialog() {
     const gid = document.getElementById('pn-guru').value;
     const role = document.getElementById('pn-role').value;
     const jenis = document.querySelector('input[name="pn-jenis"]:checked').value;
+    const clearSkor = document.getElementById('pn-clear').checked;
     if (!gid) { toast('Pilih guru dulu', 'danger'); return; }
+
+    // Jika centang "Kosongkan skor", hapus semua skor penilaian yang ada untuk guru+peran+jenis ini
+    if (clearSkor) {
+      const periode = (() => { const ap = PKGDB.getActivePeriode(); return ap ? ap.tahun : new Date().getFullYear(); })();
+      const all = JSON.parse(localStorage.getItem('pkg_v1_penilaian') || '[]');
+      const existing = all.find(x => x.guru_id === Number(gid) && x.role_code === role && x.jenis === jenis && Number(x.periode) === Number(periode));
+      if (existing) {
+        const skorAll = JSON.parse(localStorage.getItem('pkg_v1_skor') || '[]');
+        const filtered = skorAll.filter(s => s.penilaian_id !== existing.id);
+        localStorage.setItem('pkg_v1_skor', JSON.stringify(filtered));
+      }
+    }
+
     modal.hide();
     navigate(`/guru/${gid}/nilai/${role}?jenis=${jenis}`);
   });
