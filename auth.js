@@ -269,7 +269,15 @@
         
         <div class="form-group">
           <label>Kode Aktivasi (PKG-KBC-XXXX)</label>
-          <input id="reg-code" type="text" placeholder="Masukkan kode dari Pengawas" autocomplete="off" style="text-transform: uppercase;">
+          <input id="reg-code" type="text" placeholder="Masukkan kode dari Admin/Ketua Pokjawas" autocomplete="off" style="text-transform: uppercase;">
+        </div>
+        
+        <div class="form-group">
+          <label>Pilihan Peran (Role)</label>
+          <select id="reg-role">
+            <option value="pengawas">Pengawas - Pembina</option>
+            <option value="kamad">Kepala Madrasah (Kamad) - Penilai</option>
+          </select>
         </div>
         
         <div class="form-group">
@@ -308,10 +316,7 @@
         <hr style="margin:1rem 0; border:0; border-top:1px solid #eee;">
 
         <div style="text-align:center;">
-          <button id="btn-admin-login" type="button" style="background:#1e40af; color:#fff; border:0; padding:.6rem 1rem; border-radius:8px; cursor:pointer; font-weight:600; font-size:.9rem; width:100%;">
-            🔑 Login Pengawas
-          </button>
-          <button id="btn-superadmin-login" type="button" style="background:transparent; color:#6c757d; border:1px solid #dee2e6; padding:.4rem 1rem; border-radius:8px; cursor:pointer; font-weight:500; font-size:.8rem; width:100%; margin-top:.5rem;">
+          <button id="btn-superadmin-login" type="button" style="background:#1e40af; color:#fff; border:0; padding:.6rem 1rem; border-radius:8px; cursor:pointer; font-weight:600; font-size:.9rem; width:100%;">
             🛡️ Login Ketua Pokjawas (Admin)
           </button>
         </div>
@@ -340,30 +345,13 @@
       });
     }
 
-    // Tombol Login Pengawas — langsung login tanpa aktivasi
-    document.getElementById('btn-admin-login').addEventListener('click', () => {
-      const adminUser = 'subariyanto';
-      const adminPass = '@riyant1970';
-      const devId = getDeviceId();
-      const binding = fnv1aHash(devId + ':' + ADMIN_MASTER_CODE);
-      const passHash = fnv1aHash(adminPass);
-
-      localStorage.setItem(KEY_ACTIVATED, 'true');
-      localStorage.setItem(KEY_ACTIVATION_CODE, ADMIN_MASTER_CODE);
-      localStorage.setItem(KEY_DEVICE_BINDING, binding);
-      localStorage.setItem(KEY_USER_ROLE, 'pengawas');
-      localStorage.setItem(KEY_USER_USERNAME, adminUser);
-      localStorage.setItem(KEY_USER_PASSWORD_HASH, passHash);
-      localStorage.setItem(KEY_USER_FULLNAME, 'Subariyanto, S.Pd, M.Pd.I.');
-      localStorage.setItem(KEY_USER_MADRASAH, 'Pokjawas Jember');
-      // Bersihkan sisa trial
-      localStorage.removeItem(KEY_TRIAL_START);
-
-      // Auto-login
-      sessionStorage.setItem(KEY_LOGGED_IN, 'true');
-      location.hash = '#/';
-      location.reload();
-    });
+    // Role change: hide madrasah field untuk Pengawas
+    const groupMadrasah = document.getElementById('group-madrasah');
+    if (roleSel && groupMadrasah) {
+      roleSel.addEventListener('change', () => {
+        groupMadrasah.style.display = roleSel.value === 'pengawas' ? 'none' : 'block';
+      });
+    }
 
     // Tombol Login Ketua Pokjawas (Admin) — hanya admin yang bisa generate kode aktivasi
     document.getElementById('btn-superadmin-login').addEventListener('click', () => {
@@ -422,10 +410,10 @@
       const errEl = document.getElementById('auth-reg-err');
       const code = document.getElementById('reg-code').value.trim();
       const isTrialCode = code.toUpperCase() === TRIAL_CODE;
-      const role = 'kamad'; // Selalu kamad untuk pendaftaran via kode aktivasi
+      const role = isTrialCode ? 'trial' : document.getElementById('reg-role').value;
       const username = document.getElementById('reg-username').value.trim().toLowerCase();
       const fullname = document.getElementById('reg-fullname').value.trim();
-      const madrasah = document.getElementById('reg-madrasah').value.trim();
+      const madrasah = (role === 'pengawas') ? 'Pokjawas Jember' : document.getElementById('reg-madrasah').value.trim();
       const password = document.getElementById('reg-password').value;
       const confirm = document.getElementById('reg-confirm').value;
 
@@ -451,7 +439,7 @@
 
       // Validasi kode aktivasi (trial atau kode penuh)
       if (!isTrialCode && !verifyActivationCode(code)) {
-        errEl.textContent = 'Kode aktivasi tidak valid! Harap hubungi Pengawas.';
+        errEl.textContent = 'Kode aktivasi tidak valid! Harap hubungi Admin/Ketua Pokjawas.';
         return;
       }
 
