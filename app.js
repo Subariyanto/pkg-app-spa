@@ -4390,12 +4390,21 @@ function viewKelolaAktivasi(view) {
                 <input type="text" id="act-note" class="form-control form-control-sm" placeholder="Contoh: Kamad MTsN 1 Jember" autocomplete="off">
               </div>
               
-              <button id="btn-gen-code" class="btn btn-sm btn-success w-100"><i class="bi bi-magic"></i> Generate Kode</button>
+              <div class="d-flex gap-2">
+                <button id="btn-gen-code" class="btn btn-sm btn-success flex-grow-1"><i class="bi bi-magic"></i> Generate 1 Kode</button>
+                <button id="btn-gen-bulk" class="btn btn-sm btn-primary flex-grow-1"><i class="bi bi-magic"></i> Generate 10 Kode</button>
+              </div>
               
               <div id="gen-result" class="mt-3 p-3 bg-white border border-success rounded text-center d-none">
                 <span class="small text-muted">KODE BARU:</span>
                 <div class="h5 text-success my-2 font-monospace fw-bold" id="gen-code-text"></div>
                 <button id="btn-copy-code" class="btn btn-xs btn-outline-success"><i class="bi bi-clipboard"></i> Salin Kode</button>
+              </div>
+              
+              <div id="gen-bulk-result" class="mt-3 p-3 bg-white border border-primary rounded d-none">
+                <span class="small text-muted">10 KODE BARU DIBUAT:</span>
+                <div id="gen-bulk-list" class="my-2 text-start font-monospace small"></div>
+                <button id="btn-copy-bulk" class="btn btn-xs btn-outline-primary w-100"><i class="bi bi-clipboard"></i> Salin Semua Kode</button>
               </div>
             </div>
           </div>
@@ -4436,10 +4445,20 @@ function viewKelolaAktivasi(view) {
 
   // Bind Events
   const btnGen = document.getElementById('btn-gen-code');
+  const btnBulk = document.getElementById('btn-gen-bulk');
   const noteInput = document.getElementById('act-note');
   const resDiv = document.getElementById('gen-result');
   const codeText = document.getElementById('gen-code-text');
   const btnCopy = document.getElementById('btn-copy-code');
+  const bulkDiv = document.getElementById('gen-bulk-result');
+  const bulkList = document.getElementById('gen-bulk-list');
+  const btnCopyBulk = document.getElementById('btn-copy-bulk');
+  let lastBulkCodes = [];
+
+  function makeTimeStr() {
+    const d = new Date();
+    return `${d.getDate()}/${d.getMonth()+1}/${d.getFullYear()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+  }
 
   btnGen.addEventListener('click', () => {
     const note = noteInput.value.trim();
@@ -4448,25 +4467,47 @@ function viewKelolaAktivasi(view) {
       return;
     }
     const code = window.PKGAuth.generateActivationCode();
-    const d = new Date();
-    const timeStr = `${d.getDate()}/${d.getMonth()+1}/${d.getFullYear()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
-    
-    // Save
-    generated.unshift({ code, note, time: timeStr });
+    generated.unshift({ code, note, time: makeTimeStr() });
     localStorage.setItem('pkg_v1_generated_codes', JSON.stringify(generated));
-
-    // Show result
     codeText.textContent = code;
     resDiv.classList.remove('d-none');
+    bulkDiv.classList.add('d-none');
     noteInput.value = '';
-    
-    // Refresh table view
+    viewKelolaAktivasi(view);
+  });
+
+  btnBulk.addEventListener('click', () => {
+    const note = noteInput.value.trim();
+    if (!note) {
+      alert('Mohon isi nama/catatan penerima terlebih dahulu.');
+      return;
+    }
+    lastBulkCodes = [];
+    const timeStr = makeTimeStr();
+    for (let i = 0; i < 10; i++) {
+      const code = window.PKGAuth.generateActivationCode();
+      const label = note + ' #' + (i + 1);
+      generated.unshift({ code, note: label, time: timeStr });
+      lastBulkCodes.push(code);
+    }
+    localStorage.setItem('pkg_v1_generated_codes', JSON.stringify(generated));
+    // Tampilkan daftar kode
+    bulkList.innerHTML = lastBulkCodes.map((c, i) => `<div class="py-1 border-bottom"><span class="text-muted">${i+1}.</span> <span class="text-success fw-bold">${c}</span></div>`).join('');
+    bulkDiv.classList.remove('d-none');
+    resDiv.classList.add('d-none');
+    noteInput.value = '';
     viewKelolaAktivasi(view);
   });
 
   btnCopy.addEventListener('click', () => {
     navigator.clipboard.writeText(codeText.textContent).then(() => {
       alert('Kode disalin ke clipboard.');
+    });
+  });
+
+  btnCopyBulk.addEventListener('click', () => {
+    navigator.clipboard.writeText(lastBulkCodes.join('\n')).then(() => {
+      alert('10 kode disalin ke clipboard.');
     });
   });
 
