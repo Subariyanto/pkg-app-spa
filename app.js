@@ -206,7 +206,7 @@ function viewBeranda(view) {
   const stats = PKGDB.getStats();
   const recent = PKGDB.getRecentGuru(8);
   const userInfo = window.PKGAuth ? window.PKGAuth.getUserInfo() : { fullname: '', madrasah: '', role: '' };
-  const userName = userInfo.fullname || 'Pengguna';
+  const userName = userInfo.fullname || userInfo.username || 'Pengguna';
   const roleLabel = { admin: 'Ketua Pokjawas', pengawas: 'Pengawas', kamad: 'Kepala Madrasah', trial: 'Trial' }[userInfo.role] || userInfo.role;
   const trialBanner = (window.PKGAuth && window.PKGAuth.isTrial && window.PKGAuth.isTrial()) ? (() => {
     const daysLeft = window.PKGAuth.getTrialDaysLeft();
@@ -214,8 +214,7 @@ function viewBeranda(view) {
     if (expired) return '<div class="alert alert-danger beranda-trial-banner"><i class="bi bi-exclamation-triangle"></i> <strong>Masa Trial Berakhir.</strong> Hubungi Admin untuk kode aktivasi penuh.</div>';
     return `<div class="alert alert-warning beranda-trial-banner d-flex align-items-center justify-content-between flex-wrap gap-2"><div><i class="bi bi-clock-history"></i> <strong>Mode Trial</strong> — sisa <strong>${daysLeft} hari</strong>. Dokumen cetak/PDF/DOCX memiliki watermark "TRIAL".</div><a href="#/pengaturan-pin" class="btn btn-sm btn-success">Input Kode Aktivasi Penuh</a></div>`;
   })() : '';
-  const hour = new Date().getHours();
-  const greeting = hour < 11 ? 'Selamat Pagi' : hour < 15 ? 'Selamat Siang' : hour < 18 ? 'Selamat Sore' : 'Selamat Malam';
+  const greeting = 'Selamat Datang';
   view.innerHTML = `
   ${trialBanner}
 
