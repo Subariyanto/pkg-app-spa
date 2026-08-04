@@ -653,6 +653,14 @@ function getRecentGuru(limit) {
 // === BACKUP / RESTORE ===================================================
 function exportAll() {
   const authInfo = window.PKGAuth ? window.PKGAuth.getUserInfo() : null;
+  const senderMadrasah = authInfo ? (authInfo.madrasah || '').trim() : '';
+  // Auto-tag: setiap guru yang belum punya nama_madrasah → diisi dari info pengirim
+  const guruRaw = load(KEYS.guru, []);
+  if (senderMadrasah) {
+    for (const g of guruRaw) {
+      if (!g.nama_madrasah || !String(g.nama_madrasah).trim()) g.nama_madrasah = senderMadrasah;
+    }
+  }
   return {
     schema: 'pkg_v1',
     schema_version: load(KEYS.schema_version, 1),
@@ -665,7 +673,7 @@ function exportAll() {
       activationCode: localStorage.getItem('pkg_v1_activation_code') || ''
     } : null,
     data: {
-      guru: load(KEYS.guru, []),
+      guru: guruRaw,
       kamad: load(KEYS.kamad, []),
       penilaian: load(KEYS.penilaian, []),
       skor: load(KEYS.skor, []),
@@ -768,6 +776,13 @@ function mergeBackups(backups, opts) {
     stats.files++;
     const d = bk.data;
     const sourceLabel = bk._source_label || ''; // injected by caller
+    // Auto-tag: isi nama_madrasah dari info sender backup kalau kosong
+    const senderMadrasah = (bk.sender && bk.sender.madrasah) ? bk.sender.madrasah.trim() : '';
+    if (senderMadrasah) {
+      for (const g of (d.guru || [])) {
+        if (!g.nama_madrasah || !String(g.nama_madrasah).trim()) g.nama_madrasah = senderMadrasah;
+      }
+    }
 
     // GURU: dedup by NIP, fallback by (nama+nama_madrasah) when NIP empty
     const guruIdMap = new Map();
