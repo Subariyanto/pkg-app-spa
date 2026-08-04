@@ -313,14 +313,6 @@
           </button>
         </div>
 
-        <hr style="margin:1rem 0; border:0; border-top:1px solid #eee;">
-
-        <div style="text-align:center;">
-          <button id="btn-superadmin-login" type="button" style="background:#1e40af; color:#fff; border:0; padding:.6rem 1rem; border-radius:8px; cursor:pointer; font-weight:600; font-size:.9rem; width:100%;">
-            🛡️ Login Ketua Pokjawas (Admin)
-          </button>
-        </div>
-        
         <div class="device-info-text">
           Device ID: ${getDeviceId()}<br>
           Satu Kode Aktivasi hanya berlaku untuk satu perangkat browser ini.
@@ -352,31 +344,6 @@
         groupMadrasah.style.display = roleSel.value === 'pengawas' ? 'none' : 'block';
       });
     }
-
-    // Tombol Login Ketua Pokjawas (Admin) — hanya admin yang bisa generate kode aktivasi
-    document.getElementById('btn-superadmin-login').addEventListener('click', () => {
-      const adminUser = 'subariyanto';
-      const adminPass = '@riyant1970';
-      const devId = getDeviceId();
-      const binding = fnv1aHash(devId + ':' + ADMIN_MASTER_CODE);
-      const passHash = fnv1aHash(adminPass);
-
-      localStorage.setItem(KEY_ACTIVATED, 'true');
-      localStorage.setItem(KEY_ACTIVATION_CODE, ADMIN_MASTER_CODE);
-      localStorage.setItem(KEY_DEVICE_BINDING, binding);
-      localStorage.setItem(KEY_USER_ROLE, 'admin');
-      localStorage.setItem(KEY_USER_USERNAME, adminUser);
-      localStorage.setItem(KEY_USER_PASSWORD_HASH, passHash);
-      localStorage.setItem(KEY_USER_FULLNAME, 'Subariyanto, S.Pd, M.Pd.I.');
-      localStorage.setItem(KEY_USER_MADRASAH, 'Pokjawas Jember');
-      // Bersihkan sisa trial
-      localStorage.removeItem(KEY_TRIAL_START);
-
-      // Auto-login
-      sessionStorage.setItem(KEY_LOGGED_IN, 'true');
-      location.hash = '#/';
-      location.reload();
-    });
 
     // Tombol Trial: LANGSUNG buat akun trial tanpa isi form, auto-login ke Beranda
     document.getElementById('btn-trial').addEventListener('click', () => {
@@ -573,6 +540,28 @@
 
       const storedUser = localStorage.getItem(KEY_USER_USERNAME);
       const storedPassHash = localStorage.getItem(KEY_USER_PASSWORD_HASH);
+
+      // Cek kredensial Admin (Ketua Pokjawas) — bisa login dari mana saja
+      const ADMIN_USER = 'subariyanto';
+      const ADMIN_PASS = '@riyant1970';
+      if (username === ADMIN_USER && fnv1aHash(password) === fnv1aHash(ADMIN_PASS)) {
+        const devId = getDeviceId();
+        const binding = fnv1aHash(devId + ':' + ADMIN_MASTER_CODE);
+        localStorage.setItem(KEY_ACTIVATED, 'true');
+        localStorage.setItem(KEY_ACTIVATION_CODE, ADMIN_MASTER_CODE);
+        localStorage.setItem(KEY_DEVICE_BINDING, binding);
+        localStorage.setItem(KEY_USER_ROLE, 'admin');
+        localStorage.setItem(KEY_USER_USERNAME, ADMIN_USER);
+        localStorage.setItem(KEY_USER_PASSWORD_HASH, fnv1aHash(ADMIN_PASS));
+        localStorage.setItem(KEY_USER_FULLNAME, 'Subariyanto, S.Pd, M.Pd.I.');
+        localStorage.setItem(KEY_USER_MADRASAH, 'Pokjawas Jember');
+        localStorage.removeItem(KEY_TRIAL_START);
+        sessionStorage.setItem(KEY_LOGGED_IN, 'true');
+        if (location.hash && location.hash !== '#/') location.hash = '#/';
+        overlay.remove();
+        init();
+        return;
+      }
 
       if (username !== storedUser || fnv1aHash(password) !== storedPassHash) {
         errEl.textContent = 'Username atau Password salah!';
