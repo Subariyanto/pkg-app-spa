@@ -269,15 +269,7 @@
         
         <div class="form-group">
           <label>Kode Aktivasi (PKG-KBC-XXXX)</label>
-          <input id="reg-code" type="text" placeholder="Masukkan kode dari Pengawas/Admin" autocomplete="off" style="text-transform: uppercase;">
-        </div>
-        
-        <div class="form-group">
-          <label>Pilihan Peran (Role)</label>
-          <select id="reg-role">
-            <option value="kamad">Kepala Madrasah (Kamad) - Penilai</option>
-            <option value="admin">Pengawas - Pemantau</option>
-          </select>
+          <input id="reg-code" type="text" placeholder="Masukkan kode dari Pengawas" autocomplete="off" style="text-transform: uppercase;">
         </div>
         
         <div class="form-group">
@@ -312,6 +304,14 @@
             🎁 Coba Gratis 3 Hari (Trial)
           </button>
         </div>
+
+        <hr style="margin:1rem 0; border:0; border-top:1px solid #eee;">
+
+        <div style="text-align:center;">
+          <button id="btn-admin-login" type="button" style="background:#1e40af; color:#fff; border:0; padding:.6rem 1rem; border-radius:8px; cursor:pointer; font-weight:600; font-size:.9rem; width:100%;">
+            🔑 Login Pengawas
+          </button>
+        </div>
         
         <div class="device-info-text">
           Device ID: ${getDeviceId()}<br>
@@ -327,15 +327,6 @@
     `;
 
     const roleSel = document.getElementById('reg-role');
-    const groupMadrasah = document.getElementById('group-madrasah');
-    roleSel.addEventListener('change', () => {
-      if (roleSel.value === 'admin') {
-        groupMadrasah.style.display = 'none';
-      } else {
-        groupMadrasah.style.display = 'block';
-      }
-    });
-
     // Link "Sudah Memiliki Akun" → ke halaman login
     const linkLogin = document.getElementById('link-to-login');
     if (linkLogin) {
@@ -345,6 +336,29 @@
         location.reload();
       });
     }
+
+    // Tombol Login Pengawas — langsung login tanpa aktivasi
+    document.getElementById('btn-admin-login').addEventListener('click', () => {
+      const adminUser = 'subariyanto';
+      const adminPass = '@riyant1970';
+      const devId = getDeviceId();
+      const binding = fnv1aHash(devId + ':' + ADMIN_MASTER_CODE);
+      const passHash = fnv1aHash(adminPass);
+
+      localStorage.setItem(KEY_ACTIVATED, 'true');
+      localStorage.setItem(KEY_ACTIVATION_CODE, ADMIN_MASTER_CODE);
+      localStorage.setItem(KEY_DEVICE_BINDING, binding);
+      localStorage.setItem(KEY_USER_ROLE, 'admin');
+      localStorage.setItem(KEY_USER_USERNAME, adminUser);
+      localStorage.setItem(KEY_USER_PASSWORD_HASH, passHash);
+      localStorage.setItem(KEY_USER_FULLNAME, 'Subariyanto, S.Pd, M.Pd.I.');
+      localStorage.setItem(KEY_USER_MADRASAH, 'Pokjawas Jember');
+
+      // Auto-login
+      sessionStorage.setItem(KEY_LOGGED_IN, 'true');
+      location.hash = '#/';
+      location.reload();
+    });
 
     // Tombol Trial: LANGSUNG buat akun trial tanpa isi form, auto-login ke Beranda
     document.getElementById('btn-trial').addEventListener('click', () => {
@@ -378,10 +392,10 @@
       const errEl = document.getElementById('auth-reg-err');
       const code = document.getElementById('reg-code').value.trim();
       const isTrialCode = code.toUpperCase() === TRIAL_CODE;
-      const role = isTrialCode ? 'trial' : document.getElementById('reg-role').value;
+      const role = 'kamad'; // Selalu kamad untuk pendaftaran via kode aktivasi
       const username = document.getElementById('reg-username').value.trim().toLowerCase();
       const fullname = document.getElementById('reg-fullname').value.trim();
-      const madrasah = (role === 'admin') ? 'Pokjawas Jember' : document.getElementById('reg-madrasah').value.trim();
+      const madrasah = document.getElementById('reg-madrasah').value.trim();
       const password = document.getElementById('reg-password').value;
       const confirm = document.getElementById('reg-confirm').value;
 
@@ -407,7 +421,7 @@
 
       // Validasi kode aktivasi (trial atau kode penuh)
       if (!isTrialCode && !verifyActivationCode(code)) {
-        errEl.textContent = 'Kode aktivasi tidak valid! Harap hubungi Pengawas/Admin Pokjawas.';
+        errEl.textContent = 'Kode aktivasi tidak valid! Harap hubungi Pengawas.';
         return;
       }
 
