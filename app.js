@@ -47,6 +47,8 @@ const NAMA_BLN_SHORT = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Ag
 
 // === LAYOUT =============================================================
 function renderShell() {
+  const userInfo = window.PKGAuth ? window.PKGAuth.getUserInfo() : { role: 'kamad' };
+  const isAdmin = userInfo.role === 'admin';
   const html = `
   <nav class="navbar navbar-expand-xl navbar-dark bg-primary mb-3 no-print">
     <div class="container-fluid">
@@ -62,7 +64,7 @@ function renderShell() {
             <a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown"><i class="bi bi-database"></i> Data</a>
             <ul class="dropdown-menu">
               <li><a class="dropdown-item" href="#/guru"><i class="bi bi-people"></i> Data Guru</a></li>
-              <li><a class="dropdown-item" href="#/kamad"><i class="bi bi-person-badge"></i> Data Kamad</a></li>
+              ${isAdmin ? `<li><a class="dropdown-item" href="#/kamad"><i class="bi bi-person-badge"></i> Data Kamad</a></li>` : ''}
             </ul>
           </li>
           <li class="nav-item dropdown">
@@ -79,14 +81,14 @@ function renderShell() {
             <a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown"><i class="bi bi-file-earmark-text"></i> Laporan</a>
             <ul class="dropdown-menu">
               <li><a class="dropdown-item" href="#/laporan-madrasah"><i class="bi bi-building"></i> Laporan Madrasah</a></li>
-              <li><a class="dropdown-item" href="#/laporan-kkm"><i class="bi bi-diagram-3"></i> Laporan KKM</a></li>
+              ${isAdmin ? `<li><a class="dropdown-item" href="#/laporan-kkm"><i class="bi bi-diagram-3"></i> Laporan KKM</a></li>` : ''}
             </ul>
           </li>
           <li class="nav-item dropdown">
             <a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown"><i class="bi bi-shield-check"></i> Backup</a>
             <ul class="dropdown-menu">
               <li><a class="dropdown-item" href="#/backup"><i class="bi bi-building"></i> Backup Madrasah</a></li>
-              <li><a class="dropdown-item" href="#/backup-kabupaten"><i class="bi bi-geo-alt-fill"></i> Backup Kabupaten / KKM</a></li>
+              ${isAdmin ? `<li><a class="dropdown-item" href="#/backup-kabupaten"><i class="bi bi-geo-alt-fill"></i> Backup Kabupaten / KKM</a></li>` : ''}
               <li><hr class="dropdown-divider"></li>
               <li><a class="dropdown-item text-danger" href="#/backup-clear"><i class="bi bi-trash"></i> Hapus Semua Data</a></li>
             </ul>
@@ -95,7 +97,8 @@ function renderShell() {
           <li class="nav-item dropdown">
             <a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown"><i class="bi bi-person-circle"></i> Akun</a>
             <ul class="dropdown-menu dropdown-menu-end">
-              <li><a class="dropdown-item" href="#/pengaturan-pin"><i class="bi bi-shield-lock"></i> Pengaturan PIN</a></li>
+              <li><a class="dropdown-item" href="#/pengaturan-pin"><i class="bi bi-shield-lock"></i> Pengaturan PIN / Akun</a></li>
+              ${isAdmin ? `<li><a class="dropdown-item" href="#/kelola-aktivasi"><i class="bi bi-key-fill"></i> Kelola Kode Aktivasi</a></li>` : ''}
               <li><hr class="dropdown-divider"></li>
               <li><a class="dropdown-item text-danger" href="#" id="nav-logout"><i class="bi bi-box-arrow-right"></i> Logout</a></li>
             </ul>
@@ -183,6 +186,7 @@ function render() {
   if (s0 === 'instrumen') return viewInstrumen(view);
   if (s0 === 'panduan') return viewPanduan(view);
   if (s0 === 'pengaturan-pin') return window.PKGAuth.viewPengaturanPIN(view);
+  if (s0 === 'kelola-aktivasi') return viewKelolaAktivasi(view);
   if (s0 === 'periode') return viewPeriode(view);
   if (s0 === 'import') return viewImport(view);
   if (s0 === 'laporan-madrasah') return viewLaporanMadrasahPicker(view);
@@ -200,7 +204,14 @@ function render() {
 function viewBeranda(view) {
   const stats = PKGDB.getStats();
   const recent = PKGDB.getRecentGuru(8);
+  const trialBanner = (window.PKGAuth && window.PKGAuth.isTrial && window.PKGAuth.isTrial()) ? (() => {
+    const daysLeft = window.PKGAuth.getTrialDaysLeft();
+    const expired = window.PKGAuth.isTrialExpired();
+    if (expired) return '<div class="alert alert-danger"><i class="bi bi-exclamation-triangle"></i> <strong>Masa Trial Berakhir.</strong> Hubungi Pengawas untuk kode aktivasi penuh.</div>';
+    return `<div class="alert alert-warning d-flex align-items-center justify-content-between flex-wrap gap-2"><div><i class="bi bi-clock-history"></i> <strong>Mode Trial</strong> — sisa <strong>${daysLeft} hari</strong>. Dokumen cetak/PDF/DOCX memiliki watermark "TRIAL".</div><a href="#/pengaturan-pin" class="btn btn-sm btn-success">Input Kode Aktivasi Penuh</a></div>`;
+  })() : '';
   view.innerHTML = `
+  ${trialBanner}
   <div class="row g-3 mb-4">
     <div class="col-md-3 col-6"><div class="card"><div class="card-body text-center">
       <div class="display-6 text-primary"><i class="bi bi-people"></i></div>
@@ -2690,6 +2701,8 @@ function printRekapTab(title, html) {
   const w = window.open('', '_blank');
   if (!w) { toast('Pop-up diblokir. Izinkan pop-up untuk cetak.', 'danger'); return; }
   const today = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+  const isTrialMode = window.PKGAuth && window.PKGAuth.isTrial && window.PKGAuth.isTrial();
+  const trialWM = isTrialMode ? `<div class="trial-watermark" style="position:fixed;inset:0;z-index:9999;pointer-events:none;display:flex;flex-wrap:wrap;align-content:flex-start;justify-content:center;overflow:hidden;">${Array.from({length:50},()=>'<span style="display:inline-block;transform:rotate(-45deg);font-size:16pt;font-weight:900;color:rgba(200,0,0,0.13);margin:28px 36px;font-family:sans-serif;letter-spacing:4px;white-space:nowrap;">TRIAL</span>').join('')}</div><style>.trial-watermark{display:block!important;}@media print{.trial-watermark{display:flex!important;position:fixed!important;}}</style>` : '';
   w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${title}</title>
   <style>
     body{font-family:'Times New Roman',serif;font-size:10pt;color:#000;margin:1.2cm;}
@@ -2703,6 +2716,7 @@ function printRekapTab(title, html) {
     .alert{display:none;}
     @media print{ button{display:none;} }
   </style></head><body>
+  ${trialWM}
   <h2>${title}</h2>
   <div class="meta">Dicetak: ${today}</div>
   ${html}
@@ -4212,12 +4226,16 @@ function viewCetak(view, guruId, role, jenis) {
   }
   const nilai = PKGDB.hitungNilai(pen.id, role);
 
+  const _isTrial = window.PKGAuth && window.PKGAuth.isTrial && window.PKGAuth.isTrial();
+  const _trialWM = _isTrial ? `<div class="trial-wm-overlay" style="position:fixed;inset:0;z-index:1;pointer-events:none;display:flex;flex-wrap:wrap;align-content:flex-start;justify-content:center;overflow:hidden;">${Array.from({length:40},()=>'<span style="display:inline-block;transform:rotate(-45deg);font-size:22pt;font-weight:900;color:rgba(200,0,0,0.12);margin:40px 50px;font-family:sans-serif;letter-spacing:6px;white-space:nowrap;">TRIAL</span>').join('')}</div>` : '';
   view.innerHTML = `
+  <style>@media print{.trial-wm-overlay{display:flex!important;position:fixed!important;}}</style>
   <div class="no-print" style="text-align:right; padding:8px;">
     <button class="btn btn-primary btn-sm" onclick="window.print()"><i class="bi bi-printer"></i> Cetak / Simpan PDF</button>
     <a class="btn btn-light btn-sm" href="#/guru/${g.id}">Tutup</a>
   </div>
-  <div id="cetak-area" style="font-family: 'Times New Roman', serif; font-size: 11pt; color:#000; background:white; padding: 1cm; max-width: 21cm; margin: 0 auto; box-shadow: 0 2px 8px rgba(0,0,0,.1);">
+  ${_trialWM}
+  <div id="cetak-area" style="position:relative;z-index:2;font-family: 'Times New Roman', serif; font-size: 11pt; color:#000; background:white; padding: 1cm; max-width: 21cm; margin: 0 auto; box-shadow: 0 2px 8px rgba(0,0,0,.1);">
     <div style="text-align:center; margin-bottom: 12px;">
       <div><b>KEMENTERIAN AGAMA KABUPATEN JEMBER</b></div>
       <h3 style="margin:.4em 0;">INSTRUMEN PENILAIAN KINERJA ${e(meta.role_label.toUpperCase())}</h3>
@@ -4324,6 +4342,133 @@ window.addEventListener('DOMContentLoaded', async () => {
     });
   }
 });
+
+function viewKelolaAktivasi(view) {
+  const userInfo = window.PKGAuth ? window.PKGAuth.getUserInfo() : { role: 'kamad' };
+  if (userInfo.role !== 'admin') {
+    view.innerHTML = `<div class="alert alert-danger"><i class="bi bi-exclamation-triangle"></i> Halaman ini hanya dapat diakses oleh Admin Pokjawas.</div>`;
+    return;
+  }
+
+  // Load generated codes
+  let generated = [];
+  try {
+    generated = JSON.parse(localStorage.getItem('pkg_v1_generated_codes') || '[]');
+  } catch(e) {}
+
+  view.innerHTML = `
+    <div class="card mb-4">
+      <div class="card-header bg-primary text-white"><i class="bi bi-key-fill"></i> Kelola Kode Aktivasi (Admin Only)</div>
+      <div class="card-body">
+        <div class="row g-3">
+          <div class="col-md-5">
+            <div class="border rounded p-3 bg-light">
+              <h5 class="card-title text-success"><i class="bi bi-plus-circle"></i> Buat Kode Baru</h5>
+              <p class="small text-muted mb-3">Satu Kode Aktivasi hanya bisa digunakan oleh 1 User (1 Device) secara offline.</p>
+              
+              <div class="mb-3">
+                <label class="form-label small fw-bold">Catatan / Penerima</label>
+                <input type="text" id="act-note" class="form-control form-control-sm" placeholder="Contoh: Kamad MTsN 1 Jember" autocomplete="off">
+              </div>
+              
+              <button id="btn-gen-code" class="btn btn-sm btn-success w-100"><i class="bi bi-magic"></i> Generate Kode</button>
+              
+              <div id="gen-result" class="mt-3 p-3 bg-white border border-success rounded text-center d-none">
+                <span class="small text-muted">KODE BARU:</span>
+                <div class="h5 text-success my-2 font-monospace fw-bold" id="gen-code-text"></div>
+                <button id="btn-copy-code" class="btn btn-xs btn-outline-success"><i class="bi bi-clipboard"></i> Salin Kode</button>
+              </div>
+            </div>
+          </div>
+          
+          <div class="col-md-7">
+            <h5 class="card-title"><i class="bi bi-list-ul"></i> Riwayat Pembuatan Kode</h5>
+            <div class="table-responsive" style="max-height: 350px;">
+              <table class="table table-sm table-hover table-bordered mb-0">
+                <thead class="table-light">
+                  <tr>
+                    <th>Waktu</th>
+                    <th>Catatan / Penerima</th>
+                    <th>Kode Aktivasi</th>
+                    <th style="width: 80px;" class="text-center">Aksi</th>
+                  </tr>
+                </thead>
+                <tbody id="tbl-codes-body">
+                  ${generated.length === 0 ? `<tr><td colspan="4" class="text-center text-muted py-3">Belum ada kode yang di-generate.</td></tr>` : ''}
+                  ${generated.map((c, idx) => `
+                    <tr>
+                      <td class="small align-middle">${c.time}</td>
+                      <td class="small align-middle">${e(c.note || '-')}</td>
+                      <td class="font-monospace align-middle text-success fw-bold">${c.code}</td>
+                      <td class="text-center align-middle">
+                        <button class="btn btn-xs btn-outline-primary btn-copy-row" data-code="${c.code}"><i class="bi bi-clipboard"></i></button>
+                        <button class="btn btn-xs btn-outline-danger btn-del-row" data-idx="${idx}"><i class="bi bi-trash"></i></button>
+                      </td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  // Bind Events
+  const btnGen = document.getElementById('btn-gen-code');
+  const noteInput = document.getElementById('act-note');
+  const resDiv = document.getElementById('gen-result');
+  const codeText = document.getElementById('gen-code-text');
+  const btnCopy = document.getElementById('btn-copy-code');
+
+  btnGen.addEventListener('click', () => {
+    const note = noteInput.value.trim();
+    if (!note) {
+      alert('Mohon isi nama/catatan penerima terlebih dahulu.');
+      return;
+    }
+    const code = window.PKGAuth.generateActivationCode();
+    const d = new Date();
+    const timeStr = `${d.getDate()}/${d.getMonth()+1}/${d.getFullYear()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+    
+    // Save
+    generated.unshift({ code, note, time: timeStr });
+    localStorage.setItem('pkg_v1_generated_codes', JSON.stringify(generated));
+
+    // Show result
+    codeText.textContent = code;
+    resDiv.classList.remove('d-none');
+    noteInput.value = '';
+    
+    // Refresh table view
+    viewKelolaAktivasi(view);
+  });
+
+  btnCopy.addEventListener('click', () => {
+    navigator.clipboard.writeText(codeText.textContent).then(() => {
+      alert('Kode disalin ke clipboard.');
+    });
+  });
+
+  document.querySelectorAll('.btn-copy-row').forEach(b => {
+    b.addEventListener('click', () => {
+      navigator.clipboard.writeText(b.dataset.code).then(() => {
+        alert('Kode disalin: ' + b.dataset.code);
+      });
+    });
+  });
+
+  document.querySelectorAll('.btn-del-row').forEach(b => {
+    b.addEventListener('click', () => {
+      if (!confirm('Hapus riwayat kode ini? (Kode offline yang sudah disalin tetap valid)')) return;
+      const idx = parseInt(b.dataset.idx);
+      generated.splice(idx, 1);
+      localStorage.setItem('pkg_v1_generated_codes', JSON.stringify(generated));
+      viewKelolaAktivasi(view);
+    });
+  });
+}
 
 function showUpdateBanner() {
   if (document.getElementById('upd-banner')) return;

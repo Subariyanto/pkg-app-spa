@@ -652,10 +652,18 @@ function getRecentGuru(limit) {
 
 // === BACKUP / RESTORE ===================================================
 function exportAll() {
+  const authInfo = window.PKGAuth ? window.PKGAuth.getUserInfo() : null;
   return {
     schema: 'pkg_v1',
     schema_version: load(KEYS.schema_version, 1),
     exported_at: new Date().toISOString(),
+    sender: authInfo ? {
+      fullname: authInfo.fullname,
+      role: authInfo.role,
+      madrasah: authInfo.madrasah,
+      deviceId: authInfo.deviceId,
+      activationCode: localStorage.getItem('pkg_v1_activation_code') || ''
+    } : null,
     data: {
       guru: load(KEYS.guru, []),
       kamad: load(KEYS.kamad, []),

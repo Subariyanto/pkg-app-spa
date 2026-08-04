@@ -1,17 +1,42 @@
-// auth.js - PIN Lock untuk PKG App SPA
-// Strategi: PIN 4-6 digit di-hash SHA-256, simpan di localStorage.
-// Unlock state di sessionStorage (per tab/sesi browser).
-// Tidak ada recovery PIN; lupa PIN = reset semua data.
+// auth.js - Kode Aktivasi, Registrasi Akun, Login, & PIN Lock untuk PKG App SPA
+// Offline device binding logic + local user management.
+// 2 roles supported: Admin (Pokjawas), Kamad (Kepala Madrasah).
 
 (function () {
   'use strict';
 
+  // Constants
   const KEY_PIN_HASH = 'pkg_v1_pin_hash';
   const KEY_PIN_SALT = 'pkg_v1_pin_salt';
   const KEY_UNLOCKED = 'pkg_v1_unlocked';
 
+  // Activation & Account Keys
+  const KEY_ACTIVATED = 'pkg_v1_activated';
+  const KEY_ACTIVATION_CODE = 'pkg_v1_activation_code';
+  const KEY_DEVICE_ID = 'pkg_v1_device_id';
+  const KEY_DEVICE_BINDING = 'pkg_v1_device_binding';
+  
+  const KEY_USER_ROLE = 'pkg_v1_user_role'; // admin | kamad
+  const KEY_USER_USERNAME = 'pkg_v1_user_username';
+  const KEY_USER_PASSWORD_HASH = 'pkg_v1_user_password_hash';
+  const KEY_USER_FULLNAME = 'pkg_v1_user_fullname';
+  const KEY_USER_MADRASAH = 'pkg_v1_user_madrasah';
+  
+  const KEY_LOGGED_IN = 'pkg_v1_logged_in'; // sessionStorage
+
+  // Trial Account Constants
+  const TRIAL_CODE = 'PKG-TRIAL-2026';
+  const TRIAL_DURATION_MS = 3 * 24 * 60 * 60 * 1000; // 3 hari (259200000 ms)
+  const KEY_TRIAL_START = 'pkg_v1_trial_start';
+
+  // Secret Salt untuk Offline Checksum Kode Aktivasi
+  const ACTIVATION_SALT = 'kbc-pokjawasmad-jember-love-2026';
+
+  // Master Code untuk Admin Bypass / Men-generate Kode Aktivasi
+  const ADMIN_MASTER_CODE = 'POKJAWAS-JEMBER-SUPER-2026';
+
+  // --- CRYPTO UTILS ---
   async function sha256(text) {
-    // Fallback: crypto.subtle hanya tersedia di secure context (HTTPS/localhost)
     if (window.crypto && window.crypto.subtle) {
       const buf = new TextEncoder().encode(text);
       const hash = await crypto.subtle.digest('SHA-256', buf);
@@ -19,7 +44,6 @@
         .map(b => b.toString(16).padStart(2, '0'))
         .join('');
     }
-    // Fallback hash sederhana (FNV-1a + salt) untuk non-secure context
     return fnv1aHash(text);
   }
 
@@ -29,7 +53,6 @@
       h ^= str.charCodeAt(i);
       h = Math.imul(h, 0x01000193);
     }
-    // Double pass untuk distribusi lebih baik
     let h2 = 0x811c9dc5;
     const s2 = h.toString(16) + str;
     for (let i = 0; i < s2.length; i++) {
@@ -45,7 +68,6 @@
       crypto.getRandomValues(arr);
       return Array.from(arr).map(b => b.toString(16).padStart(2, '0')).join('');
     }
-    // Fallback: Math.random-based salt
     let s = '';
     for (let i = 0; i < 32; i++) {
       s += Math.floor(Math.random() * 16).toString(16);
@@ -53,6 +75,76 @@
     return s;
   }
 
+  // --- DEVICE ID GENERATION & CHECK ---
+  function getDeviceId() {
+    let id = localStorage.getItem(KEY_DEVICE_ID);
+    if (!id) {
+      id = 'DEV-' + randomSalt().substring(0, 16).toUpperCase();
+      localStorage.setItem(KEY_DEVICE_ID, id);
+    }
+    return id;
+  }
+
+  // --- OFFLINE ACTIVATION VALIDATOR ---
+  function generateActivationCode() {
+    const chars = '0123456789ABCDEF';
+    let rand = '';
+    for (let i = 0; i < 8; i++) {
+      rand += chars[Math.floor(Math.random() * 16)];
+    }
+    const checksum = fnv1aHash(rand + ':' + ACTIVATION_SALT).substring(0, 4).toUpperCase();
+    return `PKG-KBC-${rand}-${checksum}`;
+  }
+
+  function verifyActivationCode(code) {
+    const cleanCode = code.trim().toUpperCase();
+    if (cleanCode === ADMIN_MASTER_CODE) return true; // Master code bypass
+    const match = cleanCode.match(/^PKG-KBC-([0-9A-F]{8})-([0-9A-F]{4})$/);
+    if (!match) return false;
+    const rand = match[1];
+    const checksum = match[2];
+    const expected = fnv1aHash(rand + ':' + ACTIVATION_SALT).substring(0, 4).toUpperCase();
+    return checksum === expected;
+  }
+
+  // --- TRIAL ACCOUNT LOGIC ---
+  function isTrial() {
+    return localStorage.getItem(KEY_USER_ROLE) === 'trial' || !!localStorage.getItem(KEY_TRIAL_START);
+  }
+
+  function isTrialExpired() {
+    if (!isTrial()) return false;
+    const start = parseInt(localStorage.getItem(KEY_TRIAL_START) || '0', 10);
+    if (!start) return false;
+    return Date.now() - start >= TRIAL_DURATION_MS;
+  }
+
+  function getTrialDaysLeft() {
+    if (!isTrial()) return 0;
+    const start = parseInt(localStorage.getItem(KEY_TRIAL_START) || '0', 10);
+    if (!start) return 0;
+    const remaining = TRIAL_DURATION_MS - (Date.now() - start);
+    return Math.max(0, Math.ceil(remaining / (24 * 60 * 60 * 1000)));
+  }
+
+  function upgradeFromTrial(code) {
+    if (!isTrial()) return { ok: false, msg: 'Akun ini bukan akun trial.' };
+    if (!verifyActivationCode(code)) return { ok: false, msg: 'Kode aktivasi tidak valid!' };
+    // Hapus key trial, set aktivasi penuh
+    localStorage.removeItem(KEY_TRIAL_START);
+    const devId = getDeviceId();
+    const binding = fnv1aHash(devId + ':' + code);
+    localStorage.setItem(KEY_ACTIVATED, 'true');
+    localStorage.setItem(KEY_ACTIVATION_CODE, code);
+    localStorage.setItem(KEY_DEVICE_BINDING, binding);
+    // Upgrade role trial -> kamad
+    if (localStorage.getItem(KEY_USER_ROLE) === 'trial') {
+      localStorage.setItem(KEY_USER_ROLE, 'kamad');
+    }
+    return { ok: true, msg: 'Akun berhasil di-upgrade ke lisensi penuh!' };
+  }
+
+  // --- PIN LOCK LOGIC ---
   async function setPin(pin) {
     if (!/^\d{4,6}$/.test(pin)) throw new Error('PIN harus 4-6 digit angka');
     const salt = randomSalt();
@@ -93,17 +185,356 @@
     return String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
   }
 
-  // Lock screen: full-page overlay
+  // --- AUTH STATUS CHECKS ---
+  function isActivated() {
+    const activated = localStorage.getItem(KEY_ACTIVATED) === 'true';
+    if (!activated) return false;
+    
+    // Verifikasi Device Binding (Mencegah copy data ke device lain)
+    const code = localStorage.getItem(KEY_ACTIVATION_CODE);
+    const devId = getDeviceId();
+    const binding = localStorage.getItem(KEY_DEVICE_BINDING);
+    const expectedBinding = fnv1aHash(devId + ':' + code);
+    
+    return binding === expectedBinding;
+  }
+
+  function isLoggedIn() {
+    return sessionStorage.getItem(KEY_LOGGED_IN) === 'true';
+  }
+
+  function getUserInfo() {
+    return {
+      role: localStorage.getItem(KEY_USER_ROLE) || 'kamad',
+      username: localStorage.getItem(KEY_USER_USERNAME) || '',
+      fullname: localStorage.getItem(KEY_USER_FULLNAME) || '',
+      madrasah: localStorage.getItem(KEY_USER_MADRASAH) || '',
+      deviceId: getDeviceId()
+    };
+  }
+
+  // --- VIEWS & RENDER OVERLAYS ---
+
+  // 1. Screen Registrasi & Aktivasi
+  function renderActivationScreen() {
+    let overlay = document.getElementById('pkg-auth-overlay');
+    if (!overlay) {
+      overlay = document.createElement('div');
+      overlay.id = 'pkg-auth-overlay';
+      document.body.appendChild(overlay);
+    }
+
+    overlay.innerHTML = `
+      <style>
+        #pkg-auth-overlay {
+          position: fixed; inset: 0; z-index: 3000;
+          background: linear-gradient(135deg, #1e40af 0%, #1f5d3a 100%);
+          display: flex; align-items: center; justify-content: center;
+          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+          padding: 1rem; overflow-y: auto;
+        }
+        .auth-card {
+          background: #fff; border-radius: 12px; padding: 2rem;
+          width: 100%; max-width: 480px;
+          box-shadow: 0 12px 40px rgba(0,0,0,.25);
+        }
+        .auth-logo {
+          text-align: center; margin-bottom: 1.5rem;
+        }
+        .auth-logo i { font-size: 3rem; color: #1f5d3a; }
+        .auth-logo h2 { margin: 0.5rem 0 0; color: #1f5d3a; font-size: 1.5rem; font-weight: bold; }
+        .auth-logo p { margin: 0; color: #666; font-size: 0.85rem; }
+        .form-group { margin-bottom: 1rem; }
+        .form-group label { display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 0.25rem; color: #333; }
+        .form-group input, .form-group select {
+          width: 100%; padding: 0.6rem; border: 2px solid #ddd; border-radius: 8px; outline: none; font-size: 0.95rem;
+        }
+        .form-group input:focus, .form-group select:focus { border-color: #1f5d3a; }
+        .btn-auth-submit {
+          width: 100%; background: #1f5d3a; color: white; border: 0;
+          padding: 0.75rem; border-radius: 8px; font-weight: 600; cursor: pointer;
+          font-size: 1rem; margin-top: 1rem; transition: background 0.2s;
+        }
+        .btn-auth-submit:hover { background: #143e26; }
+        .auth-err { color: #c0392b; font-size: 0.85rem; min-height: 1.2rem; margin-bottom: 0.5rem; text-align: center; }
+        .device-info-text { font-size: 0.75rem; color: #888; text-align: center; margin-top: 1rem; }
+      </style>
+      <div class="auth-card">
+        <div class="auth-logo">
+          <i class="bi bi-shield-check"></i>
+          <h2>Aktivasi & Registrasi Akun</h2>
+          <p>PKG Pokjawasmad Kab. Jember (KMA 1503)</p>
+        </div>
+        <div class="auth-err" id="auth-reg-err"></div>
+        
+        <div class="form-group">
+          <label>Kode Aktivasi (PKG-KBC-XXXX)</label>
+          <input id="reg-code" type="text" placeholder="Masukkan kode dari Pengawas/Admin" autocomplete="off" style="text-transform: uppercase;">
+        </div>
+        
+        <div class="form-group">
+          <label>Pilihan Peran (Role)</label>
+          <select id="reg-role">
+            <option value="kamad">Kepala Madrasah (Kamad) - Penilai</option>
+            <option value="admin">Admin Pokjawas (Pengawas) - Pemantau</option>
+          </select>
+        </div>
+        
+        <div class="form-group">
+          <label>Nama Pengguna (Username untuk login)</label>
+          <input id="reg-username" type="text" placeholder="Contoh: kamad_sukowono" autocomplete="off" minlength="4">
+        </div>
+        
+        <div class="form-group">
+          <label>Nama Lengkap</label>
+          <input id="reg-fullname" type="text" placeholder="Nama Lengkap beserta gelar" autocomplete="off">
+        </div>
+        
+        <div class="form-group" id="group-madrasah">
+          <label>Nama Madrasah</label>
+          <input id="reg-madrasah" type="text" placeholder="Contoh: MTs Negeri 1 Jember" autocomplete="off">
+        </div>
+
+        <div class="form-group">
+          <label>Password</label>
+          <input id="reg-password" type="password" placeholder="Minimal 6 karakter" autocomplete="off">
+        </div>
+
+        <div class="form-group">
+          <label>Konfirmasi Password</label>
+          <input id="reg-confirm" type="password" placeholder="Ulangi password" autocomplete="off">
+        </div>
+
+        <button class="btn-auth-submit" id="btn-reg-submit">Aktifkan & Daftar Akun</button>
+        
+        <div style="text-align:center; margin-top:.75rem;">
+          <button id="btn-trial" type="button" style="background:transparent; border:2px solid #1f5d3a; color:#1f5d3a; padding:.5rem 1rem; border-radius:8px; cursor:pointer; font-weight:600; font-size:.9rem;">
+            🎁 Coba Gratis 3 Hari (Trial)
+          </button>
+        </div>
+        
+        <div class="device-info-text">
+          Device ID: ${getDeviceId()}<br>
+          Satu Kode Aktivasi hanya berlaku untuk satu perangkat browser ini.
+        </div>
+      </div>
+    `;
+
+    const roleSel = document.getElementById('reg-role');
+    const groupMadrasah = document.getElementById('group-madrasah');
+    roleSel.addEventListener('change', () => {
+      if (roleSel.value === 'admin') {
+        groupMadrasah.style.display = 'none';
+      } else {
+        groupMadrasah.style.display = 'block';
+      }
+    });
+
+    // Tombol Trial: auto-fill kode trial & disable field kode
+    document.getElementById('btn-trial').addEventListener('click', () => {
+      const codeInput = document.getElementById('reg-code');
+      codeInput.value = TRIAL_CODE;
+      codeInput.disabled = true;
+      codeInput.style.background = '#e8f5e9';
+      codeInput.style.color = '#1f5d3a';
+      codeInput.style.fontWeight = 'bold';
+      // Set role ke kamad (trial = akses setara kamad)
+      document.getElementById('reg-role').value = 'kamad';
+      document.getElementById('reg-role').disabled = true;
+      document.getElementById('group-madrasah').style.display = 'block';
+      document.getElementById('reg-username').focus();
+      document.getElementById('btn-reg-submit').textContent = 'Aktifkan Akun Trial (3 Hari Gratis)';
+      const errEl = document.getElementById('auth-reg-err');
+      errEl.style.color = '#1f5d3a';
+      errEl.textContent = '🎁 Mode Trial: Akses penuh 3 hari. Dokumen dicetak dengan watermark "TRIAL".';
+    });
+
+    document.getElementById('btn-reg-submit').addEventListener('click', async () => {
+      const errEl = document.getElementById('auth-reg-err');
+      const code = document.getElementById('reg-code').value.trim();
+      const isTrialCode = code.toUpperCase() === TRIAL_CODE;
+      const role = isTrialCode ? 'trial' : document.getElementById('reg-role').value;
+      const username = document.getElementById('reg-username').value.trim().toLowerCase();
+      const fullname = document.getElementById('reg-fullname').value.trim();
+      const madrasah = (role === 'admin') ? 'Pokjawas Jember' : document.getElementById('reg-madrasah').value.trim();
+      const password = document.getElementById('reg-password').value;
+      const confirm = document.getElementById('reg-confirm').value;
+
+      if (!code || !username || !fullname || !password) {
+        errEl.textContent = 'Harap isi semua kolom yang wajib!';
+        return;
+      }
+
+      if (username.length < 4) {
+        errEl.textContent = 'Username minimal 4 karakter!';
+        return;
+      }
+
+      if (password.length < 6) {
+        errEl.textContent = 'Password minimal 6 karakter!';
+        return;
+      }
+
+      if (password !== confirm) {
+        errEl.textContent = 'Konfirmasi password tidak cocok!';
+        return;
+      }
+
+      // Validasi kode aktivasi (trial atau kode penuh)
+      if (!isTrialCode && !verifyActivationCode(code)) {
+        errEl.textContent = 'Kode aktivasi tidak valid! Harap hubungi Pengawas/Admin Pokjawas.';
+        return;
+      }
+
+      // Generate Device Binding
+      const devId = getDeviceId();
+      const binding = fnv1aHash(devId + ':' + code);
+
+      // Simpan User & Status Aktivasi
+      const passHash = fnv1aHash(password);
+      
+      localStorage.setItem(KEY_ACTIVATED, 'true');
+      localStorage.setItem(KEY_ACTIVATION_CODE, code);
+      localStorage.setItem(KEY_DEVICE_BINDING, binding);
+      localStorage.setItem(KEY_USER_ROLE, role);
+      localStorage.setItem(KEY_USER_USERNAME, username);
+      localStorage.setItem(KEY_USER_PASSWORD_HASH, passHash);
+      localStorage.setItem(KEY_USER_FULLNAME, fullname);
+      localStorage.setItem(KEY_USER_MADRASAH, madrasah);
+
+      // Jika trial, simpan timestamp mulai trial
+      if (isTrialCode) {
+        localStorage.setItem(KEY_TRIAL_START, String(Date.now()));
+        alert('Akun Trial berhasil dibuat! Akses penuh 3 hari. Silakan login.');
+      } else {
+        alert('Aktivasi berhasil! Silakan login menggunakan akun yang baru saja dibuat.');
+      }
+      location.reload();
+    });
+  }
+
+  // 2. Screen Login Akun (Username + Password)
+  function renderLoginScreen() {
+    let overlay = document.getElementById('pkg-auth-overlay');
+    if (!overlay) {
+      overlay = document.createElement('div');
+      overlay.id = 'pkg-auth-overlay';
+      document.body.appendChild(overlay);
+    }
+
+    const regName = localStorage.getItem(KEY_USER_FULLNAME) || '';
+    const regMad = localStorage.getItem(KEY_USER_MADRASAH) || '';
+
+    overlay.innerHTML = `
+      <style>
+        #pkg-auth-overlay {
+          position: fixed; inset: 0; z-index: 3000;
+          background: linear-gradient(135deg, #1f5d3a 0%, #1e40af 100%);
+          display: flex; align-items: center; justify-content: center;
+          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+          padding: 1rem;
+        }
+        .auth-card {
+          background: #fff; border-radius: 12px; padding: 2rem;
+          width: 100%; max-width: 400px;
+          box-shadow: 0 12px 40px rgba(0,0,0,.25);
+        }
+        .auth-logo {
+          text-align: center; margin-bottom: 1.5rem;
+        }
+        .auth-logo i { font-size: 3rem; color: #1e40af; }
+        .auth-logo h2 { margin: 0.5rem 0 0; color: #1e40af; font-size: 1.5rem; font-weight: bold; }
+        .auth-logo p { margin: 0; color: #666; font-size: 0.85rem; }
+        .form-group { margin-bottom: 1.25rem; }
+        .form-group label { display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 0.25rem; color: #333; }
+        .form-group input {
+          width: 100%; padding: 0.65rem; border: 2px solid #ddd; border-radius: 8px; outline: none; font-size: 1rem;
+        }
+        .form-group input:focus { border-color: #1e40af; }
+        .btn-auth-submit {
+          width: 100%; background: #1e40af; color: white; border: 0;
+          padding: 0.75rem; border-radius: 8px; font-weight: 600; cursor: pointer;
+          font-size: 1rem; transition: background 0.2s;
+        }
+        .btn-auth-submit:hover { background: #17328c; }
+        .auth-err { color: #c0392b; font-size: 0.85rem; min-height: 1.2rem; margin-bottom: 0.5rem; text-align: center; }
+        .user-reg-info {
+          font-size: 0.8rem; background: #f0f4ff; color: #1e40af; padding: 0.5rem; border-radius: 6px; margin-bottom: 1rem; text-align: center;
+        }
+      </style>
+      <div class="auth-card">
+        <div class="auth-logo">
+          <i class="bi bi-person-lock"></i>
+          <h2>Masuk Aplikasi</h2>
+          <p>PKG Pokjawasmad Kab. Jember</p>
+        </div>
+        <div class="user-reg-info">
+          Terdaftar: <strong>${escapeHtml(regName)}</strong> (${escapeHtml(regMad)})
+        </div>
+        <div class="auth-err" id="auth-login-err"></div>
+        
+        <div class="form-group">
+          <label>Nama Pengguna (Username)</label>
+          <input id="login-username" type="text" placeholder="Masukkan username" autocomplete="off" required>
+        </div>
+
+        <div class="form-group">
+          <label>Password</label>
+          <input id="login-password" type="password" placeholder="Masukkan password" autocomplete="off" required>
+        </div>
+
+        <button class="btn-auth-submit" id="btn-login-submit">Login Masuk</button>
+      </div>
+    `;
+
+    const inputUser = document.getElementById('login-username');
+    const inputPass = document.getElementById('login-password');
+    const errEl = document.getElementById('auth-login-err');
+
+    setTimeout(() => inputUser.focus(), 50);
+
+    function tryLogin() {
+      const username = inputUser.value.trim().toLowerCase();
+      const password = inputPass.value;
+
+      if (!username || !password) {
+        errEl.textContent = 'Harap isi semua kolom login!';
+        return;
+      }
+
+      const storedUser = localStorage.getItem(KEY_USER_USERNAME);
+      const storedPassHash = localStorage.getItem(KEY_USER_PASSWORD_HASH);
+
+      if (username !== storedUser || fnv1aHash(password) !== storedPassHash) {
+        errEl.textContent = 'Username atau Password salah!';
+        return;
+      }
+
+      // Set logged in
+      sessionStorage.setItem(KEY_LOGGED_IN, 'true');
+      
+      // Remove overlay and boot PIN gate / main application
+      overlay.remove();
+      init();
+    }
+
+    document.getElementById('btn-login-submit').addEventListener('click', tryLogin);
+    inputPass.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); tryLogin(); }
+    });
+  }
+
+  // 3. Lock screen: full-page overlay untuk PIN
   function renderLockScreen() {
     let overlay = document.getElementById('pkg-lock-overlay');
-    if (overlay) return; // already shown
+    if (overlay) return;
     overlay = document.createElement('div');
     overlay.id = 'pkg-lock-overlay';
     overlay.innerHTML = `
       <style>
         #pkg-lock-overlay {
           position: fixed; inset: 0; z-index: 3000;
-          background: linear-gradient(135deg, #047a3a 0%, #06a04c 100%);
+          background: linear-gradient(135deg, #1f5d3a 0%, #06a04c 100%);
           display: flex; align-items: center; justify-content: center;
           font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
         }
@@ -114,28 +545,28 @@
           text-align: center;
         }
         #pkg-lock-card .lock-icon {
-          font-size: 3rem; color: #047a3a;
+          font-size: 3rem; color: #1f5d3a;
           width: 80px; height: 80px; line-height: 80px;
           margin: 0 auto 1rem;
           background: #d6efd9; border-radius: 50%;
         }
-        #pkg-lock-card h2 { margin: 0 0 .25rem; color: #047a3a; font-size: 1.4rem; }
+        #pkg-lock-card h2 { margin: 0 0 .25rem; color: #1f5d3a; font-size: 1.4rem; }
         #pkg-lock-card .subtitle { color: #666; font-size: .9rem; margin-bottom: 1.5rem; }
         #pkg-lock-card input {
           width: 100%; font-size: 1.6rem; text-align: center; letter-spacing: .8rem;
           padding: .6rem; border: 2px solid #d6efd9; border-radius: 8px;
           margin-bottom: 1rem; outline: none;
         }
-        #pkg-lock-card input:focus { border-color: #047a3a; }
+        #pkg-lock-card input:focus { border-color: #1f5d3a; }
         #pkg-lock-card button.btn-primary {
-          width: 100%; background: #047a3a; color: white; border: 0;
+          width: 100%; background: #1f5d3a; color: white; border: 0;
           padding: .65rem; border-radius: 8px; font-weight: 600; cursor: pointer;
           font-size: 1rem;
         }
-        #pkg-lock-card button.btn-primary:hover { background: #035a2a; }
+        #pkg-lock-card button.btn-primary:hover { background: #143e26; }
         #pkg-lock-card .err { color: #c0392b; font-size: .85rem; min-height: 1.2rem; margin-bottom: .5rem; }
         #pkg-lock-card .footer-link { margin-top: 1rem; font-size: .85rem; }
-        #pkg-lock-card .footer-link a { color: #047a3a; text-decoration: none; cursor: pointer; }
+        #pkg-lock-card .footer-link a { color: #1f5d3a; text-decoration: none; cursor: pointer; }
         #pkg-lock-card .footer-link a:hover { text-decoration: underline; }
       </style>
       <div id="pkg-lock-card">
@@ -181,18 +612,18 @@
     });
     forgot.addEventListener('click', () => {
       const ok = confirm(
-        'Tidak ada cara recovery PIN. Pilihan satu-satunya adalah RESET semua data dan PIN.\n\n' +
-        'PASTIKAN sudah backup data terlebih dahulu (export JSON dari menu Backup).\n\n' +
+        'Tidak ada cara recovery PIN. Pilihan satu-satunya adalah RESET semua data, registrasi akun, dan PIN.\n\n' +
+        'PASTIKAN sudah backup data terlebih dahulu.\n\n' +
         'Lanjutkan reset?'
       );
       if (!ok) return;
       const ok2 = confirm('Konfirmasi sekali lagi: HAPUS semua data PKG dan PIN dari browser ini?');
       if (!ok2) return;
-      // Clear all PKG data
+      
       const keys = Object.keys(localStorage).filter(k => k.startsWith('pkg_v1_'));
       for (const k of keys) localStorage.removeItem(k);
       sessionStorage.clear();
-      alert('Semua data PKG dan PIN sudah dihapus dari browser ini. Halaman akan di-reload.');
+      alert('Semua data PKG dan PIN sudah dihapus. Halaman akan di-reload.');
       location.reload();
     });
   }
@@ -202,8 +633,7 @@
     if (o) o.remove();
   }
 
-  // First-run setup modal: prompt to set PIN
-  // Returns Promise<boolean> - true if PIN set, false if user skipped
+  // 4. Initial PIN setup
   function promptInitialPinSetup() {
     return new Promise((resolve) => {
       const overlay = document.createElement('div');
@@ -220,7 +650,7 @@
             width: 92%; max-width: 420px;
             box-shadow: 0 12px 40px rgba(0,0,0,.25);
           }
-          #pkg-pin-setup-card h3 { margin: 0 0 .5rem; color: #047a3a; }
+          #pkg-pin-setup-card h3 { margin: 0 0 .5rem; color: #1f5d3a; }
           #pkg-pin-setup-card .desc { color: #555; font-size: .9rem; margin-bottom: 1rem; }
           #pkg-pin-setup-card label { display: block; font-size: .85rem; font-weight: 600; margin-bottom: .25rem; color: #333; }
           #pkg-pin-setup-card input {
@@ -228,12 +658,12 @@
             padding: .5rem; border: 2px solid #d6efd9; border-radius: 8px;
             margin-bottom: .9rem; outline: none;
           }
-          #pkg-pin-setup-card input:focus { border-color: #047a3a; }
+          #pkg-pin-setup-card input:focus { border-color: #1f5d3a; }
           #pkg-pin-setup-card .row-btn { display: flex; gap: .5rem; margin-top: .75rem; }
           #pkg-pin-setup-card button {
             flex: 1; padding: .55rem; border-radius: 8px; font-weight: 600; cursor: pointer; border: 0;
           }
-          #pkg-pin-setup-card .btn-primary { background: #047a3a; color: white; }
+          #pkg-pin-setup-card .btn-primary { background: #1f5d3a; color: white; }
           #pkg-pin-setup-card .btn-secondary { background: #e9ecef; color: #333; }
           #pkg-pin-setup-card .err { color: #c0392b; font-size: .85rem; min-height: 1.1rem; }
         </style>
@@ -286,34 +716,41 @@
     });
   }
 
-  // Settings: ganti / hapus PIN. Returns view HTML.
+  // Settings view for PIN
   function viewPengaturanPIN(view) {
     const isSet = isPinSet();
+    const info = getUserInfo();
     view.innerHTML = `
     <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-      <h4 class="mb-0"><i class="bi bi-shield-lock"></i> Pengaturan PIN</h4>
+      <h4 class="mb-0"><i class="bi bi-shield-lock"></i> Pengaturan Akun & PIN</h4>
     </div>
     <div class="row g-3">
       <div class="col-lg-6">
-        <div class="card">
-          <div class="card-header"><i class="bi bi-info-circle"></i> Status</div>
+        <div class="card h-100">
+          <div class="card-header"><i class="bi bi-person-badge"></i> Profil Pengguna</div>
           <div class="card-body">
-            <p class="mb-2"><strong>PIN aktif:</strong> ${isSet ? '<span class="text-success">Ya, PIN terpasang.</span>' : '<span class="text-muted">Belum diatur.</span>'}</p>
-            <p class="small text-muted mb-0">${isSet
-              ? 'Aplikasi akan terkunci saat dibuka di tab/sesi baru, atau saat Bapak klik tombol <strong>Logout</strong>.'
-              : 'Aktifkan PIN untuk menambah lapisan keamanan kalau perangkat ini dipakai bersama orang lain.'}</p>
+            <table class="table table-sm table-borderless">
+              <tr><td><strong>Nama Lengkap:</strong></td><td>${escapeHtml(info.fullname)}</td></tr>
+              <tr><td><strong>Peran (Role):</strong></td><td><span class="badge bg-primary text-uppercase">${escapeHtml(info.role)}</span></td></tr>
+              <tr><td><strong>Madrasah:</strong></td><td>${escapeHtml(info.madrasah)}</td></tr>
+              <tr><td><strong>Device ID:</strong></td><td><code class="small">${escapeHtml(info.deviceId)}</code></td></tr>
+            </table>
           </div>
         </div>
       </div>
       <div class="col-lg-6">
-        <div class="card">
-          <div class="card-header"><i class="bi bi-gear"></i> Aksi</div>
+        <div class="card h-100">
+          <div class="card-header"><i class="bi bi-gear"></i> Keamanan PIN</div>
           <div class="card-body">
+            <p class="mb-2"><strong>PIN aktif:</strong> ${isSet ? '<span class="text-success">Ya, PIN terpasang.</span>' : '<span class="text-muted">Belum diatur.</span>'}</p>
+            <p class="small text-muted mb-3">${isSet
+              ? 'Aplikasi terkunci saat dibuka di tab baru.'
+              : 'Aktifkan PIN untuk pengamanan ekstra.'}</p>
             ${isSet ? `
-              <button id="btn-change-pin" class="btn btn-primary w-100 mb-2"><i class="bi bi-key"></i> Ganti PIN</button>
-              <button id="btn-remove-pin" class="btn btn-outline-danger w-100"><i class="bi bi-shield-slash"></i> Hapus PIN</button>
+              <button id="btn-change-pin" class="btn btn-sm btn-primary w-100 mb-2"><i class="bi bi-key"></i> Ganti PIN</button>
+              <button id="btn-remove-pin" class="btn btn-sm btn-outline-danger w-100"><i class="bi bi-shield-slash"></i> Hapus PIN</button>
             ` : `
-              <button id="btn-set-pin" class="btn btn-success w-100"><i class="bi bi-shield-plus"></i> Aktifkan PIN</button>
+              <button id="btn-set-pin" class="btn btn-sm btn-success w-100"><i class="bi bi-shield-plus"></i> Aktifkan PIN</button>
             `}
           </div>
         </div>
@@ -321,9 +758,44 @@
     </div>
     <div class="alert alert-warning mt-3 small">
       <i class="bi bi-exclamation-triangle"></i> <strong>Penting:</strong> Tidak ada cara recovery PIN.
-      Kalau Bapak lupa PIN, satu-satunya pilihan adalah reset semua data PKG.
-      Selalu lakukan <a href="#/backup-kabupaten">Backup</a> sebelum mengaktifkan PIN.
+      Jika lupa PIN, harus reset data. Selalu lakukan backup berkala.
     </div>`;
+
+    // --- Trial Upgrade Section ---
+    if (isTrial()) {
+      const daysLeft = getTrialDaysLeft();
+      const expired = isTrialExpired();
+      const trialHTML = `
+      <div class="card mt-3 ${expired ? 'border-danger' : 'border-warning'}">
+        <div class="card-header ${expired ? 'bg-danger text-white' : 'bg-warning'}">
+          <i class="bi bi-clock-history"></i> Status Trial
+        </div>
+        <div class="card-body">
+          ${expired
+            ? '<p class="text-danger mb-3"><strong>⏰ Masa trial telah berakhir.</strong> Data Anda tetap tersimpan. Input kode aktivasi penuh untuk melanjutkan.</p>'
+            : `<p class="mb-3">Sisa masa trial: <strong class="text-warning">${daysLeft} hari</strong>. Dokumen yang dicetak/ekspor memiliki watermark "TRIAL".</p>`}
+          <div class="mb-2">
+            <label class="form-label small fw-bold">Kode Aktivasi Penuh (PKG-KBC-XXXX)</label>
+            <input id="trial-upgrade-input" type="text" class="form-control" placeholder="Masukkan kode dari Pengawas" style="text-transform:uppercase;" autocomplete="off">
+          </div>
+          <div id="trial-upgrade-msg" class="small text-danger mb-2" style="min-height:1.2rem;"></div>
+          <button id="btn-trial-upgrade" class="btn btn-success w-100"><i class="bi bi-key-fill"></i> Upgrade ke Lisensi Penuh</button>
+        </div>
+      </div>`;
+      view.insertAdjacentHTML('beforeend', trialHTML);
+      document.getElementById('btn-trial-upgrade').addEventListener('click', () => {
+        const code = document.getElementById('trial-upgrade-input').value.trim();
+        const msgEl = document.getElementById('trial-upgrade-msg');
+        if (!code) { msgEl.textContent = 'Masukkan kode aktivasi penuh!'; return; }
+        const result = upgradeFromTrial(code);
+        if (result.ok) {
+          alert(result.msg + ' Halaman akan di-reload.');
+          location.reload();
+        } else {
+          msgEl.textContent = result.msg;
+        }
+      });
+    }
 
     if (isSet) {
       document.getElementById('btn-change-pin').addEventListener('click', async () => {
@@ -335,11 +807,11 @@
         if (ok2) alert('PIN berhasil diganti.');
       });
       document.getElementById('btn-remove-pin').addEventListener('click', async () => {
-        const old = prompt('Masukkan PIN saat ini untuk verifikasi penghapusan:');
+        const old = prompt('Masukkan PIN saat ini untuk verifikasi:');
         if (!old) return;
         const ok = await verifyPin(old.trim());
         if (!ok) { alert('PIN salah.'); return; }
-        if (!confirm('Hapus PIN? Aplikasi tidak akan terkunci lagi sampai PIN di-aktifkan ulang.')) return;
+        if (!confirm('Hapus PIN?')) return;
         clearPin();
         alert('PIN dihapus.');
         if (typeof window.render === 'function') window.render();
@@ -348,19 +820,197 @@
       document.getElementById('btn-set-pin').addEventListener('click', async () => {
         const ok = await promptInitialPinSetup();
         if (ok) {
-          alert('PIN berhasil diaktifkan. Aplikasi akan terkunci di tab/sesi baru.');
+          alert('PIN berhasil diaktifkan.');
           if (typeof window.render === 'function') window.render();
         }
       });
     }
   }
 
-  // Inisialisasi: dipanggil di awal sebelum app render
-  // Returns Promise yang resolve setelah app boleh dirender.
+  // --- KELOLA KODE AKTIVASI ---
+  const KEY_ACTIVATION_CODES_LIST = 'pkg_v1_activation_codes_list';
+
+  function listActivationCodes() {
+    try {
+      const raw = localStorage.getItem(KEY_ACTIVATION_CODES_LIST);
+      return raw ? JSON.parse(raw) : [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  function saveActivationCodes(list) {
+    localStorage.setItem(KEY_ACTIVATION_CODES_LIST, JSON.stringify(list));
+  }
+
+  function addActivationCode(notes) {
+    const list = listActivationCodes();
+    const code = generateActivationCode();
+    const newEntry = {
+      code,
+      notes: notes || '',
+      status: 'Active',
+      deviceId: null,
+      fullname: '',
+      madrasah: '',
+      dateCreated: new Date().toLocaleString(),
+      dateUsed: null
+    };
+    list.unshift(newEntry);
+    saveActivationCodes(list);
+    return newEntry;
+  }
+
+  function deleteActivationCode(code) {
+    let list = listActivationCodes();
+    list = list.filter(item => item.code !== code);
+    saveActivationCodes(list);
+  }
+
+  function syncActivationCodeFromBackup(backupJson) {
+    if (!backupJson || !backupJson.sender || !backupJson.sender.activationCode) return;
+    const sender = backupJson.sender;
+    const list = listActivationCodes();
+    const targetCode = sender.activationCode.trim().toUpperCase();
+    
+    let item = list.find(x => x.code === targetCode);
+    if (!item) {
+      if (verifyActivationCode(targetCode)) {
+        item = {
+          code: targetCode,
+          notes: 'Terdeteksi via Impor Backup',
+          status: 'Used',
+          deviceId: sender.deviceId,
+          fullname: sender.fullname,
+          madrasah: sender.madrasah,
+          dateCreated: '-',
+          dateUsed: backupJson.exported_at ? new Date(backupJson.exported_at).toLocaleString() : new Date().toLocaleString()
+        };
+        list.push(item);
+      }
+    } else {
+      item.status = 'Used';
+      item.deviceId = sender.deviceId;
+      item.fullname = sender.fullname;
+      item.madrasah = sender.madrasah;
+      item.dateUsed = backupJson.exported_at ? new Date(backupJson.exported_at).toLocaleString() : new Date().toLocaleString();
+    }
+    saveActivationCodes(list);
+  }
+
+  // 4. Screen Trial Expired — blokir akses, minta kode aktivasi penuh
+  function renderTrialExpiredScreen() {
+    let overlay = document.getElementById('pkg-auth-overlay');
+    if (!overlay) {
+      overlay = document.createElement('div');
+      overlay.id = 'pkg-auth-overlay';
+      document.body.appendChild(overlay);
+    }
+
+    overlay.innerHTML = `
+      <style>
+        #pkg-auth-overlay {
+          position: fixed; inset: 0; z-index: 3000;
+          background: linear-gradient(135deg, #c0392b 0%, #1f5d3a 100%);
+          display: flex; align-items: center; justify-content: center;
+          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+          padding: 1rem; overflow-y: auto;
+        }
+        .auth-card {
+          background: #fff; border-radius: 12px; padding: 2rem;
+          width: 100%; max-width: 460px;
+          box-shadow: 0 12px 40px rgba(0,0,0,.25);
+        }
+        .auth-logo { text-align: center; margin-bottom: 1.5rem; }
+        .auth-logo i { font-size: 3rem; color: #c0392b; }
+        .auth-logo h2 { margin: 0.5rem 0 0; color: #c0392b; font-size: 1.4rem; font-weight: bold; }
+        .auth-logo p { margin: 0; color: #666; font-size: 0.85rem; }
+        .auth-err { color: #c0392b; font-size: 0.85rem; min-height: 1.2rem; margin-bottom: 0.5rem; text-align: center; }
+        .form-group { margin-bottom: 1rem; }
+        .form-group label { display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 0.25rem; color: #333; }
+        .form-group input {
+          width: 100%; padding: 0.6rem; border: 2px solid #ddd; border-radius: 8px; outline: none; font-size: 0.95rem;
+        }
+        .form-group input:focus { border-color: #1f5d3a; }
+        .btn-auth-submit {
+          width: 100%; background: #1f5d3a; color: white; border: 0;
+          padding: 0.75rem; border-radius: 8px; font-weight: 600; cursor: pointer;
+          font-size: 1rem; margin-top: 0.5rem; transition: background 0.2s;
+        }
+        .btn-auth-submit:hover { background: #143e26; }
+        .trial-warning {
+          background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 8px;
+          padding: 1rem; text-align: center; margin-bottom: 1rem; font-size: 0.9rem; color: #856404;
+        }
+      </style>
+      <div class="auth-card">
+        <div class="auth-logo">
+          <i class="bi bi-clock-history"></i>
+          <h2>Masa Trial Berakhir</h2>
+          <p>PKG Pokjawasmad Kab. Jember</p>
+        </div>
+        <div class="trial-warning">
+          <strong>⏰ Masa trial 3 hari telah berakhir.</strong><br>
+          Data Anda tetap tersimpan dan tidak hilang.<br>
+          Hubungi Pengawas untuk mendapatkan Kode Aktivasi Penuh.
+        </div>
+        <div class="auth-err" id="auth-trial-err"></div>
+        <div class="form-group">
+          <label>Kode Aktivasi Penuh (PKG-KBC-XXXX)</label>
+          <input id="trial-upgrade-code" type="text" placeholder="Masukkan kode dari Pengawas" autocomplete="off" style="text-transform: uppercase;">
+        </div>
+        <button class="btn-auth-submit" id="btn-trial-upgrade">Aktivasi Lisensi Penuh</button>
+        <div style="text-align:center; margin-top:1rem;">
+          <button id="btn-trial-logout" style="background:transparent; border:0; color:#888; cursor:pointer; font-size:.85rem;">Keluar / Reset</button>
+        </div>
+      </div>
+    `;
+
+    document.getElementById('btn-trial-upgrade').addEventListener('click', () => {
+      const errEl = document.getElementById('auth-trial-err');
+      const code = document.getElementById('trial-upgrade-code').value.trim();
+      if (!code) { errEl.textContent = 'Masukkan kode aktivasi penuh!'; return; }
+      const result = upgradeFromTrial(code);
+      if (result.ok) {
+        alert(result.msg + ' Halaman akan di-reload.');
+        location.reload();
+      } else {
+        errEl.textContent = result.msg;
+      }
+    });
+
+    document.getElementById('btn-trial-logout').addEventListener('click', () => {
+      if (!confirm('Reset semua data PKG di browser ini? Data trial akan dihapus.')) return;
+      const keys = Object.keys(localStorage).filter(k => k.startsWith('pkg_v1_'));
+      for (const k of keys) localStorage.removeItem(k);
+      sessionStorage.clear();
+      location.reload();
+    });
+  }
+
+  // --- INITIALIZATION ---
   async function init() {
+    // 1. Cek Aktivasi
+    if (!isActivated()) {
+      renderActivationScreen();
+      return new Promise(() => {}); // Gated forever
+    }
+
+    // 1b. Cek Trial Expired — blokir akses
+    if (isTrialExpired()) {
+      renderTrialExpiredScreen();
+      return new Promise(() => {});
+    }
+
+    // 2. Cek Login
+    if (!isLoggedIn()) {
+      renderLoginScreen();
+      return new Promise(() => {}); // Gated forever
+    }
+
+    // 3. Cek PIN Lock
     if (isPinSet() && !isUnlocked()) {
       renderLockScreen();
-      // tunggu sampai unlocked
       return new Promise((resolve) => {
         const check = setInterval(() => {
           if (isUnlocked() || !isPinSet()) {
@@ -370,30 +1020,38 @@
         }, 200);
       });
     }
+
+    // Lolos semua gate
+    const overlay = document.getElementById('pkg-auth-overlay');
+    if (overlay) overlay.remove();
   }
 
-  // Logout: lock + reload tampilan ke lock screen
   function logout() {
-    if (!isPinSet()) {
-      alert('PIN belum aktif. Aktifkan PIN dulu di menu Pengaturan PIN.');
-      return;
-    }
+    sessionStorage.removeItem(KEY_LOGGED_IN);
     lock();
-    renderLockScreen();
+    location.reload();
   }
 
-  // Expose
+  // Expose ke global
   window.PKGAuth = {
     setPin, verifyPin, isPinSet, clearPin,
     isUnlocked, unlock, lock,
     init, logout,
-    renderLockScreen, hideLockScreen,
-    promptInitialPinSetup,
+    isActivated, isLoggedIn, getUserInfo,
+    generateActivationCode, verifyActivationCode,
     viewPengaturanPIN,
     escapeHtml,
+    ADMIN_MASTER_CODE,
+    TRIAL_CODE,
+    isTrial, isTrialExpired, getTrialDaysLeft, upgradeFromTrial,
+    listActivationCodes,
+    saveActivationCodes,
+    addActivationCode,
+    deleteActivationCode,
+    syncActivationCodeFromBackup
   };
 
-  // Auto-init pada DOMContentLoaded
+  // Auto boot sequence
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);
   } else {

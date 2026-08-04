@@ -692,6 +692,15 @@ Laporan ini disusun sebagai dokumentasi resmi pelaksanaan PKG pada ${obj} untuk 
   }
 
   function wrapHTMLPrintable(body, title) {
+    const isTrialMode = window.PKGAuth && window.PKGAuth.isTrial && window.PKGAuth.isTrial();
+    const trialWM = isTrialMode ? `
+      <div class="trial-watermark" style="position:fixed; inset:0; z-index:9999; pointer-events:none; display:flex; flex-wrap:wrap; align-content:flex-start; justify-content:center; overflow:hidden;">
+        ${Array.from({length: 60}, () => '<span style="display:inline-block; transform:rotate(-45deg); font-size:18pt; font-weight:900; color:rgba(200,0,0,0.13); margin:30px 40px; font-family:sans-serif; letter-spacing:4px; white-space:nowrap;">TRIAL</span>').join('')}
+      </div>
+      <style>
+        .trial-watermark { display: block !important; }
+        @media print { .trial-watermark { display: flex !important; position: fixed !important; } }
+      </style>` : '';
     return `<!doctype html><html lang="id"><head><meta charset="utf-8"><title>${e(title)}</title>
     <style>
       @page { size: A4; margin: 2.5cm 2cm 2cm 3cm; }
@@ -716,6 +725,7 @@ Laporan ini disusun sebagai dokumentasi resmi pelaksanaan PKG pada ${obj} untuk 
       <button onclick="window.print()" style="padding:6px 14px; background:#047a3a; color:#fff; border:0; border-radius:4px; cursor:pointer;">🖨️ Cetak / Simpan PDF</button>
       <button onclick="window.close()" style="padding:6px 14px; background:#888; color:#fff; border:0; border-radius:4px; cursor:pointer; margin-left:6px;">Tutup</button>
     </div>
+    ${trialWM}
     <div class="doc">${body}</div>
     </body></html>`;
   }
@@ -763,7 +773,7 @@ Laporan ini disusun sebagai dokumentasi resmi pelaksanaan PKG pada ${obj} untuk 
       throw new Error('Library docx belum siap. Pastikan koneksi internet aktif (CDN), kemudian refresh halaman.');
     }
     const D = window.docx;
-    const { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType, Table, TableRow, TableCell, WidthType, BorderStyle, PageBreak } = D;
+    const { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType, Table, TableRow, TableCell, WidthType, BorderStyle, PageBreak, Header } = D;
 
     const center = AlignmentType.CENTER;
     const justify = AlignmentType.JUSTIFIED;
@@ -952,10 +962,30 @@ Laporan ini disusun sebagai dokumentasi resmi pelaksanaan PKG pada ${obj} untuk 
       P('Tindak lanjut hasil PKG akan diintegrasikan dengan program PKB tahun berjalan, supervisi akademik, dan evaluasi distribusi tugas mengajar.', { align: justify }),
     ];
 
+    const isTrialMode = window.PKGAuth && window.PKGAuth.isTrial && window.PKGAuth.isTrial();
+    const trialHeader = isTrialMode ? new Header({
+      children: [new Paragraph({
+        alignment: AlignmentType.CENTER,
+        children: [new TextRun({
+          text: 'DOKUMEN TRIAL — TIDAK RESMI',
+          bold: true, size: 16, color: 'CC0000',
+        })],
+      })],
+    }) : undefined;
+
     const doc = new Document({
       sections: [{
         properties: { page: { margin: { top: 1440, right: 1134, bottom: 1134, left: 1701 } } },
+        headers: isTrialMode ? { default: trialHeader } : undefined,
         children: [
+          ...(isTrialMode ? [new Paragraph({
+            alignment: AlignmentType.CENTER,
+            spacing: { after: 200 },
+            children: [new TextRun({
+              text: '⚠ DOKUMEN TRIAL — TIDAK RESMI ⚠',
+              bold: true, size: 20, color: 'CC0000',
+            })],
+          })] : []),
           ...cover, ...kataPengantar, ...pengesahan,
           ...bab1, ...bab2, ...bab3, ...bab4, ...bab5,
         ],
