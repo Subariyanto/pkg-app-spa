@@ -296,3 +296,206 @@ a:hover { color: var(--pkg-primary-dark); }
   border-radius: .35rem;
   font-weight: 600;
 }
+
+/* ===== Beranda Elegan & Eksklusif ===== */
+
+/* Hero Section */
+.beranda-hero {
+  background: linear-gradient(135deg, var(--pkg-primary-dark) 0%, var(--pkg-primary) 50%, #2a7a4f 100%);
+  border-radius: 1rem;
+  padding: 2rem 2.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 8px 32px rgba(20, 61, 38, 0.3);
+}
+.beranda-hero::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  right: -10%;
+  width: 300px;
+  height: 300px;
+  background: radial-gradient(circle, rgba(201, 162, 39, 0.12) 0%, transparent 70%);
+  border-radius: 50%;
+}
+.beranda-hero::after {
+  content: '';
+  position: absolute;
+  bottom: -30%;
+  left: -5%;
+  width: 200px;
+  height: 200px;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.06) 0%, transparent 70%);
+  border-radius: 50%;
+}
+.beranda-hero-content {
+  position: relative;
+  z-index: 1;
+}
+.beranda-hero-greeting {
+  color: rgba(255, 255, 255, 0.7);
+  font-size: .9rem;
+  text-transform: uppercase;
+  letter-spacing: .12em;
+  font-weight: 500;
+  margin-bottom: .25rem;
+}
+.beranda-hero-name {
+  color: #fff;
+  font-size: 2rem;
+  font-weight: 700;
+  line-height: 1.2;
+  margin-bottom: .35rem;
+}
+.beranda-hero-sub {
+  color: rgba(255, 255, 255, 0.55);
+  font-size: .82rem;
+  font-weight: 400;
+  letter-spacing: .03em;
+}
+.beranda-hero-emblem {
+  position: relative;
+  z-index: 1;
+  font-size: 4rem;
+  color: rgba(201, 162, 39, 0.5);
+  flex-shrink: 0;
+}
+
+/* Stat Cards */
+.stat-card {
+  background: #fff;
+  border-radius: .85rem;
+  padding: 1.25rem 1rem;
+  display: flex;
+  align-items: center;
+  gap: .85rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  border: 1px solid rgba(0, 0, 0, 0.03);
+  transition: transform .2s ease, box-shadow .2s ease;
+  height: 100%;
+}
+.stat-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.1);
+}
+.stat-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: .65rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.4rem;
+  flex-shrink: 0;
+}
+.stat-card-1 .stat-icon { background: rgba(31, 93, 58, 0.1); color: var(--pkg-primary); }
+.stat-card-2 .stat-icon { background: rgba(201, 162, 39, 0.12); color: var(--pkg-accent-dark); }
+.stat-card-3 .stat-icon { background: rgba(6, 130, 85, 0.1); color: #066838; }
+.stat-card-4 .stat-icon { background: rgba(26, 106, 163, 0.1); color: #1a6aa3; }
+.stat-value {
+  font-size: 1.65rem;
+  font-weight: 700;
+  line-height: 1;
+  color: #1a1a1a;
+}
+.stat-label {
+  font-size: .75rem;
+  color: #888;
+  margin-top: .15rem;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  font-weight: 500;
+}
+
+/* Beranda Card */
+.beranda-card {
+  border-radius: .85rem;
+  overflow: hidden;
+  border: 1px solid rgba(0, 0, 0, 0.04);
+}
+.beranda-card-header {
+  background: linear-gradient(180deg, #fff 0%, #fafdfa 100%);
+  border-bottom: 2px solid var(--pkg-primary);
+  font-weight: 600;
+  font-size: .88rem;
+  padding: .85rem 1.1rem;
+  color: var(--pkg-primary-dark);
+  text-transform: uppercase;
+  letter-spacing: .03em;
+}
+.beranda-btn-add {
+  background: var(--pkg-primary);
+  color: #fff;
+  border: none;
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: .78rem;
+  font-weight: 500;
+  padding: .3rem .7rem;
+  border-radius: .4rem;
+}
+.beranda-btn-add:hover {
+  background: var(--pkg-primary-dark);
+  color: #fff;
+}
+
+/* List Items */
+.beranda-list-item {
+  display: flex !important;
+  align-items: center;
+  gap: .75rem;
+  padding: .85rem 1.1rem !important;
+  border: none !important;
+  border-bottom: 1px solid #f0f4f1 !important;
+  transition: background .15s;
+}
+.beranda-list-item:last-child { border-bottom: none !important; }
+.beranda-list-item:hover {
+  background: #f8fdf9;
+}
+.beranda-avatar {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: rgba(31, 93, 58, 0.08);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--pkg-primary);
+  font-size: 1.15rem;
+  flex-shrink: 0;
+}
+.beranda-list-info {
+  flex: 1;
+  min-width: 0;
+}
+.beranda-list-arrow {
+  font-size: .8rem;
+  opacity: .4;
+  flex-shrink: 0;
+}
+
+/* Role card icons */
+.role-card {
+  border-radius: .65rem;
+}
+.role-card:hover {
+  border-color: var(--pkg-accent) !important;
+  box-shadow: 0 4px 16px rgba(201, 162, 39, 0.2) !important;
+}
+
+/* Responsive Hero */
+@media (max-width: 575px) {
+  .beranda-hero {
+    padding: 1.5rem 1.25rem;
+    border-radius: .75rem;
+  }
+  .beranda-hero-name { font-size: 1.5rem; }
+  .beranda-hero-emblem { font-size: 2.5rem; }
+  .stat-card { padding: 1rem .75rem; gap: .6rem; }
+  .stat-icon { width: 40px; height: 40px; font-size: 1.1rem; }
+  .stat-value { font-size: 1.35rem; }
+}

@@ -205,6 +205,8 @@ function render() {
 function viewBeranda(view) {
   const stats = PKGDB.getStats();
   const recent = PKGDB.getRecentGuru(8);
+  const user = (window.PKGAuth && window.PKGAuth.getUser) ? window.PKGAuth.getUser() : null;
+  const userName = user ? (user.nama || user.username || 'Pengguna') : 'Pengguna';
   const trialBanner = (window.PKGAuth && window.PKGAuth.isTrial && window.PKGAuth.isTrial()) ? (() => {
     const daysLeft = window.PKGAuth.getTrialDaysLeft();
     const expired = window.PKGAuth.isTrialExpired();
@@ -213,33 +215,63 @@ function viewBeranda(view) {
   })() : '';
   view.innerHTML = `
   ${trialBanner}
+
+  <!-- Hero Section -->
+  <div class="beranda-hero mb-4">
+    <div class="beranda-hero-content">
+      <div class="beranda-hero-greeting">Selamat datang,</div>
+      <div class="beranda-hero-name">${e(userName)}</div>
+      <div class="beranda-hero-sub">Sistem Penilaian Kinerja Guru Madrasah</div>
+    </div>
+    <div class="beranda-hero-emblem"><i class="bi bi-mortarboard-fill"></i></div>
+  </div>
+
+  <!-- Stats -->
   <div class="row g-3 mb-4">
-    <div class="col-md-3 col-6"><div class="card"><div class="card-body text-center">
-      <div class="display-6 text-primary"><i class="bi bi-people"></i></div>
-      <div class="h3 mb-0">${stats.guru}</div>
-      <div class="text-muted small">Guru terdaftar</div>
-    </div></div></div>
-    <div class="col-md-3 col-6"><div class="card"><div class="card-body text-center">
-      <div class="display-6 text-success"><i class="bi bi-clipboard-check"></i></div>
-      <div class="h3 mb-0">${stats.penilaian}</div>
-      <div class="text-muted small">Sesi penilaian</div>
-    </div></div></div>
-    <div class="col-md-3 col-6"><div class="card"><div class="card-body text-center">
-      <div class="display-6 text-warning"><i class="bi bi-check2-circle"></i></div>
-      <div class="h3 mb-0">${stats.selesai}</div>
-      <div class="text-muted small">Sudah dinilai</div>
-    </div></div></div>
-    <div class="col-md-3 col-6"><div class="card"><div class="card-body text-center">
-      <div class="display-6 text-info"><i class="bi bi-list-check"></i></div>
-      <div class="h3 mb-0">${stats.indikator}</div>
-      <div class="text-muted small">Total indikator</div>
-    </div></div></div>
+    <div class="col-md-3 col-6">
+      <div class="stat-card stat-card-1">
+        <div class="stat-icon"><i class="bi bi-people-fill"></i></div>
+        <div class="stat-body">
+          <div class="stat-value">${stats.guru}</div>
+          <div class="stat-label">Guru Terdaftar</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3 col-6">
+      <div class="stat-card stat-card-2">
+        <div class="stat-icon"><i class="bi bi-clipboard-check-fill"></i></div>
+        <div class="stat-body">
+          <div class="stat-value">${stats.penilaian}</div>
+          <div class="stat-label">Sesi Penilaian</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3 col-6">
+      <div class="stat-card stat-card-3">
+        <div class="stat-icon"><i class="bi bi-patch-check-fill"></i></div>
+        <div class="stat-body">
+          <div class="stat-value">${stats.selesai}</div>
+          <div class="stat-label">Sudah Dinilai</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3 col-6">
+      <div class="stat-card stat-card-4">
+        <div class="stat-icon"><i class="bi bi-list-check"></i></div>
+        <div class="stat-body">
+          <div class="stat-value">${stats.indikator}</div>
+          <div class="stat-label">Total Indikator</div>
+        </div>
+      </div>
+    </div>
   </div>
 
   <div class="row g-3">
     <div class="col-lg-7">
-      <div class="card">
-        <div class="card-header"><i class="bi bi-grid-3x3-gap"></i> Peran / Instrumen Tersedia</div>
+      <div class="card beranda-card">
+        <div class="card-header beranda-card-header">
+          <span><i class="bi bi-grid-3x3-gap-fill"></i> Peran / Instrumen Tersedia</span>
+        </div>
         <div class="card-body">
           <div class="row g-2">
             ${PKGDB.ROLES.map(r => `
@@ -247,7 +279,7 @@ function viewBeranda(view) {
                 <a href="#/instrumen?role=${encodeURIComponent(r.role_code)}" class="text-decoration-none text-dark">
                   <div class="card role-card h-100">
                     <div class="card-body">
-                      <div class="role-icon text-primary"><i class="bi bi-person-badge"></i></div>
+                      <div class="role-icon text-primary"><i class="bi bi-person-badge-fill"></i></div>
                       <div class="fw-semibold">${e(r.role_label)}</div>
                       <div class="small text-muted">${e(r.role_code)} &middot; skor 0-${r.max_score}</div>
                     </div>
@@ -260,17 +292,21 @@ function viewBeranda(view) {
       </div>
     </div>
     <div class="col-lg-5">
-      <div class="card">
-        <div class="card-header d-flex justify-content-between">
+      <div class="card beranda-card">
+        <div class="card-header beranda-card-header d-flex justify-content-between align-items-center">
           <span><i class="bi bi-clock-history"></i> Aktivitas Terakhir</span>
-          <a class="btn btn-sm btn-primary" href="#/guru/new"><i class="bi bi-plus-lg"></i> Tambah Guru</a>
+          <a class="btn btn-sm beranda-btn-add" href="#/guru/new"><i class="bi bi-plus-lg"></i> Tambah Guru</a>
         </div>
-        <div class="list-group list-group-flush">
+        <div class="list-group list-group-flush beranda-list">
           ${recent.length === 0 ? '<div class="list-group-item text-muted text-center py-4">Belum ada data guru</div>' : ''}
           ${recent.map(r => `
-            <a href="#/guru/${r.id}" class="list-group-item list-group-item-action">
-              <div class="fw-semibold">${e(r.nama)}</div>
-              <div class="small text-muted">${e(r.nama_madrasah || '-')} &middot; ${e(r.mapel_kelas || '-')}</div>
+            <a href="#/guru/${r.id}" class="list-group-item list-group-item-action beranda-list-item">
+              <div class="beranda-avatar"><i class="bi bi-person-circle"></i></div>
+              <div class="beranda-list-info">
+                <div class="fw-semibold">${e(r.nama)}</div>
+                <div class="small text-muted">${e(r.nama_madrasah || '-')} &middot; ${e(r.mapel_kelas || '-')}</div>
+              </div>
+              <i class="bi bi-chevron-right text-muted beranda-list-arrow"></i>
             </a>
           `).join('')}
         </div>
