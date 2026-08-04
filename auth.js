@@ -330,23 +330,32 @@
       }
     });
 
-    // Tombol Trial: auto-fill kode trial & disable field kode
+    // Tombol Trial: LANGSUNG buat akun trial tanpa isi form, auto-login ke Beranda
     document.getElementById('btn-trial').addEventListener('click', () => {
-      const codeInput = document.getElementById('reg-code');
-      codeInput.value = TRIAL_CODE;
-      codeInput.disabled = true;
-      codeInput.style.background = '#e8f5e9';
-      codeInput.style.color = '#1f5d3a';
-      codeInput.style.fontWeight = 'bold';
-      // Set role ke kamad (trial = akses setara kamad)
-      document.getElementById('reg-role').value = 'kamad';
-      document.getElementById('reg-role').disabled = true;
-      document.getElementById('group-madrasah').style.display = 'block';
-      document.getElementById('reg-username').focus();
-      document.getElementById('btn-reg-submit').textContent = 'Aktifkan Akun Trial (3 Hari Gratis)';
-      const errEl = document.getElementById('auth-reg-err');
-      errEl.style.color = '#1f5d3a';
-      errEl.textContent = '🎁 Mode Trial: Akses penuh 3 hari. Dokumen dicetak dengan watermark "TRIAL".';
+      if (!confirm('Aktifkan akun Trial gratis 3 hari?\n\nAkses penuh semua fitur. Dokumen cetak akan ada watermark "TRIAL".\nSetelah 3 hari, hubungi Pengawas untuk kode aktivasi penuh.')) return;
+
+      // Auto-create trial account — tanpa form, tanpa aktivasi
+      const code = TRIAL_CODE;
+      const devId = getDeviceId();
+      const binding = fnv1aHash(devId + ':' + code);
+      const passHash = fnv1aHash('trial123');
+
+      localStorage.setItem(KEY_ACTIVATED, 'true');
+      localStorage.setItem(KEY_ACTIVATION_CODE, code);
+      localStorage.setItem(KEY_DEVICE_BINDING, binding);
+      localStorage.setItem(KEY_USER_ROLE, 'trial');
+      localStorage.setItem(KEY_USER_USERNAME, 'trial');
+      localStorage.setItem(KEY_USER_PASSWORD_HASH, passHash);
+      localStorage.setItem(KEY_USER_FULLNAME, 'Pengguna Trial');
+      localStorage.setItem(KEY_USER_MADRASAH, 'Madrasah Trial');
+      localStorage.setItem(KEY_TRIAL_START, String(Date.now()));
+
+      // Auto-login — langsung masuk tanpa screen login
+      sessionStorage.setItem(KEY_LOGGED_IN, 'true');
+
+      // Pastikan hash kosong = Beranda
+      location.hash = '#/';
+      location.reload();
     });
 
     document.getElementById('btn-reg-submit').addEventListener('click', async () => {
@@ -512,6 +521,11 @@
 
       // Set logged in
       sessionStorage.setItem(KEY_LOGGED_IN, 'true');
+
+      // Pastikan ke Beranda setelah login
+      if (location.hash && location.hash !== '#/') {
+        location.hash = '#/';
+      }
       
       // Remove overlay and boot PIN gate / main application
       overlay.remove();
