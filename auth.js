@@ -329,8 +329,8 @@
     const linkLogin = document.getElementById('link-to-login');
     if (linkLogin) {
       linkLogin.addEventListener('click', () => {
-        // Set flag activated agar init() lewat ke login screen
-        localStorage.setItem(KEY_ACTIVATED, 'true');
+        // Set flag bypass agar init() lewat ke login screen
+        localStorage.setItem('pkg_v1_skip_activation', 'true');
         location.reload();
       });
     }
@@ -1076,6 +1076,17 @@
 
   // --- INITIALIZATION ---
   async function init() {
+    // 0. Kalau sudah punya akun terdaftar tapi belum aktivasi di device ini → langsung ke login
+    const hasAccount = localStorage.getItem(KEY_USER_USERNAME);
+    const skipActivation = localStorage.getItem('pkg_v1_skip_activation') === 'true';
+    if (skipActivation || hasAccount) {
+      localStorage.removeItem('pkg_v1_skip_activation');
+      if (!isLoggedIn()) {
+        renderLoginScreen();
+        return new Promise(() => {});
+      }
+    }
+
     // 1. Cek Aktivasi
     if (!isActivated()) {
       renderActivationScreen();
