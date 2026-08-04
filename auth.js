@@ -276,7 +276,7 @@
           <label>Pilihan Peran (Role)</label>
           <select id="reg-role">
             <option value="kamad">Kepala Madrasah (Kamad) - Penilai</option>
-            <option value="admin">Admin Pokjawas (Pengawas) - Pemantau</option>
+            <option value="admin">Pengawas - Pemantau</option>
           </select>
         </div>
         
