@@ -318,11 +318,9 @@
           Satu Kode Aktivasi hanya berlaku untuk satu perangkat browser ini.
         </div>
 
-        ${(localStorage.getItem(KEY_USER_USERNAME) || localStorage.getItem(KEY_TRIAL_START)) ? `
         <div style="text-align:center; margin-top:1rem; font-size:.85rem;">
           <a id="link-to-login" style="color:#1f5d3a; cursor:pointer; text-decoration:none; font-weight:600;">Sudah Memiliki Akun? Login di sini</a>
         </div>
-        ` : ''}
       </div>
     `;
 
