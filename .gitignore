@@ -1,0 +1,10 @@
+node_modules/
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.log
+
+.gmp-indikator.txt
+
+.other-indikator.txt

@@ -1,0 +1,967 @@
+// db.js - localStorage data layer for PKG SPA
+// Schema mirrors the Express+SQLite version, but using arrays in localStorage.
+
+const KEYS = {
+  guru: 'pkg_v1_guru',
+  kamad: 'pkg_v1_kamad',
+  penilaian: 'pkg_v1_penilaian',
+  skor: 'pkg_v1_skor',
+  kehadiran: 'pkg_v1_kehadiran',
+  pkb: 'pkg_v1_pkb',
+  meta: 'pkg_v1_meta',
+  instrumen_overrides: 'pkg_v1_instrumen_overrides',
+  kompetensi_overrides: 'pkg_v1_kompetensi_overrides',
+  penggalian: 'pkg_v1_penggalian_data',
+  periode: 'pkg_v1_periode',
+  periode_active: 'pkg_v1_periode_active',
+  schema_version: 'pkg_v1_schema_version',
+};
+
+function load(key, def) {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : def;
+  } catch (e) {
+    console.error('localStorage load error:', key, e);
+    return def;
+  }
+}
+
+function save(key, val) {
+  try {
+    localStorage.setItem(key, JSON.stringify(val));
+    return true;
+  } catch (e) {
+    console.error('localStorage save error:', key, e);
+    if (e.name === 'QuotaExceededError') {
+      alert('Storage browser penuh. Lakukan Backup → Export, lalu hapus data lama.');
+    }
+    return false;
+  }
+}
+
+function nextId(table) {
+  const meta = load(KEYS.meta, {});
+  const cur = meta[`next_${table}`] || 1;
+  meta[`next_${table}`] = cur + 1;
+  save(KEYS.meta, meta);
+  return cur;
+}
+
+function nowLocal() {
+  const d = new Date();
+  const pad = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+
+// === PERIODE ============================================================
+// Periode = tahun kalender (2025, 2026, ...). Tiap penilaian/kehadiran/PKB di-tag
+// dengan field `periode` (number tahun). Migrasi otomatis tag data lama ke
+// tahun berjalan.
+
+const CURRENT_SCHEMA_VERSION = 2;
+
+function listPeriode() {
+  const arr = load(KEYS.periode, []);
+  return arr.slice().sort((a, b) => b.tahun - a.tahun);
+}
+
+function getActivePeriode() {
+  const all = load(KEYS.periode, []);
+  const id = load(KEYS.periode_active, null);
+  let p = id != null ? all.find(x => x.tahun === Number(id)) : null;
+  if (!p) p = all.find(x => x.aktif) || all[0] || null;
+  return p;
+}
+
+function setActivePeriode(tahun) {
+  tahun = Number(tahun);
+  const all = load(KEYS.periode, []);
+  if (!all.some(p => p.tahun === tahun)) throw new Error('Periode tidak ditemukan: ' + tahun);
+  for (const p of all) p.aktif = (p.tahun === tahun);
+  save(KEYS.periode, all);
+  save(KEYS.periode_active, tahun);
+  return getActivePeriode();
+}
+
+function addPeriode(tahun, opts) {
+  tahun = Number(tahun);
+  if (!tahun || tahun < 2000 || tahun > 2100) throw new Error('Tahun tidak valid');
+  const all = load(KEYS.periode, []);
+  if (all.some(p => p.tahun === tahun)) throw new Error('Periode ' + tahun + ' sudah ada');
+  const row = {
+    tahun,
+    label: (opts && opts.label) || `Tahun ${tahun}`,
+    catatan: (opts && opts.catatan) || '',
+    aktif: !all.length,  // jadi aktif kalau ini pertama
+    created_at: nowLocal(),
+  };
+  all.push(row);
+  save(KEYS.periode, all);
+  if (row.aktif) save(KEYS.periode_active, tahun);
+  return row;
+}
+
+function updatePeriode(tahun, fields) {
+  tahun = Number(tahun);
+  const all = load(KEYS.periode, []);
+  const idx = all.findIndex(p => p.tahun === tahun);
+  if (idx < 0) throw new Error('Periode tidak ditemukan');
+  const allowed = ['label', 'catatan'];
+  for (const k of allowed) if (fields[k] !== undefined) all[idx][k] = fields[k];
+  save(KEYS.periode, all);
+  return all[idx];
+}
+
+function deletePeriode(tahun) {
+  tahun = Number(tahun);
+  const all = load(KEYS.periode, []);
+  const target = all.find(p => p.tahun === tahun);
+  if (!target) throw new Error('Periode tidak ditemukan');
+  // Cek apakah ada data
+  const pen = load(KEYS.penilaian, []).filter(p => Number(p.periode) === tahun);
+  const keh = load(KEYS.kehadiran, []).filter(k => Number(k.periode) === tahun);
+  const pkb = load(KEYS.pkb, []).filter(p => Number(p.periode) === tahun);
+  if (pen.length || keh.length || pkb.length) {
+    throw new Error(`Periode ${tahun} masih punya data (${pen.length} penilaian, ${keh.length} kehadiran, ${pkb.length} PKB). Hapus data dulu sebelum hapus periode.`);
+  }
+  const filtered = all.filter(p => p.tahun !== tahun);
+  // Kalau yang dihapus aktif, pindahkan aktif ke periode terbaru
+  if (target.aktif && filtered.length) {
+    filtered.sort((a, b) => b.tahun - a.tahun);
+    filtered[0].aktif = true;
+    save(KEYS.periode_active, filtered[0].tahun);
+  } else if (!filtered.length) {
+    save(KEYS.periode_active, null);
+  }
+  save(KEYS.periode, filtered);
+}
+
+function countDataPerPeriode(tahun) {
+  tahun = Number(tahun);
+  return {
+    penilaian: load(KEYS.penilaian, []).filter(p => Number(p.periode) === tahun).length,
+    kehadiran: load(KEYS.kehadiran, []).filter(k => Number(k.periode) === tahun).length,
+    pkb: load(KEYS.pkb, []).filter(p => Number(p.periode) === tahun).length,
+  };
+}
+
+// Migrasi otomatis: kalau schema_version < CURRENT, jalankan migrasi.
+function runMigrations() {
+  const cur = Number(load(KEYS.schema_version, 1));
+  if (cur >= CURRENT_SCHEMA_VERSION) return;
+
+  // v1 -> v2: tambah field periode di semua data, tag dengan tahun berjalan.
+  const tahunIni = new Date().getFullYear();
+  let periodes = load(KEYS.periode, []);
+  if (!periodes.length) {
+    // Cek apakah ada data lama -> bikin periode default
+    const adaPenilaian = load(KEYS.penilaian, []).length > 0;
+    const adaKehadiran = load(KEYS.kehadiran, []).length > 0;
+    const adaPkb = load(KEYS.pkb, []).length > 0;
+    if (adaPenilaian || adaKehadiran || adaPkb) {
+      periodes = [{
+        tahun: tahunIni,
+        label: `Tahun ${tahunIni}`,
+        catatan: 'Otomatis dibuat saat migrasi data lama (sebelum fitur Periode).',
+        aktif: true,
+        created_at: nowLocal(),
+      }];
+    } else {
+      // Belum ada data sama sekali → buat periode default tetap, biar UI tidak kosong
+      periodes = [{
+        tahun: tahunIni,
+        label: `Tahun ${tahunIni}`,
+        catatan: 'Periode default.',
+        aktif: true,
+        created_at: nowLocal(),
+      }];
+    }
+    save(KEYS.periode, periodes);
+    save(KEYS.periode_active, tahunIni);
+  }
+
+  // Tag data lama tanpa periode → ke tahunIni
+  const pen = load(KEYS.penilaian, []);
+  let changedPen = false;
+  for (const p of pen) if (p.periode == null) { p.periode = tahunIni; changedPen = true; }
+  if (changedPen) save(KEYS.penilaian, pen);
+
+  const keh = load(KEYS.kehadiran, []);
+  let changedKeh = false;
+  for (const k of keh) if (k.periode == null) { k.periode = tahunIni; changedKeh = true; }
+  if (changedKeh) save(KEYS.kehadiran, keh);
+
+  const pkb = load(KEYS.pkb, []);
+  let changedPkb = false;
+  for (const p of pkb) if (p.periode == null) { p.periode = tahunIni; changedPkb = true; }
+  if (changedPkb) save(KEYS.pkb, pkb);
+
+  save(KEYS.schema_version, CURRENT_SCHEMA_VERSION);
+  console.info('[PKG] Migrasi v1→v2 selesai. Data lama di-tag ke periode', tahunIni);
+}
+
+// Jalankan migrasi sekali saat modul load
+try { runMigrations(); } catch (e) { console.error('Migrasi gagal:', e); }
+
+
+// === ROLES (derived from INSTRUMEN) =====================================
+const ROLES = (() => {
+  const seen = new Map();
+  for (const it of window.INSTRUMEN) {
+    if (!seen.has(it.role_code)) {
+      seen.set(it.role_code, {
+        role_code: it.role_code,
+        role_label: it.role_label,
+        max_score: it.max_score,
+      });
+    }
+  }
+  return Array.from(seen.values()).sort((a, b) => a.role_code.localeCompare(b.role_code));
+})();
+
+function getRoleMeta(code) {
+  return ROLES.find(r => r.role_code === code);
+}
+
+function getInstrumen(role) {
+  const overInd = load(KEYS.instrumen_overrides, {});
+  const overKomp = load(KEYS.kompetensi_overrides, {});
+  return window.INSTRUMEN
+    .filter(i => i.role_code === role)
+    .map((it) => {
+      const id = `${it.role_code}_${it.kompetensi_no}_${it.indikator_no}`;
+      const kompKey = `${it.role_code}_${it.kompetensi_no}`;
+      return {
+        ...it,
+        id,
+        indikator: overInd[id] != null ? overInd[id] : it.indikator,
+        kompetensi_nama: overKomp[kompKey] != null ? overKomp[kompKey] : it.kompetensi_nama,
+        _isOverridden: !!(overInd[id] || overKomp[kompKey]),
+        _origIndikator: it.indikator,
+        _origKompetensi: it.kompetensi_nama,
+      };
+    })
+    .sort((a, b) => a.kompetensi_no - b.kompetensi_no || a.indikator_no - b.indikator_no);
+}
+
+function setIndikatorOverride(id, newText) {
+  const all = load(KEYS.instrumen_overrides, {});
+  if (newText == null || newText === '') delete all[id];
+  else all[id] = newText;
+  save(KEYS.instrumen_overrides, all);
+}
+
+function setKompetensiOverride(roleCode, kompNo, newText) {
+  const all = load(KEYS.kompetensi_overrides, {});
+  const key = `${roleCode}_${kompNo}`;
+  if (newText == null || newText === '') delete all[key];
+  else all[key] = newText;
+  save(KEYS.kompetensi_overrides, all);
+}
+
+function resetAllOverrides() {
+  save(KEYS.instrumen_overrides, {});
+  save(KEYS.kompetensi_overrides, {});
+}
+
+function countOverrides() {
+  const a = Object.keys(load(KEYS.instrumen_overrides, {})).length;
+  const b = Object.keys(load(KEYS.kompetensi_overrides, {})).length;
+  return { indikator: a, kompetensi: b, total: a + b };
+}
+
+// Catatan Penggalian Data per indikator
+// Stored as { [indikator_id]: { metode: ['observasi','dokumen','wawancara'], sumber: string, catatan: string, updated_at: ISO } }
+function getPenggalian(id) {
+  const all = load(KEYS.penggalian, {});
+  return all[id] || null;
+}
+function setPenggalian(id, data) {
+  const all = load(KEYS.penggalian, {});
+  if (!data || (!data.catatan && !data.sumber && (!data.metode || data.metode.length === 0))) {
+    delete all[id];
+  } else {
+    all[id] = { ...data, updated_at: new Date().toISOString() };
+  }
+  save(KEYS.penggalian, all);
+}
+function listPenggalian() {
+  return load(KEYS.penggalian, {});
+}
+function countPenggalian() {
+  return Object.keys(load(KEYS.penggalian, {})).length;
+}
+
+// === GURU ===============================================================
+function listGuru(query) {
+  const all = load(KEYS.guru, []);
+  if (!query) return all.sort((a, b) => (a.nama || '').localeCompare(b.nama || ''));
+  const q = query.toLowerCase();
+  return all
+    .filter(g =>
+      (g.nama || '').toLowerCase().includes(q) ||
+      (g.nip || '').toLowerCase().includes(q) ||
+      (g.nama_madrasah || '').toLowerCase().includes(q)
+    )
+    .sort((a, b) => (a.nama || '').localeCompare(b.nama || ''));
+}
+
+function getGuru(id) {
+  const all = load(KEYS.guru, []);
+  return all.find(g => g.id === Number(id));
+}
+
+function findGuruByNIP(nip) {
+  if (!nip) return null;
+  const all = load(KEYS.guru, []);
+  return all.find(g => (g.nip || '').trim() === nip.trim()) || null;
+}
+
+function saveGuru(data, existingId) {
+  const all = load(KEYS.guru, []);
+  if (existingId) {
+    const idx = all.findIndex(g => g.id === Number(existingId));
+    if (idx === -1) throw new Error('Guru not found');
+    all[idx] = { ...all[idx], ...data, updated_at: nowLocal() };
+    save(KEYS.guru, all);
+    return all[idx];
+  }
+  const id = nextId('guru');
+  const row = {
+    id,
+    ...data,
+    created_at: nowLocal(),
+    updated_at: nowLocal(),
+  };
+  all.push(row);
+  save(KEYS.guru, all);
+  return row;
+}
+
+function deleteGuru(id) {
+  id = Number(id);
+  save(KEYS.guru, load(KEYS.guru, []).filter(g => g.id !== id));
+  // Cascade
+  const pen = load(KEYS.penilaian, []).filter(p => p.guru_id !== id);
+  save(KEYS.penilaian, pen);
+  const allPenIds = new Set(pen.map(p => p.id));
+  save(KEYS.skor, load(KEYS.skor, []).filter(s => allPenIds.has(s.penilaian_id)));
+  save(KEYS.kehadiran, load(KEYS.kehadiran, []).filter(k => k.guru_id !== id));
+  save(KEYS.pkb, load(KEYS.pkb, []).filter(p => p.guru_id !== id));
+}
+
+function deleteAllGuru() {
+  // Hapus semua guru + semua data turunannya (penilaian, skor, kehadiran, pkb).
+  // Data kamad TIDAK ikut terhapus.
+  save(KEYS.guru, []);
+  save(KEYS.penilaian, []);
+  save(KEYS.skor, []);
+  save(KEYS.kehadiran, []);
+  save(KEYS.pkb, []);
+}
+
+// === KAMAD (Kepala Madrasah) ===========================================
+function listKamad(query) {
+  const all = load(KEYS.kamad, []);
+  if (!query) return all.sort((a, b) => (a.nama_madrasah || '').localeCompare(b.nama_madrasah || ''));
+  const q = query.toLowerCase();
+  return all
+    .filter(k =>
+      (k.nama || '').toLowerCase().includes(q) ||
+      (k.nip || '').toLowerCase().includes(q) ||
+      (k.nama_madrasah || '').toLowerCase().includes(q)
+    )
+    .sort((a, b) => (a.nama_madrasah || '').localeCompare(b.nama_madrasah || ''));
+}
+
+function getKamad(id) {
+  return load(KEYS.kamad, []).find(k => k.id === Number(id));
+}
+
+function saveKamad(data, existingId) {
+  const all = load(KEYS.kamad, []);
+  if (existingId) {
+    const idx = all.findIndex(k => k.id === Number(existingId));
+    if (idx === -1) throw new Error('Kamad not found');
+    all[idx] = { ...all[idx], ...data, updated_at: nowLocal() };
+    save(KEYS.kamad, all);
+    return all[idx];
+  }
+  const id = nextId('kamad');
+  const row = { id, ...data, created_at: nowLocal(), updated_at: nowLocal() };
+  all.push(row);
+  save(KEYS.kamad, all);
+  return row;
+}
+
+function deleteKamad(id) {
+  id = Number(id);
+  save(KEYS.kamad, load(KEYS.kamad, []).filter(k => k.id !== id));
+}
+
+// Auto-import kamad dari data guru (kalau ada nama_kamad/nip_kamad/nama_madrasah)
+function syncKamadFromGuru() {
+  const gurus = load(KEYS.guru, []);
+  const existing = load(KEYS.kamad, []);
+  const seenByMadrasah = new Map(existing.map(k => [(k.nama_madrasah || '').toLowerCase(), k]));
+  let added = 0;
+  for (const g of gurus) {
+    const mad = (g.nama_madrasah || '').trim();
+    if (!mad || !g.nama_kamad) continue;
+    const key = mad.toLowerCase();
+    if (seenByMadrasah.has(key)) continue;
+    const row = {
+      id: nextId('kamad'),
+      nama: g.nama_kamad,
+      nip: g.nip_kamad || '',
+      nama_madrasah: mad,
+      alamat_madrasah: g.alamat_madrasah || '',
+      jenjang: '',
+      no_hp: '',
+      email: '',
+      catatan: '',
+      created_at: nowLocal(),
+      updated_at: nowLocal(),
+    };
+    existing.push(row);
+    seenByMadrasah.set(key, row);
+    added++;
+  }
+  save(KEYS.kamad, existing);
+  return added;
+}
+
+// === PENILAIAN ==========================================================
+function listPenilaianByGuru(guruId, periode) {
+  guruId = Number(guruId);
+  const all = load(KEYS.penilaian, []).filter(p => p.guru_id === guruId);
+  if (periode == null) return all;
+  return all.filter(p => Number(p.periode) === Number(periode));
+}
+
+function deletePenilaian(penId) {
+  penId = Number(penId);
+  save(KEYS.penilaian, load(KEYS.penilaian, []).filter(p => p.id !== penId));
+  // Cascade hapus skor terkait
+  save(KEYS.skor, load(KEYS.skor, []).filter(s => s.penilaian_id !== penId));
+}
+
+function deletePenilaianMany(ids) {
+  const idSet = new Set(ids.map(Number));
+  save(KEYS.penilaian, load(KEYS.penilaian, []).filter(p => !idSet.has(p.id)));
+  save(KEYS.skor, load(KEYS.skor, []).filter(s => !idSet.has(s.penilaian_id)));
+}
+
+function getOrCreatePenilaian(guruId, role, jenis, periode) {
+  guruId = Number(guruId);
+  if (periode == null) {
+    const ap = getActivePeriode();
+    periode = ap ? ap.tahun : new Date().getFullYear();
+  }
+  periode = Number(periode);
+  const all = load(KEYS.penilaian, []);
+  let p = all.find(x =>
+    x.guru_id === guruId &&
+    x.role_code === role &&
+    x.jenis === jenis &&
+    Number(x.periode) === periode
+  );
+  if (p) return p;
+  p = {
+    id: nextId('penilaian'),
+    guru_id: guruId,
+    role_code: role,
+    jenis,
+    periode,
+    tanggal: null,
+    catatan: null,
+    created_at: nowLocal(),
+    updated_at: nowLocal(),
+  };
+  all.push(p);
+  save(KEYS.penilaian, all);
+  return p;
+}
+
+function updatePenilaianMeta(penId, fields) {
+  const all = load(KEYS.penilaian, []);
+  const idx = all.findIndex(p => p.id === penId);
+  if (idx >= 0) {
+    all[idx] = { ...all[idx], ...fields, updated_at: nowLocal() };
+    save(KEYS.penilaian, all);
+  }
+}
+
+// === SKOR ===============================================================
+function getSkorMap(penId) {
+  const rows = load(KEYS.skor, []).filter(s => s.penilaian_id === penId);
+  const m = {};
+  for (const r of rows) m[r.instrumen_id] = r.skor;
+  return m;
+}
+
+function setSkor(penId, instrumenId, skor) {
+  const all = load(KEYS.skor, []);
+  const idx = all.findIndex(s => s.penilaian_id === penId && s.instrumen_id === instrumenId);
+  if (skor === null || skor === undefined || skor === '') {
+    if (idx >= 0) {
+      all.splice(idx, 1);
+      save(KEYS.skor, all);
+    }
+    return;
+  }
+  if (idx >= 0) all[idx].skor = Number(skor);
+  else all.push({ penilaian_id: penId, instrumen_id: instrumenId, skor: Number(skor) });
+  save(KEYS.skor, all);
+}
+
+function countSkor(penId) {
+  return load(KEYS.skor, []).filter(s => s.penilaian_id === penId).length;
+}
+
+// === HITUNG NILAI =======================================================
+function hitungNilai(penId, role) {
+  const meta = getRoleMeta(role);
+  if (!meta) return { nilaiAkhir: 0, sebutan: '-', kompPct: [] };
+  const max = meta.max_score;
+  const instrumen = getInstrumen(role);
+  const skorMap = getSkorMap(penId);
+  const byKomp = new Map();
+  for (const it of instrumen) {
+    if (!byKomp.has(it.kompetensi_no)) byKomp.set(it.kompetensi_no, { sum: 0, count: 0, nama: it.kompetensi_nama });
+    const o = byKomp.get(it.kompetensi_no);
+    o.sum += Number(skorMap[it.id]) || 0;
+    o.count += 1;
+  }
+  const kompPct = [];
+  for (const [no, o] of byKomp) {
+    const maks = o.count * max;
+    const pct = maks ? (o.sum / maks) * 100 : 0;
+    kompPct.push({ no, nama: o.nama, pct, sum: o.sum, maks });
+  }
+  kompPct.sort((a, b) => a.no - b.no);
+  const nilaiAkhir = kompPct.length ? kompPct.reduce((a, b) => a + b.pct, 0) / kompPct.length : 0;
+  let sebutan = 'Kurang';
+  if (nilaiAkhir > 90) sebutan = 'Amat Baik';
+  else if (nilaiAkhir > 75) sebutan = 'Baik';
+  else if (nilaiAkhir > 60) sebutan = 'Cukup';
+  else if (nilaiAkhir > 50) sebutan = 'Sedang';
+  return { nilaiAkhir: Math.round(nilaiAkhir * 100) / 100, sebutan, kompPct };
+}
+
+// === KEHADIRAN ==========================================================
+function listKehadiran(guruId, periode) {
+  guruId = Number(guruId);
+  let arr = load(KEYS.kehadiran, []).filter(k => k.guru_id === guruId);
+  if (periode != null) arr = arr.filter(k => Number(k.periode) === Number(periode));
+  return arr.sort((a, b) => a.tahun - b.tahun || a.bulan - b.bulan);
+}
+
+function upsertKehadiran(guruId, data, periode) {
+  guruId = Number(guruId);
+  if (periode == null) {
+    const ap = getActivePeriode();
+    periode = ap ? ap.tahun : new Date().getFullYear();
+  }
+  periode = Number(periode);
+  const all = load(KEYS.kehadiran, []);
+  const idx = all.findIndex(k =>
+    k.guru_id === guruId &&
+    k.bulan === Number(data.bulan) &&
+    k.tahun === Number(data.tahun) &&
+    Number(k.periode) === periode
+  );
+  const row = {
+    id: idx >= 0 ? all[idx].id : nextId('kehadiran'),
+    guru_id: guruId,
+    periode,
+    bulan: Number(data.bulan),
+    tahun: Number(data.tahun),
+    hadir: Number(data.hadir) || 0,
+    sakit: Number(data.sakit) || 0,
+    izin: Number(data.izin) || 0,
+    alpa: Number(data.alpa) || 0,
+    cuti: Number(data.cuti) || 0,
+    dinas: Number(data.dinas) || 0,
+    hari_efektif: Number(data.hari_efektif) || 0,
+  };
+  if (idx >= 0) all[idx] = row;
+  else all.push(row);
+  save(KEYS.kehadiran, all);
+}
+
+function deleteKehadiran(id) {
+  save(KEYS.kehadiran, load(KEYS.kehadiran, []).filter(k => k.id !== Number(id)));
+}
+
+// === PKB ================================================================
+function listPKB(guruId, periode) {
+  guruId = Number(guruId);
+  let arr = load(KEYS.pkb, []).filter(p => p.guru_id === guruId);
+  if (periode != null) arr = arr.filter(p => Number(p.periode) === Number(periode));
+  return arr.sort((a, b) => a.prioritas - b.prioritas);
+}
+
+function replacePKB(guruId, items, periode) {
+  guruId = Number(guruId);
+  if (periode == null) {
+    const ap = getActivePeriode();
+    periode = ap ? ap.tahun : new Date().getFullYear();
+  }
+  periode = Number(periode);
+  // Replace hanya untuk periode tersebut
+  const all = load(KEYS.pkb, []).filter(p => !(p.guru_id === guruId && Number(p.periode) === periode));
+  for (const it of items) {
+    if (it.kompetensi || it.rencana || it.target) {
+      all.push({
+        id: nextId('pkb'),
+        guru_id: guruId,
+        periode,
+        prioritas: Number(it.prioritas),
+        kompetensi: it.kompetensi || null,
+        rencana: it.rencana || null,
+        target: it.target || null,
+      });
+    }
+  }
+  save(KEYS.pkb, all);
+}
+
+// === STATS ==============================================================
+function getStats() {
+  const guru = load(KEYS.guru, []).length;
+  const kamad = load(KEYS.kamad, []).length;
+  const penilaian = load(KEYS.penilaian, []).length;
+  const skor = load(KEYS.skor, []);
+  const penIds = new Set(skor.map(s => s.penilaian_id));
+  return {
+    guru,
+    kamad,
+    penilaian,
+    selesai: penIds.size,
+    indikator: window.INSTRUMEN.length,
+  };
+}
+
+function getRecentGuru(limit) {
+  return load(KEYS.guru, [])
+    .sort((a, b) => (b.updated_at || '').localeCompare(a.updated_at || ''))
+    .slice(0, limit || 8);
+}
+
+// === BACKUP / RESTORE ===================================================
+function exportAll() {
+  const authInfo = window.PKGAuth ? window.PKGAuth.getUserInfo() : null;
+  const senderMadrasah = authInfo ? (authInfo.madrasah || '').trim() : '';
+  // Auto-tag: setiap guru yang belum punya nama_madrasah → diisi dari info pengirim
+  const guruRaw = load(KEYS.guru, []);
+  if (senderMadrasah) {
+    for (const g of guruRaw) {
+      if (!g.nama_madrasah || !String(g.nama_madrasah).trim()) g.nama_madrasah = senderMadrasah;
+    }
+  }
+  return {
+    schema: 'pkg_v1',
+    schema_version: load(KEYS.schema_version, 1),
+    exported_at: new Date().toISOString(),
+    sender: authInfo ? {
+      fullname: authInfo.fullname,
+      role: authInfo.role,
+      madrasah: authInfo.madrasah,
+      deviceId: authInfo.deviceId,
+      activationCode: localStorage.getItem('pkg_v1_activation_code') || ''
+    } : null,
+    data: {
+      guru: guruRaw,
+      kamad: load(KEYS.kamad, []),
+      penilaian: load(KEYS.penilaian, []),
+      skor: load(KEYS.skor, []),
+      kehadiran: load(KEYS.kehadiran, []),
+      pkb: load(KEYS.pkb, []),
+      meta: load(KEYS.meta, {}),
+      instrumen_overrides: load(KEYS.instrumen_overrides, {}),
+      kompetensi_overrides: load(KEYS.kompetensi_overrides, {}),
+      penggalian: load(KEYS.penggalian, {}),
+      periode: load(KEYS.periode, []),
+      periode_active: load(KEYS.periode_active, null),
+    },
+  };
+}
+
+function importAll(json, mode) {
+  // mode: 'replace' | 'merge'
+  if (!json || json.schema !== 'pkg_v1' || !json.data) {
+    throw new Error('Format backup tidak valid (schema bukan pkg_v1)');
+  }
+  const d = json.data;
+  if (mode === 'merge') {
+    // Merge: append, dedup by NIP for guru
+    const existGuru = load(KEYS.guru, []);
+    const byNip = new Map(existGuru.filter(g => g.nip).map(g => [g.nip, g]));
+    const idMap = new Map(); // old id -> new id
+    for (const g of (d.guru || [])) {
+      if (g.nip && byNip.has(g.nip)) {
+        idMap.set(g.id, byNip.get(g.nip).id);
+        // keep existing, skip
+      } else {
+        const newId = nextId('guru');
+        idMap.set(g.id, newId);
+        existGuru.push({ ...g, id: newId });
+      }
+    }
+    save(KEYS.guru, existGuru);
+    // Re-map penilaian
+    const penAll = load(KEYS.penilaian, []);
+    for (const p of (d.penilaian || [])) {
+      const newGuruId = idMap.get(p.guru_id);
+      if (!newGuruId) continue;
+      const exists = penAll.find(x => x.guru_id === newGuruId && x.role_code === p.role_code && x.jenis === p.jenis);
+      if (exists) {
+        // overwrite
+        exists.tanggal = p.tanggal;
+        exists.catatan = p.catatan;
+      } else {
+        penAll.push({ ...p, guru_id: newGuruId, id: nextId('penilaian') });
+      }
+    }
+    save(KEYS.penilaian, penAll);
+    // Skor: skip merge mode (complex re-map). Simpler: replace mode recommended.
+    return { mode: 'merge', merged: d.guru?.length || 0 };
+  }
+  // Replace
+  save(KEYS.guru, d.guru || []);
+  save(KEYS.kamad, d.kamad || []);
+  save(KEYS.penilaian, d.penilaian || []);
+  save(KEYS.skor, d.skor || []);
+  save(KEYS.kehadiran, d.kehadiran || []);
+  save(KEYS.pkb, d.pkb || []);
+  save(KEYS.meta, d.meta || {});
+  save(KEYS.instrumen_overrides, d.instrumen_overrides || {});
+  save(KEYS.kompetensi_overrides, d.kompetensi_overrides || {});
+  save(KEYS.penggalian, d.penggalian || {});
+  if (d.periode) save(KEYS.periode, d.periode);
+  if (d.periode_active != null) save(KEYS.periode_active, d.periode_active);
+  // Migrasi data backup yang belum punya field periode
+  try { runMigrations(); } catch (e) { console.error('Post-import migration failed:', e); }
+  return { mode: 'replace', count: (d.guru || []).length };
+}
+
+function clearAll() {
+  for (const k of Object.values(KEYS)) localStorage.removeItem(k);
+}
+
+// === MERGE MULTIPLE BACKUPS (for KKM/Kabupaten aggregation) ============
+// Takes array of backup JSONs, merges into current data with full id remap.
+// Dedup by NIP for guru/kamad. All children (penilaian, skor, kehadiran, pkb)
+// get new ids and pointers updated. Returns stats.
+function mergeBackups(backups, opts) {
+  opts = opts || {};
+  const tagSource = opts.tagSource !== false; // tag asal madrasah/kkm di catatan?
+  let stats = { files: 0, guru_added: 0, guru_dedup: 0, penilaian_added: 0, skor_added: 0, kehadiran_added: 0, pkb_added: 0, kamad_added: 0, errors: [] };
+
+  let curGuru = load(KEYS.guru, []);
+  let curKamad = load(KEYS.kamad, []);
+  let curPen = load(KEYS.penilaian, []);
+  let curSkor = load(KEYS.skor, []);
+  let curKehadiran = load(KEYS.kehadiran, []);
+  let curPkb = load(KEYS.pkb, []);
+  let curPenggalian = load(KEYS.penggalian, {});
+
+  for (const bk of backups) {
+    if (!bk || bk.schema !== 'pkg_v1' || !bk.data) {
+      stats.errors.push('File bukan format pkg_v1, dilewati');
+      continue;
+    }
+    stats.files++;
+    const d = bk.data;
+    const sourceLabel = bk._source_label || ''; // injected by caller
+    // Auto-tag: isi nama_madrasah dari info sender backup kalau kosong
+    const senderMadrasah = (bk.sender && bk.sender.madrasah) ? bk.sender.madrasah.trim() : '';
+    if (senderMadrasah) {
+      for (const g of (d.guru || [])) {
+        if (!g.nama_madrasah || !String(g.nama_madrasah).trim()) g.nama_madrasah = senderMadrasah;
+      }
+    }
+
+    // GURU: dedup by NIP, fallback by (nama+nama_madrasah) when NIP empty
+    const guruIdMap = new Map();
+    const byNip = new Map(curGuru.filter(g => g.nip).map(g => [String(g.nip).trim(), g]));
+    const byKey = new Map(curGuru.filter(g => !g.nip).map(g => [(g.nama || '').toLowerCase().trim() + '|' + (g.nama_madrasah || '').toLowerCase().trim(), g]));
+    for (const g of (d.guru || [])) {
+      const nip = g.nip ? String(g.nip).trim() : '';
+      const altKey = (g.nama || '').toLowerCase().trim() + '|' + (g.nama_madrasah || '').toLowerCase().trim();
+      let exist = nip ? byNip.get(nip) : byKey.get(altKey);
+      if (exist) {
+        guruIdMap.set(g.id, exist.id);
+        // Update field yang masih kosong di existing dari incoming
+        for (const k of ['kkm', 'kabupaten', 'nama_madrasah', 'alamat_madrasah']) {
+          if (!exist[k] && g[k]) exist[k] = g[k];
+        }
+        stats.guru_dedup++;
+      } else {
+        const newId = nextId('guru');
+        guruIdMap.set(g.id, newId);
+        const newG = { ...g, id: newId };
+        if (sourceLabel && !newG._source) newG._source = sourceLabel;
+        curGuru.push(newG);
+        if (nip) byNip.set(nip, newG);
+        else byKey.set(altKey, newG);
+        stats.guru_added++;
+      }
+    }
+    save(KEYS.guru, curGuru);
+
+    // KAMAD: dedup by (nama_madrasah)
+    const kamadByMad = new Map(curKamad.map(k => [(k.nama_madrasah || '').toLowerCase().trim(), k]));
+    for (const k of (d.kamad || [])) {
+      const key = (k.nama_madrasah || '').toLowerCase().trim();
+      if (!key) continue;
+      if (!kamadByMad.has(key)) {
+        const newK = { ...k, id: nextId('kamad') };
+        if (sourceLabel) newK._source = sourceLabel;
+        curKamad.push(newK);
+        kamadByMad.set(key, newK);
+        stats.kamad_added++;
+      }
+    }
+    save(KEYS.kamad, curKamad);
+
+    // PENILAIAN: dedup by (guru_id_new, role_code, jenis, tanggal). Add or skip.
+    const penIdMap = new Map();
+    const penKey = (p) => `${p.guru_id}|${p.role_code}|${p.jenis}|${p.tanggal || ''}`;
+    const existingPenKeys = new Set(curPen.map(penKey));
+    for (const p of (d.penilaian || [])) {
+      const newGuruId = guruIdMap.get(p.guru_id);
+      if (!newGuruId) continue;
+      const candidate = { ...p, guru_id: newGuruId };
+      if (existingPenKeys.has(penKey(candidate))) {
+        // pakai existing id (skip add, tapi map old id ke existing yang match)
+        const exist = curPen.find(x => penKey(x) === penKey(candidate));
+        if (exist) penIdMap.set(p.id, exist.id);
+        continue;
+      }
+      const newId = nextId('penilaian');
+      penIdMap.set(p.id, newId);
+      candidate.id = newId;
+      if (sourceLabel) candidate._source = sourceLabel;
+      curPen.push(candidate);
+      existingPenKeys.add(penKey(candidate));
+      stats.penilaian_added++;
+    }
+    save(KEYS.penilaian, curPen);
+
+    // SKOR: remap by penIdMap
+    const skorExist = new Set(curSkor.map(s => `${s.penilaian_id}|${s.indikator_id}`));
+    for (const s of (d.skor || [])) {
+      const newPenId = penIdMap.get(s.penilaian_id);
+      if (!newPenId) continue;
+      const k = `${newPenId}|${s.indikator_id}`;
+      if (skorExist.has(k)) continue;
+      curSkor.push({ ...s, id: nextId('skor'), penilaian_id: newPenId });
+      skorExist.add(k);
+      stats.skor_added++;
+    }
+    save(KEYS.skor, curSkor);
+
+    // KEHADIRAN: dedup by (guru_id_new, bulan, tahun)
+    const khKey = (x) => `${x.guru_id}|${x.bulan}|${x.tahun}`;
+    const khExist = new Set(curKehadiran.map(khKey));
+    for (const k of (d.kehadiran || [])) {
+      const newGuruId = guruIdMap.get(k.guru_id);
+      if (!newGuruId) continue;
+      const cand = { ...k, guru_id: newGuruId };
+      if (khExist.has(khKey(cand))) continue;
+      cand.id = nextId('kehadiran');
+      curKehadiran.push(cand);
+      khExist.add(khKey(cand));
+      stats.kehadiran_added++;
+    }
+    save(KEYS.kehadiran, curKehadiran);
+
+    // PKB: replace per guru bila incoming punya entries lebih banyak
+    const pkbByGuru = new Map();
+    for (const p of curPkb) {
+      if (!pkbByGuru.has(p.guru_id)) pkbByGuru.set(p.guru_id, []);
+      pkbByGuru.get(p.guru_id).push(p);
+    }
+    const incomingPkbByGuru = new Map();
+    for (const p of (d.pkb || [])) {
+      const newGuruId = guruIdMap.get(p.guru_id);
+      if (!newGuruId) continue;
+      if (!incomingPkbByGuru.has(newGuruId)) incomingPkbByGuru.set(newGuruId, []);
+      incomingPkbByGuru.get(newGuruId).push({ ...p, guru_id: newGuruId });
+    }
+    for (const [guruId, items] of incomingPkbByGuru) {
+      const cur = pkbByGuru.get(guruId) || [];
+      if (items.length > cur.length) {
+        // hapus pkb existing untuk guru ini, ganti dengan incoming
+        curPkb = curPkb.filter(p => p.guru_id !== guruId);
+        for (const it of items) {
+          curPkb.push({ ...it, id: nextId('pkb') });
+          stats.pkb_added++;
+        }
+      }
+    }
+    save(KEYS.pkb, curPkb);
+
+    // PENGGALIAN: merge object (key by indikator_id), incoming wins kalau lebih lengkap
+    if (d.penggalian && typeof d.penggalian === 'object') {
+      for (const [k, v] of Object.entries(d.penggalian)) {
+        if (!curPenggalian[k] || (v && v.catatan && (!curPenggalian[k].catatan || curPenggalian[k].catatan.length < v.catatan.length))) {
+          curPenggalian[k] = v;
+        }
+      }
+      save(KEYS.penggalian, curPenggalian);
+    }
+  }
+  return stats;
+}
+
+// === REKAP ==============================================================
+// Filter rekap berdasarkan periode aktif (default) atau periode tertentu.
+// Pass periode = null untuk no-filter (semua periode).
+function getRekap(periode) {
+  if (periode === undefined) {
+    const ap = getActivePeriode();
+    periode = ap ? ap.tahun : null;
+  }
+  const gurus = load(KEYS.guru, []).sort((a, b) => (a.nama || '').localeCompare(b.nama || ''));
+  let allPen = load(KEYS.penilaian, []);
+  if (periode != null) allPen = allPen.filter(p => Number(p.periode) === Number(periode));
+  return gurus.map(g => {
+    const pen = allPen.filter(p => p.guru_id === g.id);
+    const peran = pen.map(p => {
+      const n = hitungNilai(p.id, p.role_code);
+      const meta = getRoleMeta(p.role_code) || {};
+      return {
+        ...p,
+        role_label: meta.role_label,
+        nilai: n.nilaiAkhir,
+        sebutan: n.sebutan,
+      };
+    });
+    return { ...g, peran };
+  });
+}
+
+// Expose
+window.PKGDB = {
+  KEYS, ROLES,
+  getRoleMeta, getInstrumen,
+  setIndikatorOverride, setKompetensiOverride, resetAllOverrides, countOverrides,
+  getPenggalian, setPenggalian, listPenggalian, countPenggalian,
+  listGuru, getGuru, findGuruByNIP, saveGuru, deleteGuru, deleteAllGuru,
+  listKamad, getKamad, saveKamad, deleteKamad, syncKamadFromGuru,
+  listPenilaianByGuru, getOrCreatePenilaian, updatePenilaianMeta, deletePenilaian, deletePenilaianMany,
+  getSkorMap, setSkor, countSkor,
+  hitungNilai,
+  listKehadiran, upsertKehadiran, deleteKehadiran,
+  listPKB, replacePKB,
+  getStats, getRecentGuru,
+  // Periode
+  listPeriode, getActivePeriode, setActivePeriode,
+  addPeriode, updatePeriode, deletePeriode, countDataPerPeriode,
+  exportAll, importAll, mergeBackups, clearAll,
+  getRekap,
+};
