@@ -10,10 +10,10 @@
   'use strict';
 
   // === KONFIGURASI ===
-  // Project Yanto: erhk-2026 (region ap-southeast-1, Singapore).
+  // Project: pkg-pokjawas (region ap-southeast-1, Singapore).
   // Publishable key boleh di-deploy ke browser (RLS yang melindungi).
-  var SUPABASE_URL = 'https://setskebswnhfokfsorfj.supabase.co';
-  var SUPABASE_ANON_KEY = 'sb_publishable_bVcuJGs0k97BC18BkkgeYA_IOgDT16h';
+  var SUPABASE_URL = 'https://veezuitkavznfipyyxln.supabase.co';
+  var SUPABASE_ANON_KEY = 'sb_publishable_71VsVcheY13eLPXoUteZkg_hUtaJh8S';
   var TABLE = 'pkg_aktivasi_log';
 
   function isConfigured() {
