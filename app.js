@@ -4551,7 +4551,7 @@ function viewKelolaAktivasi(view) {
     resDiv.classList.remove('d-none');
     bulkDiv.classList.add('d-none');
     noteInput.value = '';
-    viewKelolaAktivasi(view);
+    refreshCodesTable();
   });
 
   if (btnBulk) btnBulk.addEventListener('click', () => {
@@ -4570,7 +4570,7 @@ function viewKelolaAktivasi(view) {
     bulkDiv.classList.remove('d-none');
     resDiv.classList.add('d-none');
     noteInput.value = '';
-    viewKelolaAktivasi(view);
+    refreshCodesTable();
   });
 
   if (btnCopy) btnCopy.addEventListener('click', () => {
@@ -4580,19 +4580,46 @@ function viewKelolaAktivasi(view) {
     navigator.clipboard.writeText(lastBulkCodes.join('\n')).then(() => alert('10 kode disalin ke clipboard.'));
   });
 
-  document.querySelectorAll('.btn-copy-row').forEach(b => {
-    b.addEventListener('click', () => navigator.clipboard.writeText(b.dataset.code).then(() => alert('Kode disalin: ' + b.dataset.code)));
-  });
-  document.querySelectorAll('.btn-del-row').forEach(b => {
-    b.addEventListener('click', () => {
-      if (!confirm('Hapus riwayat kode ini? (Kode offline yang sudah disalin tetap valid)')) return;
-      const idx = parseInt(b.dataset.idx);
-      generated.splice(idx, 1);
-      localStorage.setItem('pkg_v1_generated_codes', JSON.stringify(generated));
-      if (window.GithubSync && window.GithubSync.pushIfConfigured) window.GithubSync.pushIfConfigured(generated, 'delete code');
-      viewKelolaAktivasi(view);
+  function refreshCodesTable() {
+    var tbody = document.getElementById('tbl-codes-body');
+    if (!tbody) return;
+    if (generated.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted py-3">Belum ada kode yang di-generate.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = generated.map(function(c, idx) {
+      return '<tr>' +
+        '<td class="small align-middle">' + (c.time || '-') + '</td>' +
+        '<td class="small align-middle">' + (c.note || '-') + '</td>' +
+        '<td class="font-monospace align-middle text-success fw-bold">' + c.code + '</td>' +
+        '<td class="text-center align-middle">' +
+          '<button class="btn btn-xs btn-outline-primary btn-copy-row" data-code="' + c.code + '"><i class="bi bi-clipboard"></i></button> ' +
+          '<button class="btn btn-xs btn-outline-danger btn-del-row" data-idx="' + idx + '"><i class="bi bi-trash"></i></button>' +
+        '</td>' +
+      '</tr>';
+    }).join('');
+    bindRowButtons();
+  }
+
+  function bindRowButtons() {
+    document.querySelectorAll('.btn-copy-row').forEach(function(b) {
+      b.addEventListener('click', function() {
+        navigator.clipboard.writeText(b.dataset.code).then(function() { alert('Kode disalin: ' + b.dataset.code); });
+      });
     });
-  });
+    document.querySelectorAll('.btn-del-row').forEach(function(b) {
+      b.addEventListener('click', function() {
+        if (!confirm('Hapus riwayat kode ini? (Kode offline yang sudah disalin tetap valid)')) return;
+        var idx = parseInt(b.dataset.idx);
+        generated.splice(idx, 1);
+        localStorage.setItem('pkg_v1_generated_codes', JSON.stringify(generated));
+        if (window.GithubSync && window.GithubSync.pushIfConfigured) window.GithubSync.pushIfConfigured(generated, 'delete code');
+        refreshCodesTable();
+      });
+    });
+  }
+
+  bindRowButtons();
 
   // --- Tab switching ---
   document.querySelectorAll('#aktTab button[data-tab]').forEach(btn => {
