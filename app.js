@@ -4415,60 +4415,59 @@ function viewKelolaAktivasi(view) {
         </ul>
 
         <div id="tab-generate" class="${activeTab === 'generate' ? 'd-block' : 'd-none'}">
-          <div class="row g-3">
-            <div class="col-md-5">
-              <div class="border rounded p-3 bg-light">
-                <h5 class="card-title text-success"><i class="bi bi-plus-circle"></i> Buat Kode Baru</h5>
-                <p class="small text-muted mb-3">Satu Kode Aktivasi hanya bisa digunakan oleh 1 User (1 Device) secara offline. Untuk lintas device, sinkronkan ke gh-pages.</p>
-                <div class="mb-3">
-                  <label class="form-label small fw-bold">Catatan / Penerima</label>
-                  <input type="text" id="act-note" class="form-control form-control-sm" placeholder="Contoh: Kamad MTsN 1 Jember" autocomplete="off">
-                </div>
-                <div class="d-flex gap-2">
-                  <button id="btn-gen-code" class="btn btn-sm btn-success flex-grow-1"><i class="bi bi-magic"></i> Generate 1 Kode</button>
-                  <button id="btn-gen-bulk" class="btn btn-sm btn-primary flex-grow-1"><i class="bi bi-magic"></i> Generate 10 Kode</button>
-                </div>
-                <div id="gen-result" class="mt-3 p-3 bg-white border border-success rounded text-center d-none">
-                  <span class="small text-muted">KODE BARU:</span>
-                  <div class="h5 text-success my-2 font-monospace fw-bold" id="gen-code-text"></div>
-                  <button id="btn-copy-code" class="btn btn-xs btn-outline-success"><i class="bi bi-clipboard"></i> Salin Kode</button>
-                </div>
-                <div id="gen-bulk-result" class="mt-3 p-3 bg-white border border-primary rounded d-none">
-                  <span class="small text-muted">10 KODE BARU DIBUAT:</span>
-                  <div id="gen-bulk-list" class="my-2 text-start font-monospace small"></div>
-                  <button id="btn-copy-bulk" class="btn btn-xs btn-outline-primary w-100"><i class="bi bi-clipboard"></i> Salin Semua Kode</button>
-                </div>
+          <div class="border rounded p-3 bg-light mb-3">
+            <h5 class="card-title text-success"><i class="bi bi-plus-circle"></i> Buat Kode Baru</h5>
+            <p class="small text-muted mb-3">Satu Kode Aktivasi hanya bisa digunakan oleh 1 User (1 Device) secara offline. Untuk lintas device, sinkronkan ke gh-pages.</p>
+            <div class="row g-2 mb-3">
+              <div class="col-md-8">
+                <label class="form-label small fw-bold">Catatan / Penerima</label>
+                <input type="text" id="act-note" class="form-control form-control-sm" placeholder="Contoh: Kamad MTsN 1 Jember" autocomplete="off">
+              </div>
+              <div class="col-md-4 d-flex align-items-end gap-2">
+                <button id="btn-gen-code" class="btn btn-sm btn-success flex-grow-1"><i class="bi bi-magic"></i> Generate 1</button>
+                <button id="btn-gen-bulk" class="btn btn-sm btn-primary flex-grow-1"><i class="bi bi-magic"></i> Generate 10</button>
               </div>
             </div>
-            <div class="col-md-7">
-              <h5 class="card-title"><i class="bi bi-list-ul"></i> Riwayat Pembuatan Kode</h5>
-              <div class="table-responsive" style="max-height: 350px;">
-                <table class="table table-sm table-hover table-bordered mb-0">
-                  <thead class="table-light">
-                    <tr>
-                      <th>Waktu</th>
-                      <th>Catatan / Penerima</th>
-                      <th>Kode Aktivasi</th>
-                      <th style="width: 80px;" class="text-center">Aksi</th>
-                    </tr>
-                  </thead>
-                  <tbody id="tbl-codes-body">
-                    ${generated.length === 0 ? `<tr><td colspan="4" class="text-center text-muted py-3">Belum ada kode yang di-generate.</td></tr>` : ''}
-                    ${generated.map((c, idx) => `
-                      <tr>
-                        <td class="small align-middle">${c.time}</td>
-                        <td class="small align-middle">${e(c.note || '-')}</td>
-                        <td class="font-monospace align-middle text-success fw-bold">${c.code}</td>
-                        <td class="text-center align-middle">
-                          <button class="btn btn-xs btn-outline-primary btn-copy-row" data-code="${c.code}"><i class="bi bi-clipboard"></i></button>
-                          <button class="btn btn-xs btn-outline-danger btn-del-row" data-idx="${idx}"><i class="bi bi-trash"></i></button>
-                        </td>
-                      </tr>
-                    `).join('')}
-                  </tbody>
-                </table>
-              </div>
+            <div id="gen-result" class="mt-3 p-3 bg-white border border-success rounded text-center d-none">
+              <span class="small text-muted">KODE BARU:</span>
+              <div class="h5 text-success my-2 font-monospace fw-bold" id="gen-code-text"></div>
+              <button id="btn-copy-code" class="btn btn-xs btn-outline-success"><i class="bi bi-clipboard"></i> Salin Kode</button>
             </div>
+            <div id="gen-bulk-result" class="mt-3 p-3 bg-white border border-primary rounded d-none">
+              <span class="small text-muted">10 KODE BARU DIBUAT:</span>
+              <div id="gen-bulk-list" class="my-2 text-start font-monospace small"></div>
+              <button id="btn-copy-bulk" class="btn btn-xs btn-outline-primary w-100"><i class="bi bi-clipboard"></i> Salin Semua Kode</button>
+            </div>
+          </div>
+
+          <h5 class="card-title"><i class="bi bi-list-ul"></i> Riwayat Pembuatan Kode</h5>
+          <div class="table-responsive" style="max-height: 400px;">
+            <table class="table table-sm table-hover table-bordered mb-0">
+              <thead class="table-light">
+                <tr>
+                  <th>Waktu</th>
+                  <th>Catatan / Penerima</th>
+                  <th>Kode Aktivasi</th>
+                  <th style="width: 100px;" class="text-center">Aksi</th>
+                </tr>
+              </thead>
+              <tbody id="tbl-codes-body">
+                ${generated.length === 0 ? `<tr><td colspan="4" class="text-center text-muted py-3">Belum ada kode yang di-generate.</td></tr>` : ''}
+                ${generated.map((c, idx) => `
+                  <tr>
+                    <td class="small align-middle">${c.time}</td>
+                    <td class="small align-middle">${e(c.note || '-')}</td>
+                    <td class="font-monospace align-middle text-success fw-bold">${c.code}</td>
+                    <td class="text-center align-middle">
+                      <div class="d-flex gap-1 justify-content-center">
+                        <button class="btn btn-xs btn-outline-primary btn-copy-row" data-code="${c.code}"><i class="bi bi-clipboard"></i> Salin</button>
+                        <button class="btn btn-xs btn-outline-danger btn-del-row" data-idx="${idx}"><i class="bi bi-trash"></i> Hapus</button>
+                      </div>
+                    </td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
           </div>
         </div>
 
@@ -4593,8 +4592,10 @@ function viewKelolaAktivasi(view) {
         '<td class="small align-middle">' + (c.note || '-') + '</td>' +
         '<td class="font-monospace align-middle text-success fw-bold">' + c.code + '</td>' +
         '<td class="text-center align-middle">' +
-          '<button class="btn btn-xs btn-outline-primary btn-copy-row" data-code="' + c.code + '"><i class="bi bi-clipboard"></i></button> ' +
-          '<button class="btn btn-xs btn-outline-danger btn-del-row" data-idx="' + idx + '"><i class="bi bi-trash"></i></button>' +
+          '<div class="d-flex gap-1 justify-content-center">' +
+            '<button class="btn btn-xs btn-outline-primary btn-copy-row" data-code="' + c.code + '"><i class="bi bi-clipboard"></i> Salin</button>' +
+            '<button class="btn btn-xs btn-outline-danger btn-del-row" data-idx="' + idx + '"><i class="bi bi-trash"></i> Hapus</button>' +
+          '</div>' +
         '</td>' +
       '</tr>';
     }).join('');
