@@ -96,7 +96,7 @@
     return `PKG-KBC-${rand}-${checksum}`;
   }
 
-  function verifyActivationCode(code) {
+  async function verifyActivationCode(code) {
     const cleanCode = code.trim().toUpperCase();
     if (cleanCode === ADMIN_MASTER_CODE) return true; // Master code bypass
     const match = cleanCode.match(/^PKG-KBC-([0-9A-F]{8})-([0-9A-F]{4})$/);
@@ -104,7 +104,23 @@
     const rand = match[1];
     const checksum = match[2];
     const expected = fnv1aHash(rand + ':' + ACTIVATION_SALT).substring(0, 4).toUpperCase();
-    return checksum === expected;
+    if (checksum !== expected) return false;
+
+    // Cross-device check: kode sudah dipakai di device lain?
+    // Trial code dikecualikan (bukan kode random).
+    if (cleanCode !== TRIAL_CODE && window.SupabaseSync && typeof window.SupabaseSync.isCodeUsed === 'function') {
+      try {
+        const used = await window.SupabaseSync.isCodeUsed(cleanCode);
+        if (used) {
+          console.warn('[verifyActivationCode] kode sudah dipakai di device lain:', cleanCode);
+          return 'used';
+        }
+      } catch (e) {
+        console.warn('[verifyActivationCode] isCodeUsed error:', e.message);
+      }
+    }
+
+    return true;
   }
 
   // --- TRIAL ACCOUNT LOGIC ---
@@ -127,13 +143,21 @@
     return Math.max(0, Math.ceil(remaining / (24 * 60 * 60 * 1000)));
   }
 
-  function upgradeFromTrial(code) {
+  async function upgradeFromTrial(code) {
     if (!isTrial()) return { ok: false, msg: 'Akun ini bukan akun trial.' };
-    if (!verifyActivationCode(code)) return { ok: false, msg: 'Kode aktivasi tidak valid!' };
+
+    const v = await verifyActivationCode(code);
+    if (v === false) return { ok: false, msg: 'Kode aktivasi tidak valid!' };
+    if (v === 'used') return { ok: false, msg: 'Kode aktivasi sudah digunakan di perangkat lain. Hubungi Admin/Ketua Pokjawas.' };
+
     // Hapus key trial, set aktivasi penuh
     localStorage.removeItem(KEY_TRIAL_START);
     const devId = getDeviceId();
     const binding = fnv1aHash(devId + ':' + code);
+    const fullname = localStorage.getItem(KEY_USER_FULLNAME) || '';
+    const username = localStorage.getItem(KEY_USER_USERNAME) || '';
+    const madrasah = localStorage.getItem(KEY_USER_MADRASAH) || '';
+
     localStorage.setItem(KEY_ACTIVATED, 'true');
     localStorage.setItem(KEY_ACTIVATION_CODE, code);
     localStorage.setItem(KEY_DEVICE_BINDING, binding);
@@ -141,6 +165,24 @@
     if (localStorage.getItem(KEY_USER_ROLE) === 'trial') {
       localStorage.setItem(KEY_USER_ROLE, 'kamad');
     }
+
+    // Report aktivasi ke Supabase (cross-device relay). Best-effort.
+    if (window.SupabaseSync && typeof window.SupabaseSync.reportActivation === 'function') {
+      try {
+        await window.SupabaseSync.reportActivation({
+          code: code,
+          nama: fullname,
+          username: username,
+          madrasah: madrasah,
+          role: 'kamad',
+          device_id: devId,
+          device_info: navigator.userAgent || ''
+        });
+      } catch (e) {
+        console.warn('[upgradeFromTrial] reportActivation failed:', e.message);
+      }
+    }
+
     return { ok: true, msg: 'Akun berhasil di-upgrade ke lisensi penuh!' };
   }
 
@@ -404,9 +446,18 @@
       }
 
       // Validasi kode aktivasi (trial atau kode penuh)
-      if (!isTrialCode && !verifyActivationCode(code)) {
-        errEl.textContent = 'Kode aktivasi tidak valid! Harap hubungi Admin/Ketua Pokjawas.';
-        return;
+      let codeValid = isTrialCode;
+      if (!isTrialCode) {
+        const v = await verifyActivationCode(code);
+        if (v === false) {
+          errEl.textContent = 'Kode aktivasi tidak valid! Harap hubungi Admin/Ketua Pokjawas.';
+          return;
+        }
+        if (v === 'used') {
+          errEl.textContent = 'Kode aktivasi sudah digunakan di perangkat lain. Hubungi Admin/Ketua Pokjawas.';
+          return;
+        }
+        codeValid = true;
       }
 
       // Generate Device Binding
@@ -424,6 +475,23 @@
       localStorage.setItem(KEY_USER_PASSWORD_HASH, passHash);
       localStorage.setItem(KEY_USER_FULLNAME, fullname);
       localStorage.setItem(KEY_USER_MADRASAH, madrasah);
+
+      // Report aktivasi ke Supabase (cross-device relay). Best-effort.
+      if (!isTrialCode && window.SupabaseSync && typeof window.SupabaseSync.reportActivation === 'function') {
+        try {
+          await window.SupabaseSync.reportActivation({
+            code: code,
+            nama: fullname,
+            username: username,
+            madrasah: madrasah,
+            role: role,
+            device_id: devId,
+            device_info: navigator.userAgent || ''
+          });
+        } catch (e) {
+          console.warn('[register] reportActivation failed:', e.message);
+        }
+      }
 
       // Jika trial, simpan timestamp mulai trial
       if (isTrialCode) {
@@ -868,11 +936,11 @@
         </div>
       </div>`;
       view.insertAdjacentHTML('beforeend', trialHTML);
-      document.getElementById('btn-trial-upgrade').addEventListener('click', () => {
+      document.getElementById('btn-trial-upgrade').addEventListener('click', async () => {
         const code = document.getElementById('trial-upgrade-input').value.trim();
         const msgEl = document.getElementById('trial-upgrade-msg');
         if (!code) { msgEl.textContent = 'Masukkan kode aktivasi penuh!'; return; }
-        const result = upgradeFromTrial(code);
+        const result = await upgradeFromTrial(code);
         if (result.ok) {
           alert(result.msg + ' Halaman akan di-reload.');
           location.reload();
@@ -952,7 +1020,7 @@
     saveActivationCodes(list);
   }
 
-  function syncActivationCodeFromBackup(backupJson) {
+  async function syncActivationCodeFromBackup(backupJson) {
     if (!backupJson || !backupJson.sender || !backupJson.sender.activationCode) return;
     const sender = backupJson.sender;
     const list = listActivationCodes();
@@ -960,7 +1028,7 @@
     
     let item = list.find(x => x.code === targetCode);
     if (!item) {
-      if (verifyActivationCode(targetCode)) {
+      if (await verifyActivationCode(targetCode)) {
         item = {
           code: targetCode,
           notes: 'Terdeteksi via Impor Backup',
@@ -1051,11 +1119,11 @@
       </div>
     `;
 
-    document.getElementById('btn-trial-upgrade').addEventListener('click', () => {
+    document.getElementById('btn-trial-upgrade').addEventListener('click', async () => {
       const errEl = document.getElementById('auth-trial-err');
       const code = document.getElementById('trial-upgrade-code').value.trim();
       if (!code) { errEl.textContent = 'Masukkan kode aktivasi penuh!'; return; }
-      const result = upgradeFromTrial(code);
+      const result = await upgradeFromTrial(code);
       if (result.ok) {
         alert(result.msg + ' Halaman akan di-reload.');
         location.reload();
@@ -1075,6 +1143,17 @@
 
   // --- INITIALIZATION ---
   async function init() {
+    // 0. Coba tarik codes.json dari gh-pages di background sejak awal boot.
+    // Kalau berhasil, window.REMOTE_CODES akan dipakai verifyActivationCode()
+    // untuk validasi kode lintas device.
+    if (window.GithubSync && typeof window.GithubSync.refreshFromPublic === 'function') {
+      try {
+        await window.GithubSync.refreshFromPublic();
+      } catch (e) {
+        console.warn('[init] refreshFromPublic failed:', e.message);
+      }
+    }
+
     // 0. Kalau diminta ke halaman aktivasi (dari link 'Buat Akun Baru')
     const forceActivation = localStorage.getItem('pkg_v1_force_activation') === 'true';
     if (forceActivation) {
