@@ -4460,8 +4460,8 @@ function viewKelolaAktivasi(view) {
                     <td class="font-monospace align-middle text-success fw-bold">${c.code}</td>
                     <td class="text-center align-middle">
                       <div class="d-flex gap-1 justify-content-center">
-                        <button class="btn btn-xs btn-outline-primary btn-copy-row" data-code="${c.code}"><i class="bi bi-clipboard"></i> Salin</button>
-                        <button class="btn btn-xs btn-outline-danger btn-del-row" data-idx="${idx}"><i class="bi bi-trash"></i> Hapus</button>
+                        <button class="btn btn-xs btn-outline-primary btn-copy-row" data-code="${c.code}"><i class="bi bi-clipboard"></i></button>
+                        <button class="btn btn-xs btn-outline-danger btn-del-row" data-idx="${idx}"><i class="bi bi-trash"></i></button>
                       </div>
                     </td>
                   </tr>
@@ -4593,8 +4593,8 @@ function viewKelolaAktivasi(view) {
         '<td class="font-monospace align-middle text-success fw-bold">' + c.code + '</td>' +
         '<td class="text-center align-middle">' +
           '<div class="d-flex gap-1 justify-content-center">' +
-            '<button class="btn btn-xs btn-outline-primary btn-copy-row" data-code="' + c.code + '"><i class="bi bi-clipboard"></i> Salin</button>' +
-            '<button class="btn btn-xs btn-outline-danger btn-del-row" data-idx="' + idx + '"><i class="bi bi-trash"></i> Hapus</button>' +
+            '<button class="btn btn-xs btn-outline-primary btn-copy-row" data-code="' + c.code + '"><i class="bi bi-clipboard"></i></button>' +
+            '<button class="btn btn-xs btn-outline-danger btn-del-row" data-idx="' + idx + '"><i class="bi bi-trash"></i></button>' +
           '</div>' +
         '</td>' +
       '</tr>';
