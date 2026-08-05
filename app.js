@@ -49,7 +49,7 @@ const NAMA_BLN_SHORT = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Ag
 function renderShell() {
   const userInfo = window.PKGAuth ? window.PKGAuth.getUserInfo() : { role: 'kamad' };
   const isAdmin = userInfo.role === 'admin'; // Ketua Pokjawas
-  const isPengawas = userInfo.role === 'admin' || userInfo.role === 'pengawas'; // admin & pengawas
+  const isPengawas = userInfo.role === 'admin' || userInfo.role === 'pengawas' || userInfo.role === 'trial'; // admin, pengawas & trial
   const html = `
   <nav class="navbar navbar-expand-xl navbar-dark bg-primary mb-3 no-print">
     <div class="container-fluid">
