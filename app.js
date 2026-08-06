@@ -4345,6 +4345,15 @@ function viewCetak(view, guruId, role, jenis) {
 }
 
 // === BOOT ===============================================================
+// Rebuild navbar setelah login (role berubah → menu berubah)
+function rebuildShell() {
+  const oldNav = document.querySelector('nav.navbar');
+  if (oldNav) oldNav.remove();
+  renderShell();
+  wireNavPeriodeSelector();
+}
+window.rebuildShell = rebuildShell;
+
 window.render = render;
 window.addEventListener('hashchange', render);
 window.addEventListener('DOMContentLoaded', async () => {

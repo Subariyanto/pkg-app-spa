@@ -627,7 +627,7 @@
         sessionStorage.setItem(KEY_LOGGED_IN, 'true');
         location.hash = '#/';
         overlay.remove();
-        init().then(() => { if (window.render) window.render(); });
+        init().then(() => { if (window.rebuildShell) window.rebuildShell(); if (window.render) window.render(); });
         return;
       }
 
@@ -644,7 +644,7 @@
 
       // Remove overlay and boot PIN gate / main application
       overlay.remove();
-      init().then(() => { if (window.render) window.render(); });
+      init().then(() => { if (window.rebuildShell) window.rebuildShell(); if (window.render) window.render(); });
     }
 
     document.getElementById('btn-login-submit').addEventListener('click', tryLogin);
@@ -659,7 +659,7 @@
         sessionStorage.setItem(KEY_LOGGED_IN, 'true');
         location.hash = '#/';
         overlay.remove();
-        init().then(() => { if (window.render) window.render(); });
+        init().then(() => { if (window.rebuildShell) window.rebuildShell(); if (window.render) window.render(); });
       });
     }
 
