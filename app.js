@@ -4582,12 +4582,25 @@ function viewKelolaAktivasi(view) {
     refreshCodesTable();
   });
 
-  if (btnCopy) btnCopy.addEventListener('click', () => {
-    navigator.clipboard.writeText(codeText.textContent).then(() => alert('Kode disalin ke clipboard.'));
-  });
-  if (btnCopyBulk) btnCopyBulk.addEventListener('click', () => {
-    navigator.clipboard.writeText(lastBulkCodes.join('\n')).then(() => alert('10 kode disalin ke clipboard.'));
-  });
+  function copyToClipboard(text) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function() { alert('Kode disalin ke clipboard.'); }).catch(function() { fallbackCopy(text); });
+    } else { fallbackCopy(text); }
+  }
+  function fallbackCopy(text) {
+    var ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.top = '-9999px';
+    ta.style.left = '-9999px';
+    document.body.appendChild(ta);
+    ta.focus(); ta.select();
+    try { document.execCommand('copy'); alert('Kode disalin ke clipboard.'); } catch(e) { alert('Gagal menyalin. Silakan copy manual: ' + text); }
+    document.body.removeChild(ta);
+  }
+
+  if (btnCopy) btnCopy.addEventListener('click', () => { copyToClipboard(codeText.textContent); });
+  if (btnCopyBulk) btnCopyBulk.addEventListener('click', () => { copyToClipboard(lastBulkCodes.join('\n')); });
 
   function refreshCodesTable() {
     var tbody = document.getElementById('tbl-codes-body');
@@ -4616,7 +4629,7 @@ function viewKelolaAktivasi(view) {
   function bindRowButtons() {
     document.querySelectorAll('.btn-copy-row').forEach(function(b) {
       b.addEventListener('click', function() {
-        navigator.clipboard.writeText(b.dataset.code).then(function() { alert('Kode disalin: ' + b.dataset.code); });
+        copyToClipboard(b.dataset.code);
       });
     });
     document.querySelectorAll('.btn-edit-row').forEach(function(b) {
