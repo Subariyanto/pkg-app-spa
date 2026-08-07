@@ -4457,7 +4457,7 @@ function viewKelolaAktivasi(view) {
                   <th>Waktu</th>
                   <th>Catatan / Penerima</th>
                   <th>Kode Aktivasi</th>
-                  <th style="width: 100px;" class="text-center">Aksi</th>
+                  <th style="width: 130px;" class="text-center">Aksi</th>
                 </tr>
               </thead>
               <tbody id="tbl-codes-body">
@@ -4465,11 +4465,12 @@ function viewKelolaAktivasi(view) {
                 ${generated.map((c, idx) => `
                   <tr>
                     <td class="small align-middle">${c.time}</td>
-                    <td class="small align-middle">${e(c.note || '-')}</td>
+                    <td class="small align-middle" id="note-cell-${idx}">${e(c.note || '-')}</td>
                     <td class="font-monospace align-middle text-success fw-bold">${c.code}</td>
                     <td class="text-center align-middle">
                       <div class="d-flex gap-1 justify-content-center">
                         <button class="btn btn-xs btn-outline-primary btn-copy-row" data-code="${c.code}"><i class="bi bi-clipboard"></i></button>
+                        <button class="btn btn-xs btn-outline-warning btn-edit-row" data-idx="${idx}"><i class="bi bi-pencil"></i></button>
                         <button class="btn btn-xs btn-outline-danger btn-del-row" data-idx="${idx}"><i class="bi bi-trash"></i></button>
                       </div>
                     </td>
@@ -4598,11 +4599,12 @@ function viewKelolaAktivasi(view) {
     tbody.innerHTML = generated.map(function(c, idx) {
       return '<tr>' +
         '<td class="small align-middle">' + (c.time || '-') + '</td>' +
-        '<td class="small align-middle">' + (c.note || '-') + '</td>' +
+        '<td class="small align-middle" id="note-cell-' + idx + '">' + (c.note || '-') + '</td>' +
         '<td class="font-monospace align-middle text-success fw-bold">' + c.code + '</td>' +
         '<td class="text-center align-middle">' +
           '<div class="d-flex gap-1 justify-content-center">' +
             '<button class="btn btn-xs btn-outline-primary btn-copy-row" data-code="' + c.code + '"><i class="bi bi-clipboard"></i></button>' +
+            '<button class="btn btn-xs btn-outline-warning btn-edit-row" data-idx="' + idx + '"><i class="bi bi-pencil"></i></button>' +
             '<button class="btn btn-xs btn-outline-danger btn-del-row" data-idx="' + idx + '"><i class="bi bi-trash"></i></button>' +
           '</div>' +
         '</td>' +
@@ -4615,6 +4617,34 @@ function viewKelolaAktivasi(view) {
     document.querySelectorAll('.btn-copy-row').forEach(function(b) {
       b.addEventListener('click', function() {
         navigator.clipboard.writeText(b.dataset.code).then(function() { alert('Kode disalin: ' + b.dataset.code); });
+      });
+    });
+    document.querySelectorAll('.btn-edit-row').forEach(function(b) {
+      b.addEventListener('click', function() {
+        var idx = parseInt(b.dataset.idx);
+        var item = generated[idx];
+        if (!item) return;
+        var cell = document.getElementById('note-cell-' + idx);
+        if (!cell) return;
+        var currentNote = item.note || '';
+        cell.innerHTML = '<input type="text" class="form-control form-control-sm" id="edit-note-' + idx + '" value="' + currentNote.replace(/"/g, '&quot;') + '">';
+        var input = document.getElementById('edit-note-' + idx);
+        if (input) {
+          input.focus();
+          input.select();
+          var saveEdit = function() {
+            var newNote = input.value.trim();
+            generated[idx].note = newNote;
+            localStorage.setItem('pkg_v1_generated_codes', JSON.stringify(generated));
+            if (window.GithubSync && window.GithubSync.pushIfConfigured) window.GithubSync.pushIfConfigured(generated, 'edit note idx ' + idx);
+            refreshCodesTable();
+          };
+          input.addEventListener('keydown', function(ev) {
+            if (ev.key === 'Enter') { ev.preventDefault(); saveEdit(); }
+            if (ev.key === 'Escape') { refreshCodesTable(); }
+          });
+          input.addEventListener('blur', saveEdit);
+        }
       });
     });
     document.querySelectorAll('.btn-del-row').forEach(function(b) {
