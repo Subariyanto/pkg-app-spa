@@ -54,12 +54,13 @@
       h = Math.imul(h, 0x01000193);
     }
     let h2 = 0x811c9dc5;
-    const s2 = h.toString(16) + str;
+    const s2 = (h >>> 0).toString(16).padStart(8, '0') + str;
     for (let i = 0; i < s2.length; i++) {
       h2 ^= s2.charCodeAt(i);
       h2 = Math.imul(h2, 0x01000193);
     }
-    return h.toString(16).padStart(8, '0') + h2.toString(16).padStart(8, '0');
+    // >>> 0 ensures unsigned 32-bit, so toString(16) never produces a leading '-'
+    return (h >>> 0).toString(16).padStart(8, '0') + (h2 >>> 0).toString(16).padStart(8, '0');
   }
 
   function randomSalt() {
