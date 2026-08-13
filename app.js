@@ -4360,6 +4360,16 @@ window.addEventListener('DOMContentLoaded', async () => {
   renderShell();
   wireNavPeriodeSelector();
 
+  // Wire up tombol Logout di navbar (event delegation di body).
+  // HARUS sebelum init() karena init() bisa tidak resolve (login screen),
+  // yang membuat listener logout tidak pernah terpasang.
+  document.body.addEventListener('click', (ev) => {
+    const t = ev.target.closest('#nav-logout');
+    if (!t) return;
+    ev.preventDefault();
+    if (window.PKGAuth) window.PKGAuth.logout();
+  });
+
   // PIN gate: kalau PIN aktif tapi belum unlock, tampilkan lock screen.
   // PKGAuth.init() resolve setelah unlocked.
   if (window.PKGAuth) {
@@ -4367,15 +4377,6 @@ window.addEventListener('DOMContentLoaded', async () => {
   }
 
   render();
-
-  // Wire up tombol Logout di navbar (event delegation karena renderShell
-  // dipanggil sekali saja, tapi link ada di shell).
-  document.body.addEventListener('click', (ev) => {
-    const t = ev.target.closest('#nav-logout');
-    if (!t) return;
-    ev.preventDefault();
-    if (window.PKGAuth) window.PKGAuth.logout();
-  });
 
   // Service worker (PWA) with auto-update
   if ('serviceWorker' in navigator) {
