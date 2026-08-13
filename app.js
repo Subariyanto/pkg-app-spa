@@ -49,7 +49,7 @@ const NAMA_BLN_SHORT = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Ag
 function renderShell() {
   const userInfo = window.PKGAuth ? window.PKGAuth.getUserInfo() : { role: 'kamad' };
   const isAdmin = userInfo.role === 'admin'; // Ketua Pokjawas
-  const isPengawas = userInfo.role === 'admin' || userInfo.role === 'pengawas'; // admin & pengawas
+  const isPengawas = userInfo.role === 'admin' || userInfo.role === 'pengawas' || userInfo.role === 'trial'; // admin, pengawas & trial
   const html = `
   <nav class="navbar navbar-expand-xl navbar-dark bg-primary mb-3 no-print">
     <div class="container-fluid">
@@ -206,7 +206,7 @@ function viewBeranda(view) {
   const stats = PKGDB.getStats();
   const recent = PKGDB.getRecentGuru(8);
   const userInfo = window.PKGAuth ? window.PKGAuth.getUserInfo() : { fullname: '', madrasah: '', role: '' };
-  const userName = userInfo.fullname || 'Pengguna';
+  const userName = userInfo.fullname || userInfo.username || 'Pengguna';
   const roleLabel = { admin: 'Ketua Pokjawas', pengawas: 'Pengawas', kamad: 'Kepala Madrasah', trial: 'Trial' }[userInfo.role] || userInfo.role;
   const trialBanner = (window.PKGAuth && window.PKGAuth.isTrial && window.PKGAuth.isTrial()) ? (() => {
     const daysLeft = window.PKGAuth.getTrialDaysLeft();
@@ -214,8 +214,7 @@ function viewBeranda(view) {
     if (expired) return '<div class="alert alert-danger beranda-trial-banner"><i class="bi bi-exclamation-triangle"></i> <strong>Masa Trial Berakhir.</strong> Hubungi Admin untuk kode aktivasi penuh.</div>';
     return `<div class="alert alert-warning beranda-trial-banner d-flex align-items-center justify-content-between flex-wrap gap-2"><div><i class="bi bi-clock-history"></i> <strong>Mode Trial</strong> — sisa <strong>${daysLeft} hari</strong>. Dokumen cetak/PDF/DOCX memiliki watermark "TRIAL".</div><a href="#/pengaturan-pin" class="btn btn-sm btn-success">Input Kode Aktivasi Penuh</a></div>`;
   })() : '';
-  const hour = new Date().getHours();
-  const greeting = hour < 11 ? 'Selamat Pagi' : hour < 15 ? 'Selamat Siang' : hour < 18 ? 'Selamat Sore' : 'Selamat Malam';
+  const greeting = 'Selamat Datang';
   view.innerHTML = `
   ${trialBanner}
 
@@ -4346,11 +4345,30 @@ function viewCetak(view, guruId, role, jenis) {
 }
 
 // === BOOT ===============================================================
+// Rebuild navbar setelah login (role berubah → menu berubah)
+function rebuildShell() {
+  const oldNav = document.querySelector('nav.navbar');
+  if (oldNav) oldNav.remove();
+  renderShell();
+  wireNavPeriodeSelector();
+}
+window.rebuildShell = rebuildShell;
+
 window.render = render;
 window.addEventListener('hashchange', render);
 window.addEventListener('DOMContentLoaded', async () => {
   renderShell();
   wireNavPeriodeSelector();
+
+  // Wire up tombol Logout di navbar (event delegation di body).
+  // HARUS sebelum init() karena init() bisa tidak resolve (login screen),
+  // yang membuat listener logout tidak pernah terpasang.
+  document.body.addEventListener('click', (ev) => {
+    const t = ev.target.closest('#nav-logout');
+    if (!t) return;
+    ev.preventDefault();
+    if (window.PKGAuth) window.PKGAuth.logout();
+  });
 
   // PIN gate: kalau PIN aktif tapi belum unlock, tampilkan lock screen.
   // PKGAuth.init() resolve setelah unlocked.
@@ -4359,15 +4377,6 @@ window.addEventListener('DOMContentLoaded', async () => {
   }
 
   render();
-
-  // Wire up tombol Logout di navbar (event delegation karena renderShell
-  // dipanggil sekali saja, tapi link ada di shell).
-  document.body.addEventListener('click', (ev) => {
-    const t = ev.target.closest('#nav-logout');
-    if (!t) return;
-    ev.preventDefault();
-    if (window.PKGAuth) window.PKGAuth.logout();
-  });
 
   // Service worker (PWA) with auto-update
   if ('serviceWorker' in navigator) {
@@ -4399,81 +4408,135 @@ function viewKelolaAktivasi(view) {
     return;
   }
 
-  // Load generated codes
   let generated = [];
   try {
     generated = JSON.parse(localStorage.getItem('pkg_v1_generated_codes') || '[]');
   } catch(e) {}
 
+  const activeTab = new URLSearchParams(location.hash.split('?')[1] || '').get('tab') || 'generate';
+
   view.innerHTML = `
     <div class="card mb-4">
       <div class="card-header bg-primary text-white"><i class="bi bi-key-fill"></i> Kelola Kode Aktivasi (Admin Only)</div>
       <div class="card-body">
-        <div class="row g-3">
-          <div class="col-md-5">
-            <div class="border rounded p-3 bg-light">
-              <h5 class="card-title text-success"><i class="bi bi-plus-circle"></i> Buat Kode Baru</h5>
-              <p class="small text-muted mb-3">Satu Kode Aktivasi hanya bisa digunakan oleh 1 User (1 Device) secara offline.</p>
-              
-              <div class="mb-3">
+        <ul class="nav nav-tabs mb-3" id="aktTab" role="tablist">
+          <li class="nav-item"><button class="nav-link ${activeTab === 'generate' ? 'active' : ''}" data-tab="generate" type="button"><i class="bi bi-plus-circle"></i> Buat Kode</button></li>
+          <li class="nav-item"><button class="nav-link ${activeTab === 'sync' ? 'active' : ''}" data-tab="sync" type="button"><i class="bi bi-cloud-arrow-up"></i> Sinkronisasi</button></li>
+        </ul>
+
+        <div id="tab-generate" class="${activeTab === 'generate' ? 'd-block' : 'd-none'}">
+          <div class="border rounded p-3 bg-light mb-3">
+            <h5 class="card-title text-success"><i class="bi bi-plus-circle"></i> Buat Kode Baru</h5>
+            <p class="small text-muted mb-3">Satu Kode Aktivasi hanya bisa digunakan oleh 1 User (1 Device) secara offline. Untuk lintas device, sinkronkan ke gh-pages.</p>
+            <div class="row g-2 mb-3">
+              <div class="col-md-8">
                 <label class="form-label small fw-bold">Catatan / Penerima</label>
                 <input type="text" id="act-note" class="form-control form-control-sm" placeholder="Contoh: Kamad MTsN 1 Jember" autocomplete="off">
               </div>
-              
-              <div class="d-flex gap-2">
-                <button id="btn-gen-code" class="btn btn-sm btn-success flex-grow-1"><i class="bi bi-magic"></i> Generate 1 Kode</button>
-                <button id="btn-gen-bulk" class="btn btn-sm btn-primary flex-grow-1"><i class="bi bi-magic"></i> Generate 10 Kode</button>
-              </div>
-              
-              <div id="gen-result" class="mt-3 p-3 bg-white border border-success rounded text-center d-none">
-                <span class="small text-muted">KODE BARU:</span>
-                <div class="h5 text-success my-2 font-monospace fw-bold" id="gen-code-text"></div>
-                <button id="btn-copy-code" class="btn btn-xs btn-outline-success"><i class="bi bi-clipboard"></i> Salin Kode</button>
-              </div>
-              
-              <div id="gen-bulk-result" class="mt-3 p-3 bg-white border border-primary rounded d-none">
-                <span class="small text-muted">10 KODE BARU DIBUAT:</span>
-                <div id="gen-bulk-list" class="my-2 text-start font-monospace small"></div>
-                <button id="btn-copy-bulk" class="btn btn-xs btn-outline-primary w-100"><i class="bi bi-clipboard"></i> Salin Semua Kode</button>
+              <div class="col-md-4 d-flex align-items-end gap-2">
+                <button id="btn-gen-code" class="btn btn-sm btn-success flex-grow-1"><i class="bi bi-magic"></i> Generate 1</button>
+                <button id="btn-gen-bulk" class="btn btn-sm btn-primary flex-grow-1"><i class="bi bi-magic"></i> Generate 10</button>
               </div>
             </div>
+            <div id="gen-result" class="mt-3 p-3 bg-white border border-success rounded text-center d-none">
+              <span class="small text-muted">KODE BARU:</span>
+              <div class="h5 text-success my-2 font-monospace fw-bold" id="gen-code-text"></div>
+              <button id="btn-copy-code" class="btn btn-xs btn-outline-success"><i class="bi bi-clipboard"></i> Salin Kode</button>
+            </div>
+            <div id="gen-bulk-result" class="mt-3 p-3 bg-white border border-primary rounded d-none">
+              <span class="small text-muted">10 KODE BARU DIBUAT:</span>
+              <div id="gen-bulk-list" class="my-2 text-start font-monospace small"></div>
+              <button id="btn-copy-bulk" class="btn btn-xs btn-outline-primary w-100"><i class="bi bi-clipboard"></i> Salin Semua Kode</button>
+            </div>
           </div>
-          
-          <div class="col-md-7">
-            <h5 class="card-title"><i class="bi bi-list-ul"></i> Riwayat Pembuatan Kode</h5>
-            <div class="table-responsive" style="max-height: 350px;">
-              <table class="table table-sm table-hover table-bordered mb-0">
-                <thead class="table-light">
+
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <h5 class="card-title mb-0"><i class="bi bi-list-ul"></i> Riwayat Pembuatan Kode</h5>
+            <button id="btn-export-excel-codes" class="btn btn-sm btn-success"><i class="bi bi-file-earmark-excel"></i> Export Excel</button>
+          </div>
+          <div class="table-responsive" style="max-height: 400px;">
+            <table class="table table-sm table-hover table-bordered mb-0">
+              <thead class="table-light">
+                <tr>
+                  <th>Waktu</th>
+                  <th>Catatan / Penerima</th>
+                  <th>Kode Aktivasi</th>
+                  <th style="width: 130px;" class="text-center">Aksi</th>
+                </tr>
+              </thead>
+              <tbody id="tbl-codes-body">
+                ${generated.length === 0 ? `<tr><td colspan="4" class="text-center text-muted py-3">Belum ada kode yang di-generate.</td></tr>` : ''}
+                ${generated.map((c, idx) => `
                   <tr>
-                    <th>Waktu</th>
-                    <th>Catatan / Penerima</th>
-                    <th>Kode Aktivasi</th>
-                    <th style="width: 80px;" class="text-center">Aksi</th>
-                  </tr>
-                </thead>
-                <tbody id="tbl-codes-body">
-                  ${generated.length === 0 ? `<tr><td colspan="4" class="text-center text-muted py-3">Belum ada kode yang di-generate.</td></tr>` : ''}
-                  ${generated.map((c, idx) => `
-                    <tr>
-                      <td class="small align-middle">${c.time}</td>
-                      <td class="small align-middle">${e(c.note || '-')}</td>
-                      <td class="font-monospace align-middle text-success fw-bold">${c.code}</td>
-                      <td class="text-center align-middle">
+                    <td class="small align-middle">${c.time}</td>
+                    <td class="small align-middle" id="note-cell-${idx}">${e(c.note || '-')}</td>
+                    <td class="font-monospace align-middle text-success fw-bold">${c.code}</td>
+                    <td class="text-center align-middle">
+                      <div class="d-flex gap-1 justify-content-center">
                         <button class="btn btn-xs btn-outline-primary btn-copy-row" data-code="${c.code}"><i class="bi bi-clipboard"></i></button>
+                        <button class="btn btn-xs btn-outline-warning btn-edit-row" data-idx="${idx}"><i class="bi bi-pencil"></i></button>
                         <button class="btn btn-xs btn-outline-danger btn-del-row" data-idx="${idx}"><i class="bi bi-trash"></i></button>
-                      </td>
-                    </tr>
-                  `).join('')}
-                </tbody>
-              </table>
+                      </div>
+                    </td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div id="tab-sync" class="${activeTab === 'sync' ? 'd-block' : 'd-none'}">
+          <div class="row g-3">
+            <div class="col-md-7">
+              <div class="border rounded p-3 bg-light">
+                <h5 class="card-title"><i class="bi bi-cloud-arrow-up"></i> Sinkronisasi Kode Lintas Device</h5>
+                <p class="small text-muted mb-3">Setup GitHub PAT sekali, lalu setiap generate/revoke kode otomatis push ke <code>gh-pages/data/codes.json</code>. User di HP/device lain akan otomatis pull saat buka aplikasi.</p>
+                <div class="alert alert-info small">
+                  <strong>Cara dapat PAT:</strong>
+                  <ol class="mb-0 ps-3">
+                    <li>Buka <a href="https://github.com/settings/personal-access-tokens/new" target="_blank">github.com/settings/personal-access-tokens/new</a></li>
+                    <li>Resource owner: <strong>Subariyanto</strong>, repository: <strong>pkg-app-spa</strong></li>
+                    <li>Permissions -> Contents: <strong>Read and write</strong></li>
+                    <li>Generate token -> paste di bawah -> Simpan + Test</li>
+                  </ol>
+                </div>
+                <div class="mb-3">
+                  <label class="form-label small fw-bold">GitHub Personal Access Token</label>
+                  <input id="pat-input" type="password" class="form-control form-control-sm" placeholder="github_pat_..." autocomplete="off">
+                  <div class="form-text small">Disimpan di localStorage browser admin. Tidak diupload ke mana pun.</div>
+                </div>
+                <div class="d-flex flex-wrap gap-2 mb-3">
+                  <button id="btn-save-pat" class="btn btn-sm btn-success"><i class="bi bi-shield-check"></i> Simpan + Test</button>
+                  <button id="btn-reveal-pat" class="btn btn-sm btn-outline-secondary"><i class="bi bi-eye"></i> Tampilkan/Sembunyikan</button>
+                  <button id="btn-clear-pat" class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i> Hapus PAT</button>
+                </div>
+                <div class="d-flex flex-wrap gap-2 mb-3">
+                  <button id="btn-pull-gh" class="btn btn-sm btn-outline-primary"><i class="bi bi-cloud-download"></i> Tarik dari gh-pages</button>
+                  <button id="btn-push-gh" class="btn btn-sm btn-outline-success"><i class="bi bi-cloud-upload"></i> Push Sekarang</button>
+                </div>
+                <div id="sync-status" class="small"></div>
+              </div>
+            </div>
+            <div class="col-md-5">
+              <div class="border rounded p-3 bg-light">
+                <h6><i class="bi bi-inbox"></i> Inbox Aktivasi (Supabase)</h6>
+                <p class="small text-muted mb-2">User yang aktivasi dari HP otomatis melapor ke Supabase. Klik tombol di bawah untuk tarik laporan terbaru, merge ke daftar kode, lalu push ke gh-pages.</p>
+                <button id="btn-pull-supabase" class="btn btn-sm btn-success mb-2"><i class="bi bi-cloud-download"></i> Tarik Aktivasi Terbaru</button>
+                <div id="supabase-status" class="small"></div>
+              </div>
+              <div class="border rounded p-3 bg-light mt-3">
+                <h6><i class="bi bi-info-circle"></i> Status Saat Ini</h6>
+                <div id="sync-info" class="small"></div>
+              </div>
             </div>
           </div>
         </div>
+
       </div>
     </div>
   `;
 
-  // Bind Events
+  // --- Generate tab events ---
   const btnGen = document.getElementById('btn-gen-code');
   const btnBulk = document.getElementById('btn-gen-bulk');
   const noteInput = document.getElementById('act-note');
@@ -4490,74 +4553,260 @@ function viewKelolaAktivasi(view) {
     return `${d.getDate()}/${d.getMonth()+1}/${d.getFullYear()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
   }
 
-  btnGen.addEventListener('click', () => {
+  if (btnGen) btnGen.addEventListener('click', () => {
     const note = noteInput.value.trim();
-    if (!note) {
-      alert('Mohon isi nama/catatan penerima terlebih dahulu.');
-      return;
-    }
+    if (!note) { alert('Mohon isi nama/catatan penerima terlebih dahulu.'); return; }
     const code = window.PKGAuth.generateActivationCode();
     generated.unshift({ code, note, time: makeTimeStr() });
     localStorage.setItem('pkg_v1_generated_codes', JSON.stringify(generated));
+    if (window.GithubSync && window.GithubSync.pushIfConfigured) window.GithubSync.pushIfConfigured(generated, 'generate 1 code');
     codeText.textContent = code;
     resDiv.classList.remove('d-none');
     bulkDiv.classList.add('d-none');
     noteInput.value = '';
-    viewKelolaAktivasi(view);
+    refreshCodesTable();
   });
 
-  btnBulk.addEventListener('click', () => {
+  if (btnBulk) btnBulk.addEventListener('click', () => {
     const note = noteInput.value.trim();
-    if (!note) {
-      alert('Mohon isi nama/catatan penerima terlebih dahulu.');
-      return;
-    }
+    if (!note) { alert('Mohon isi nama/catatan penerima terlebih dahulu.'); return; }
     lastBulkCodes = [];
     const timeStr = makeTimeStr();
     for (let i = 0; i < 10; i++) {
       const code = window.PKGAuth.generateActivationCode();
-      const label = note + ' #' + (i + 1);
-      generated.unshift({ code, note: label, time: timeStr });
+      generated.unshift({ code, note: note + ' #' + (i + 1), time: timeStr });
       lastBulkCodes.push(code);
     }
     localStorage.setItem('pkg_v1_generated_codes', JSON.stringify(generated));
-    // Tampilkan daftar kode
+    if (window.GithubSync && window.GithubSync.pushIfConfigured) window.GithubSync.pushIfConfigured(generated, 'generate 10 codes');
     bulkList.innerHTML = lastBulkCodes.map((c, i) => `<div class="py-1 border-bottom"><span class="text-muted">${i+1}.</span> <span class="text-success fw-bold">${c}</span></div>`).join('');
     bulkDiv.classList.remove('d-none');
     resDiv.classList.add('d-none');
     noteInput.value = '';
-    viewKelolaAktivasi(view);
+    refreshCodesTable();
   });
 
-  btnCopy.addEventListener('click', () => {
-    navigator.clipboard.writeText(codeText.textContent).then(() => {
-      alert('Kode disalin ke clipboard.');
-    });
-  });
+  function copyToClipboard(text) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function() { alert('Kode disalin ke clipboard.'); }).catch(function() { fallbackCopy(text); });
+    } else { fallbackCopy(text); }
+  }
+  function fallbackCopy(text) {
+    var ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.top = '-9999px';
+    ta.style.left = '-9999px';
+    document.body.appendChild(ta);
+    ta.focus(); ta.select();
+    try { document.execCommand('copy'); alert('Kode disalin ke clipboard.'); } catch(e) { alert('Gagal menyalin. Silakan copy manual: ' + text); }
+    document.body.removeChild(ta);
+  }
 
-  btnCopyBulk.addEventListener('click', () => {
-    navigator.clipboard.writeText(lastBulkCodes.join('\n')).then(() => {
-      alert('10 kode disalin ke clipboard.');
-    });
-  });
+  if (btnCopy) btnCopy.addEventListener('click', () => { copyToClipboard(codeText.textContent); });
+  if (btnCopyBulk) btnCopyBulk.addEventListener('click', () => { copyToClipboard(lastBulkCodes.join('\n')); });
 
-  document.querySelectorAll('.btn-copy-row').forEach(b => {
-    b.addEventListener('click', () => {
-      navigator.clipboard.writeText(b.dataset.code).then(() => {
-        alert('Kode disalin: ' + b.dataset.code);
+  function refreshCodesTable() {
+    var tbody = document.getElementById('tbl-codes-body');
+    if (!tbody) return;
+    if (generated.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted py-3">Belum ada kode yang di-generate.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = generated.map(function(c, idx) {
+      return '<tr>' +
+        '<td class="small align-middle">' + (c.time || '-') + '</td>' +
+        '<td class="small align-middle" id="note-cell-' + idx + '">' + (c.note || '-') + '</td>' +
+        '<td class="font-monospace align-middle text-success fw-bold">' + c.code + '</td>' +
+        '<td class="text-center align-middle">' +
+          '<div class="d-flex gap-1 justify-content-center">' +
+            '<button class="btn btn-xs btn-outline-primary btn-copy-row" data-code="' + c.code + '"><i class="bi bi-clipboard"></i></button>' +
+            '<button class="btn btn-xs btn-outline-warning btn-edit-row" data-idx="' + idx + '"><i class="bi bi-pencil"></i></button>' +
+            '<button class="btn btn-xs btn-outline-danger btn-del-row" data-idx="' + idx + '"><i class="bi bi-trash"></i></button>' +
+          '</div>' +
+        '</td>' +
+      '</tr>';
+    }).join('');
+    bindRowButtons();
+  }
+
+  function bindRowButtons() {
+    document.querySelectorAll('.btn-copy-row').forEach(function(b) {
+      b.addEventListener('click', function() {
+        copyToClipboard(b.dataset.code);
       });
     });
-  });
+    document.querySelectorAll('.btn-edit-row').forEach(function(b) {
+      b.addEventListener('click', function() {
+        var idx = parseInt(b.dataset.idx);
+        var item = generated[idx];
+        if (!item) return;
+        var cell = document.getElementById('note-cell-' + idx);
+        if (!cell) return;
+        var currentNote = item.note || '';
+        cell.innerHTML = '<input type="text" class="form-control form-control-sm" id="edit-note-' + idx + '" value="' + currentNote.replace(/"/g, '&quot;') + '">';
+        var input = document.getElementById('edit-note-' + idx);
+        if (input) {
+          input.focus();
+          input.select();
+          var saveEdit = function() {
+            var newNote = input.value.trim();
+            generated[idx].note = newNote;
+            localStorage.setItem('pkg_v1_generated_codes', JSON.stringify(generated));
+            if (window.GithubSync && window.GithubSync.pushIfConfigured) window.GithubSync.pushIfConfigured(generated, 'edit note idx ' + idx);
+            refreshCodesTable();
+          };
+          input.addEventListener('keydown', function(ev) {
+            if (ev.key === 'Enter') { ev.preventDefault(); saveEdit(); }
+            if (ev.key === 'Escape') { refreshCodesTable(); }
+          });
+          input.addEventListener('blur', saveEdit);
+        }
+      });
+    });
+    document.querySelectorAll('.btn-del-row').forEach(function(b) {
+      b.addEventListener('click', function() {
+        if (!confirm('Hapus riwayat kode ini? (Kode offline yang sudah disalin tetap valid)')) return;
+        var idx = parseInt(b.dataset.idx);
+        generated.splice(idx, 1);
+        localStorage.setItem('pkg_v1_generated_codes', JSON.stringify(generated));
+        if (window.GithubSync && window.GithubSync.pushIfConfigured) window.GithubSync.pushIfConfigured(generated, 'delete code');
+        refreshCodesTable();
+      });
+    });
+  }
 
-  document.querySelectorAll('.btn-del-row').forEach(b => {
-    b.addEventListener('click', () => {
-      if (!confirm('Hapus riwayat kode ini? (Kode offline yang sudah disalin tetap valid)')) return;
-      const idx = parseInt(b.dataset.idx);
-      generated.splice(idx, 1);
-      localStorage.setItem('pkg_v1_generated_codes', JSON.stringify(generated));
+  bindRowButtons();
+
+  // --- Tab switching ---
+  document.querySelectorAll('#aktTab button[data-tab]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      location.hash = '#/kelola-aktivasi?tab=' + btn.dataset.tab;
       viewKelolaAktivasi(view);
     });
   });
+
+  // --- Sync tab helpers ---
+  function setSyncStatus(html, type) {
+    const el = document.getElementById('sync-status');
+    if (el) { el.innerHTML = html; el.className = 'small alert alert-' + (type || 'light') + ' mt-2 mb-0'; }
+  }
+  function setSupabaseStatus(html, type) {
+    const el = document.getElementById('supabase-status');
+    if (el) { el.innerHTML = html; el.className = 'small alert alert-' + (type || 'light') + ' mt-2 mb-0'; }
+  }
+  function renderSyncInfo() {
+    const el = document.getElementById('sync-info');
+    if (!el) return;
+    const hasPat = window.GithubSync && window.GithubSync.hasPAT ? window.GithubSync.hasPAT() : false;
+    const remoteCount = (typeof window.REMOTE_CODES !== 'undefined' && Array.isArray(window.REMOTE_CODES)) ? window.REMOTE_CODES.length : 0;
+    el.innerHTML = '<div><strong>PAT:</strong> ' + (hasPat ? '<span class="text-success">tersimpan</span>' : '<span class="text-danger">belum diset</span>') + '</div>' +
+      '<div><strong>Local codes:</strong> ' + generated.length + '</div>' +
+      '<div><strong>Remote codes (gh-pages):</strong> ' + remoteCount + '</div>' +
+      '<div><strong>Supabase:</strong> ' + (window.SupabaseSync && window.SupabaseSync.isConfigured ? '<span class="text-success">aktif</span>' : '<span class="text-muted">tidak aktif</span>') + '</div>';
+  }
+
+  const patInput = document.getElementById('pat-input');
+  if (patInput && window.GithubSync && window.GithubSync.getPAT) patInput.value = window.GithubSync.getPAT();
+
+  const btnSavePat = document.getElementById('btn-save-pat');
+  if (btnSavePat) btnSavePat.addEventListener('click', async () => {
+    const val = (document.getElementById('pat-input') || {}).value || '';
+    if (!window.GithubSync || !window.GithubSync.setPAT) return;
+    window.GithubSync.setPAT(val.trim());
+    setSyncStatus('Mengetes PAT...', 'info');
+    const r = await window.GithubSync.testPAT();
+    setSyncStatus(r.ok ? '<i class="bi bi-check-circle"></i> ' + r.message : '<i class="bi bi-x-circle"></i> ' + r.message, r.ok ? 'success' : 'danger');
+    renderSyncInfo();
+  });
+
+  const btnRevealPat = document.getElementById('btn-reveal-pat');
+  if (btnRevealPat) btnRevealPat.addEventListener('click', () => {
+    const input = document.getElementById('pat-input');
+    if (input) input.type = input.type === 'password' ? 'text' : 'password';
+  });
+
+  const btnClearPat = document.getElementById('btn-clear-pat');
+  if (btnClearPat) btnClearPat.addEventListener('click', () => {
+    if (!confirm('Hapus PAT dari browser ini?')) return;
+    if (window.GithubSync && window.GithubSync.clearPAT) window.GithubSync.clearPAT();
+    const input = document.getElementById('pat-input');
+    if (input) input.value = '';
+    setSyncStatus('PAT dihapus.', 'warning');
+    renderSyncInfo();
+  });
+
+  const btnPullGh = document.getElementById('btn-pull-gh');
+  if (btnPullGh) btnPullGh.addEventListener('click', async () => {
+    setSyncStatus('Menarik data dari gh-pages...', 'info');
+    try {
+      const data = await window.GithubSync.refreshFromPublic();
+      setSyncStatus(data && Array.isArray(data.codes) ? 'Berhasil tarik ' + data.codes.length + ' kode dari gh-pages.' : 'File codes.json belum ada di gh-pages atau kosong.', data && data.codes ? 'success' : 'warning');
+    } catch (err) {
+      setSyncStatus('Gagal tarik: ' + err.message, 'danger');
+    }
+    renderSyncInfo();
+  });
+
+  const btnPushGh = document.getElementById('btn-push-gh');
+  if (btnPushGh) btnPushGh.addEventListener('click', async () => {
+    if (!window.GithubSync || !window.GithubSync.pushIfConfigured) return;
+    setSyncStatus('Meng-push kode ke gh-pages...', 'info');
+    const r = await window.GithubSync.pushIfConfigured(generated, 'manual push from admin');
+    setSyncStatus(r.synced ? 'Berhasil push ke gh-pages.' : 'Push gagal: ' + (r.reason === 'no-pat' ? 'PAT belum diset.' : (r.error || 'error')), r.synced ? 'success' : 'danger');
+    renderSyncInfo();
+  });
+
+  const btnPullSupabase = document.getElementById('btn-pull-supabase');
+  if (btnPullSupabase) btnPullSupabase.addEventListener('click', async () => {
+    if (!window.SupabaseSync || !window.SupabaseSync.syncAdminInbox) { setSupabaseStatus('SupabaseSync tidak tersedia.', 'danger'); return; }
+    setSupabaseStatus('Memeriksa inbox aktivasi...', 'info');
+    const r = await window.SupabaseSync.syncAdminInbox();
+    if (r.errors && r.errors.length) setSupabaseStatus('Merged: ' + r.merged + ', processed: ' + r.processed + '. Error: ' + r.errors.join('; '), 'warning');
+    else if (r.merged === 0) setSupabaseStatus('Tidak ada aktivasi baru di inbox.', 'info');
+    else setSupabaseStatus('Berhasil merge ' + r.merged + ' aktivasi dan push ke gh-pages.', 'success');
+    try { generated = JSON.parse(localStorage.getItem('pkg_v1_generated_codes') || '[]'); } catch(e) {}
+    renderSyncInfo();
+  });
+
+  // --- Export Excel ---
+  const btnExportExcel = document.getElementById('btn-export-excel-codes');
+  if (btnExportExcel) btnExportExcel.addEventListener('click', async () => {
+    if (generated.length === 0) { alert('Belum ada kode untuk diexport.'); return; }
+    try {
+      const ExcelJS = window.ExcelJS || (typeof require === 'function' ? require('exceljs') : null);
+      if (!ExcelJS) { alert('Library Excel belum termuat. Coba refresh halaman.'); return; }
+      const wb = new ExcelJS.Workbook();
+      const ws = wb.addWorksheet('Kode Aktivasi');
+      ws.columns = [
+        { header: 'No', key: 'no', width: 6 },
+        { header: 'Waktu Dibuat', key: 'time', width: 22 },
+        { header: 'Catatan / Penerima', key: 'note', width: 35 },
+        { header: 'Kode Aktivasi', key: 'code', width: 28 },
+      ];
+      ws.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+      ws.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E40AF' } };
+      ws.getRow(1).alignment = { vertical: 'middle', horizontal: 'center' };
+      generated.forEach((c, i) => {
+        const row = ws.addRow({ no: i + 1, time: c.time || '-', note: c.note || '-', code: c.code });
+        row.getCell(4).font = { bold: true, color: { argb: 'FF1F5D3A' } };
+      });
+      ws.eachRow((row, i) => { if (i > 1) row.height = 20; });
+      const buf = await wb.xlsx.writeBuffer();
+      const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const d = new Date();
+      const stamp = `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}_${String(d.getHours()).padStart(2,'0')}${String(d.getMinutes()).padStart(2,'0')}`;
+      a.href = url; a.download = `kode-aktivasi-pkg_${stamp}.xlsx`;
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      alert('Gagal export Excel: ' + err.message);
+    }
+  });
+
+  renderSyncInfo();
 }
 
 function showUpdateBanner() {
