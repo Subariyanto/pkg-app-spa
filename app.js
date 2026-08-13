@@ -4449,7 +4449,10 @@ function viewKelolaAktivasi(view) {
             </div>
           </div>
 
-          <h5 class="card-title"><i class="bi bi-list-ul"></i> Riwayat Pembuatan Kode</h5>
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <h5 class="card-title mb-0"><i class="bi bi-list-ul"></i> Riwayat Pembuatan Kode</h5>
+            <button id="btn-export-excel-codes" class="btn btn-sm btn-success"><i class="bi bi-file-earmark-excel"></i> Export Excel</button>
+          </div>
           <div class="table-responsive" style="max-height: 400px;">
             <table class="table table-sm table-hover table-bordered mb-0">
               <thead class="table-light">
@@ -4763,6 +4766,43 @@ function viewKelolaAktivasi(view) {
     else setSupabaseStatus('Berhasil merge ' + r.merged + ' aktivasi dan push ke gh-pages.', 'success');
     try { generated = JSON.parse(localStorage.getItem('pkg_v1_generated_codes') || '[]'); } catch(e) {}
     renderSyncInfo();
+  });
+
+  // --- Export Excel ---
+  const btnExportExcel = document.getElementById('btn-export-excel-codes');
+  if (btnExportExcel) btnExportExcel.addEventListener('click', async () => {
+    if (generated.length === 0) { alert('Belum ada kode untuk diexport.'); return; }
+    try {
+      const ExcelJS = window.ExcelJS || (typeof require === 'function' ? require('exceljs') : null);
+      if (!ExcelJS) { alert('Library Excel belum termuat. Coba refresh halaman.'); return; }
+      const wb = new ExcelJS.Workbook();
+      const ws = wb.addWorksheet('Kode Aktivasi');
+      ws.columns = [
+        { header: 'No', key: 'no', width: 6 },
+        { header: 'Waktu Dibuat', key: 'time', width: 22 },
+        { header: 'Catatan / Penerima', key: 'note', width: 35 },
+        { header: 'Kode Aktivasi', key: 'code', width: 28 },
+      ];
+      ws.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+      ws.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E40AF' } };
+      ws.getRow(1).alignment = { vertical: 'middle', horizontal: 'center' };
+      generated.forEach((c, i) => {
+        const row = ws.addRow({ no: i + 1, time: c.time || '-', note: c.note || '-', code: c.code });
+        row.getCell(4).font = { bold: true, color: { argb: 'FF1F5D3A' } };
+      });
+      ws.eachRow((row, i) => { if (i > 1) row.height = 20; });
+      const buf = await wb.xlsx.writeBuffer();
+      const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const d = new Date();
+      const stamp = `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}_${String(d.getHours()).padStart(2,'0')}${String(d.getMinutes()).padStart(2,'0')}`;
+      a.href = url; a.download = `kode-aktivasi-pkg_${stamp}.xlsx`;
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      alert('Gagal export Excel: ' + err.message);
+    }
   });
 
   renderSyncInfo();
