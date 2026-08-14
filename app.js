@@ -213,6 +213,9 @@ function viewBeranda(view) {
   const userName = userInfo.fullname || userInfo.username || 'Pengguna';
   const namaKabupaten = getNamaKabupaten(userInfo);
   const roleLabel = { admin: 'Ketua Pokjawas', pengawas: 'Pengawas', kamad: 'Kepala Madrasah', trial: 'Trial' }[userInfo.role] || userInfo.role;
+  const roleContext = userInfo.role === 'pengawas' || userInfo.role === 'admin'
+    ? `Pokjawas ${namaKabupaten}`
+    : (userInfo.madrasah || namaKabupaten);
   const trialBanner = (window.PKGAuth && window.PKGAuth.isTrial && window.PKGAuth.isTrial()) ? (() => {
     const daysLeft = window.PKGAuth.getTrialDaysLeft();
     const expired = window.PKGAuth.isTrialExpired();
@@ -230,8 +233,7 @@ function viewBeranda(view) {
       <div class="beranda-hero-text">
         <div class="beranda-hero-greeting">${greeting},</div>
         <div class="beranda-hero-name">${e(userName)}</div>
-        <div class="beranda-hero-role"><i class="bi bi-shield-check"></i> ${e(roleLabel)}${userInfo.madrasah ? ' &middot; ' + e(userInfo.madrasah) : ''}</div>
-        <div class="beranda-hero-role"><i class="bi bi-geo-alt-fill"></i> ${e(namaKabupaten)}</div>
+        <div class="beranda-hero-role"><i class="bi bi-shield-check"></i> ${e(roleLabel)} &middot; ${e(roleContext)}</div>
       </div>
       <div class="beranda-hero-emblem"><i class="bi bi-mortarboard-fill"></i></div>
     </div>
