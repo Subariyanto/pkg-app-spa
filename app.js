@@ -65,7 +65,6 @@ function renderShell() {
     <div class="container-fluid">
       <a class="navbar-brand fw-bold d-flex flex-column lh-1" href="#/" style="line-height:1.1;">
         <span style="font-size:1.5rem;">Aplikasi PKG</span>
-        <small class="text-white-50 fw-normal" style="font-size:.95rem; margin-top:4px;">Pokjawasmad ${e(namaKabupaten)}</small>
       </a>
       <button class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#nav"><span class="navbar-toggler-icon"></span></button>
       <div class="collapse navbar-collapse" id="nav">
