@@ -21,6 +21,7 @@
   const KEY_USER_PASSWORD_HASH = 'pkg_v1_user_password_hash';
   const KEY_USER_FULLNAME = 'pkg_v1_user_fullname';
   const KEY_USER_MADRASAH = 'pkg_v1_user_madrasah';
+  const KEY_USER_KABUPATEN = 'pkg_v1_user_kabupaten';
   
   const KEY_LOGGED_IN = 'pkg_v1_logged_in'; // sessionStorage
 
@@ -252,6 +253,7 @@
       username: localStorage.getItem(KEY_USER_USERNAME) || '',
       fullname: localStorage.getItem(KEY_USER_FULLNAME) || '',
       madrasah: localStorage.getItem(KEY_USER_MADRASAH) || '',
+      kabupaten: localStorage.getItem(KEY_USER_KABUPATEN) || '',
       deviceId: getDeviceId()
     };
   }
@@ -339,6 +341,11 @@
         </div>
 
         <div class="form-group">
+          <label>Kabupaten/Kota Asal</label>
+          <input id="reg-kabupaten" type="text" placeholder="Contoh: Kabupaten Jember" autocomplete="address-level2">
+        </div>
+
+        <div class="form-group">
           <label>Password</label>
           <input id="reg-password" type="password" placeholder="Minimal 6 karakter" autocomplete="off">
         </div>
@@ -422,11 +429,12 @@
       const role = isTrialCode ? 'trial' : document.getElementById('reg-role').value;
       const username = document.getElementById('reg-username').value.trim().toLowerCase();
       const fullname = document.getElementById('reg-fullname').value.trim();
-      const madrasah = (role === 'pengawas') ? 'Pokjawas Jember' : document.getElementById('reg-madrasah').value.trim();
+      const madrasah = document.getElementById('reg-madrasah').value.trim();
+      const kabupaten = document.getElementById('reg-kabupaten').value.trim();
       const password = document.getElementById('reg-password').value;
       const confirm = document.getElementById('reg-confirm').value;
 
-      if (!code || !username || !fullname || !password) {
+      if (!code || !username || !fullname || !kabupaten || !password) {
         errEl.textContent = 'Harap isi semua kolom yang wajib!';
         return;
       }
@@ -476,6 +484,7 @@
       localStorage.setItem(KEY_USER_PASSWORD_HASH, passHash);
       localStorage.setItem(KEY_USER_FULLNAME, fullname);
       localStorage.setItem(KEY_USER_MADRASAH, madrasah);
+      localStorage.setItem(KEY_USER_KABUPATEN, kabupaten);
 
       // Report aktivasi ke Supabase (cross-device relay). Best-effort.
       if (!isTrialCode && window.SupabaseSync && typeof window.SupabaseSync.reportActivation === 'function') {
@@ -623,7 +632,8 @@
         localStorage.setItem(KEY_USER_USERNAME, ADMIN_USER);
         localStorage.setItem(KEY_USER_PASSWORD_HASH, fnv1aHash(ADMIN_PASS));
         localStorage.setItem(KEY_USER_FULLNAME, 'Subariyanto, S.Pd, M.Pd.I.');
-        localStorage.setItem(KEY_USER_MADRASAH, 'Pokjawas Jember');
+        localStorage.setItem(KEY_USER_MADRASAH, '');
+        localStorage.setItem(KEY_USER_KABUPATEN, '');
         localStorage.removeItem(KEY_TRIAL_START);
         sessionStorage.setItem(KEY_LOGGED_IN, 'true');
         location.hash = '#/';

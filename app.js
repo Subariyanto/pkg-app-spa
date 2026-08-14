@@ -46,18 +46,13 @@ const NAMA_BLN = ['', 'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'J
 const NAMA_BLN_SHORT = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
 
 // === LAYOUT =============================================================
-function getNamaKabupaten() {
-  const guru = window.PKGDB ? window.PKGDB.listGuru() : [];
-  const kamad = window.PKGDB ? window.PKGDB.listKamad() : [];
-  const kabupaten = [...guru, ...kamad]
-    .map(x => (x.kabupaten || '').trim())
-    .find(Boolean);
-  return kabupaten || 'Kabupaten/Kota';
+function getNamaKabupaten(userInfo) {
+  return (userInfo && userInfo.kabupaten || '').trim() || 'Kabupaten/Kota';
 }
 
 function renderShell() {
   const userInfo = window.PKGAuth ? window.PKGAuth.getUserInfo() : { role: 'kamad' };
-  const namaKabupaten = getNamaKabupaten();
+  const namaKabupaten = getNamaKabupaten(userInfo);
   const isAdmin = userInfo.role === 'admin'; // Ketua Pokjawas
   const isPengawas = userInfo.role === 'admin' || userInfo.role === 'pengawas' || userInfo.role === 'trial'; // admin, pengawas & trial
   const html = `
@@ -216,7 +211,7 @@ function viewBeranda(view) {
   const recent = PKGDB.getRecentGuru(8);
   const userInfo = window.PKGAuth ? window.PKGAuth.getUserInfo() : { fullname: '', madrasah: '', role: '' };
   const userName = userInfo.fullname || userInfo.username || 'Pengguna';
-  const namaKabupaten = getNamaKabupaten();
+  const namaKabupaten = getNamaKabupaten(userInfo);
   const roleLabel = { admin: 'Ketua Pokjawas', pengawas: 'Pengawas', kamad: 'Kepala Madrasah', trial: 'Trial' }[userInfo.role] || userInfo.role;
   const trialBanner = (window.PKGAuth && window.PKGAuth.isTrial && window.PKGAuth.isTrial()) ? (() => {
     const daysLeft = window.PKGAuth.getTrialDaysLeft();
