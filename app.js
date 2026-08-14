@@ -46,8 +46,18 @@ const NAMA_BLN = ['', 'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'J
 const NAMA_BLN_SHORT = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
 
 // === LAYOUT =============================================================
+function getNamaKabupaten() {
+  const guru = window.PKGDB ? window.PKGDB.listGuru() : [];
+  const kamad = window.PKGDB ? window.PKGDB.listKamad() : [];
+  const kabupaten = [...guru, ...kamad]
+    .map(x => (x.kabupaten || '').trim())
+    .find(Boolean);
+  return kabupaten || 'Kabupaten/Kota';
+}
+
 function renderShell() {
   const userInfo = window.PKGAuth ? window.PKGAuth.getUserInfo() : { role: 'kamad' };
+  const namaKabupaten = getNamaKabupaten();
   const isAdmin = userInfo.role === 'admin'; // Ketua Pokjawas
   const isPengawas = userInfo.role === 'admin' || userInfo.role === 'pengawas' || userInfo.role === 'trial'; // admin, pengawas & trial
   const html = `
@@ -55,7 +65,7 @@ function renderShell() {
     <div class="container-fluid">
       <a class="navbar-brand fw-bold d-flex flex-column lh-1" href="#/" style="line-height:1.1;">
         <span style="font-size:1.5rem;">Aplikasi PKG</span>
-        <small class="text-white-50 fw-normal" style="font-size:.95rem; margin-top:4px;">Pokjawasmad Kab. Jember</small>
+        <small class="text-white-50 fw-normal" style="font-size:.95rem; margin-top:4px;">Pokjawasmad ${e(namaKabupaten)}</small>
       </a>
       <button class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#nav"><span class="navbar-toggler-icon"></span></button>
       <div class="collapse navbar-collapse" id="nav">
@@ -112,7 +122,7 @@ function renderShell() {
   <div class="container-fluid pb-5" id="view"></div>
   <footer class="text-center text-muted small py-3 no-print">
     Aplikasi PKG &middot; berbasis SK Dirjen Pendis No. 6673 Tahun 2019 &middot; disesuaikan dengan KMA No. 1503 Tahun 2025 (Kurikulum Berbasis Cinta &amp; Pembelajaran Mendalam)
-    <div class="mt-1">Aplikasi ini dibuat oleh : Subariyanto, S.Pd, M.Pd.I. Ketua Pokjawas Madrasah Kab. Jember</div>
+    <div class="mt-1">Aplikasi ini dibuat oleh : Subariyanto, S.Pd, M.Pd.I. Ketua Pokjawas Madrasah ${e(namaKabupaten)}</div>
   </footer>`;
   document.body.insertAdjacentHTML('afterbegin', html);
 }
@@ -207,6 +217,7 @@ function viewBeranda(view) {
   const recent = PKGDB.getRecentGuru(8);
   const userInfo = window.PKGAuth ? window.PKGAuth.getUserInfo() : { fullname: '', madrasah: '', role: '' };
   const userName = userInfo.fullname || userInfo.username || 'Pengguna';
+  const namaKabupaten = getNamaKabupaten();
   const roleLabel = { admin: 'Ketua Pokjawas', pengawas: 'Pengawas', kamad: 'Kepala Madrasah', trial: 'Trial' }[userInfo.role] || userInfo.role;
   const trialBanner = (window.PKGAuth && window.PKGAuth.isTrial && window.PKGAuth.isTrial()) ? (() => {
     const daysLeft = window.PKGAuth.getTrialDaysLeft();
@@ -226,6 +237,7 @@ function viewBeranda(view) {
         <div class="beranda-hero-greeting">${greeting},</div>
         <div class="beranda-hero-name">${e(userName)}</div>
         <div class="beranda-hero-role"><i class="bi bi-shield-check"></i> ${e(roleLabel)}${userInfo.madrasah ? ' &middot; ' + e(userInfo.madrasah) : ''}</div>
+        <div class="beranda-hero-role"><i class="bi bi-geo-alt-fill"></i> ${e(namaKabupaten)}</div>
       </div>
       <div class="beranda-hero-emblem"><i class="bi bi-mortarboard-fill"></i></div>
     </div>
