@@ -1,7 +1,7 @@
 // sw.js - Service worker for PKG app
-// V3 (2026-08-19): Tahap 3 — Device key (ECDSA + IndexedDB) + challenge-response.
+// V4 (2026-08-19): Tahap 4 — Monitoring dashboard, audit log, rate limiting, export.
 // Strategy: network-first for app code (instant updates), cache-first for static assets.
-const CACHE_VERSION = 'pkg-v3-2026-08-19-tahap3';
+const CACHE_VERSION = 'pkg-v4-2026-08-19-tahap4';
 
 const NETWORK_FIRST = [
   // Same-origin app code: always try network first so updates show immediately

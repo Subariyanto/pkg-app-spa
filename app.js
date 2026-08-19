@@ -4419,9 +4419,11 @@ function viewKelolaAktivasi(view) {
     return;
   }
 
-  // State
+  // State — TAHAP 4: expanded with audit logs, dashboard, tabs
   var state = {
     adminLoggedIn: false,
+    activeTab: 'kode',  // 'kode' | 'audit' | 'dashboard'
+    // Codes tab
     codes: [],
     total: 0,
     page: 1,
@@ -4430,7 +4432,22 @@ function viewKelolaAktivasi(view) {
     filterStatus: '',
     filterRole: '',
     sortBy: 'created_desc',
-    stats: { total: 0, unused: 0, activated: 0, revoked: 0 },
+    // Audit tab
+    auditLogs: [],
+    auditTotal: 0,
+    auditPage: 1,
+    auditLimit: 25,
+    auditSearch: '',
+    auditAction: '',
+    auditDateFrom: '',
+    auditDateTo: '',
+    // Dashboard — TAHAP 4: 8 stats + suspicious activity + health
+    stats: {
+      total: 0, unused: 0, activated: 0, revoked: 0,
+      activatedToday: 0, activated30d: 0, replacements: 0, failedAttempts: 0,
+    },
+    suspiciousActivity: [],
+    serverHealth: 'unknown',  // 'online' | 'offline' | 'degraded' | 'unknown'
     loading: false,
     creating: false,
   };
@@ -4440,7 +4457,7 @@ function viewKelolaAktivasi(view) {
     state.adminLoggedIn = true;
   }
 
-  // === RENDER ===
+  // === RENDER — TAHAP 4: tab-based ===
   function render() {
     if (!state.adminLoggedIn) {
       renderLogin();
@@ -4502,130 +4519,60 @@ function viewKelolaAktivasi(view) {
     passInput.addEventListener('keydown', function(e) { if (e.key === 'Enter') { e.preventDefault(); doLogin(); } });
   }
 
-  // === MAIN PANEL ===
+  // === MAIN PANEL — TAHAP 4: tab-based (Dashboard | Kode | Audit Log) ===
   function renderPanel() {
     var s = state.stats;
+    var healthBadge = {
+      online:   '<span class="badge bg-success"><i class="bi bi-wifi"></i> Server Online</span>',
+      offline:  '<span class="badge bg-danger"><i class="bi bi-wifi-off"></i> Server Offline</span>',
+      degraded: '<span class="badge bg-warning text-dark"><i class="bi bi-exclamation-triangle"></i> Server Terganggu</span>',
+      unknown:   '<span class="badge bg-secondary"><i class="bi bi-question-circle"></i> Cek Server...</span>',
+    }[state.serverHealth || 'unknown'];
+
+    var tabKode = state.activeTab === 'kode' ? 'active' : '';
+    var tabDashboard = state.activeTab === 'dashboard' ? 'active' : '';
+    var tabAudit = state.activeTab === 'audit' ? 'active' : '';
+
     view.innerHTML = `
     <div class="card mb-4">
-      <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
-        <span><i class="bi bi-key-fill"></i> Kelola Kode Aktivasi</span>
-        <button id="btn-admin-logout" class="btn btn-sm btn-outline-light"><i class="bi bi-box-arrow-right"></i> Logout Admin</button>
+      <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <span><i class="bi bi-shield-lock"></i> Admin Panel Aktivasi</span>
+        <div class="d-flex gap-2 align-items-center">
+          ${healthBadge}
+          <button id="btn-admin-logout" class="btn btn-sm btn-outline-light"><i class="bi bi-box-arrow-right"></i> Logout</button>
+        </div>
       </div>
       <div class="card-body">
+        <!-- TAB NAV -->
+        <ul class="nav nav-tabs mb-3" id="admin-tabs">
+          <li class="nav-item">
+            <button class="nav-link ${tabDashboard}" data-tab="dashboard"><i class="bi bi-speedometer2"></i> Dashboard</button>
+          </li>
+          <li class="nav-item">
+            <button class="nav-link ${tabKode}" data-tab="kode"><i class="bi bi-key"></i> Kode Aktivasi</button>
+          </li>
+          <li class="nav-item">
+            <button class="nav-link ${tabAudit}" data-tab="audit"><i class="bi bi-clipboard-check"></i> Audit Log</button>
+          </li>
+        </ul>
 
-        <!-- STATS -->
-        <div class="row g-2 mb-4">
-          <div class="col-6 col-md-3">
-            <div class="border rounded p-2 text-center bg-light">
-              <div class="small text-muted">Total Kode</div>
-              <div class="h4 mb-0 text-primary" id="stat-total">${s.total}</div>
-            </div>
-          </div>
-          <div class="col-6 col-md-3">
-            <div class="border rounded p-2 text-center bg-light">
-              <div class="small text-muted">Belum Digunakan</div>
-              <div class="h4 mb-0 text-warning" id="stat-unused">${s.unused}</div>
-            </div>
-          </div>
-          <div class="col-6 col-md-3">
-            <div class="border rounded p-2 text-center bg-light">
-              <div class="small text-muted">Sudah Digunakan</div>
-              <div class="h4 mb-0 text-success" id="stat-activated">${s.activated}</div>
-            </div>
-          </div>
-          <div class="col-6 col-md-3">
-            <div class="border rounded p-2 text-center bg-light">
-              <div class="small text-muted">Dinonaktifkan</div>
-              <div class="h4 mb-0 text-danger" id="stat-revoked">${s.revoked}</div>
-            </div>
-          </div>
-        </div>
-
-        <!-- CREATE BUTTON -->
-        <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-          <h5 class="mb-0"><i class="bi bi-plus-circle"></i> Buat Kode Aktivasi</h5>
-          <button id="btn-create-code" class="btn btn-sm btn-success"><i class="bi bi-magic"></i> + Buat Kode Aktivasi</button>
-        </div>
-
-        <!-- SEARCH + FILTER -->
-        <div class="row g-2 mb-3">
-          <div class="col-md-4">
-            <input id="search-input" type="text" class="form-control form-control-sm" placeholder="Cari kode/pengguna/madrasah..." value="${esc(state.search)}">
-          </div>
-          <div class="col-md-3">
-            <select id="filter-status" class="form-control form-control-sm">
-              <option value="">Semua Status</option>
-              <option value="unused" ${state.filterStatus === 'unused' ? 'selected' : ''}>Belum Digunakan</option>
-              <option value="activated" ${state.filterStatus === 'activated' ? 'selected' : ''}>Sudah Digunakan</option>
-              <option value="revoked" ${state.filterStatus === 'revoked' ? 'selected' : ''}>Dinonaktifkan</option>
-            </select>
-          </div>
-          <div class="col-md-3">
-            <select id="filter-role" class="form-control form-control-sm">
-              <option value="">Semua Role</option>
-              <option value="kamad" ${state.filterRole === 'kamad' ? 'selected' : ''}>Kepala Madrasah</option>
-              <option value="pengawas" ${state.filterRole === 'pengawas' ? 'selected' : ''}>Tim PKG</option>
-            </select>
-          </div>
-          <div class="col-md-2">
-            <select id="sort-by" class="form-control form-control-sm">
-              <option value="created_desc" ${state.sortBy === 'created_desc' ? 'selected' : ''}>Terbaru</option>
-              <option value="created_asc" ${state.sortBy === 'created_asc' ? 'selected' : ''}>Terlama</option>
-            </select>
-          </div>
-        </div>
-
-        <!-- LOADING -->
-        <div id="codes-loading" class="text-center text-muted py-3 small d-none">
-          <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
-          <span class="ms-2">Memuat data dari server...</span>
-        </div>
-
-        <!-- TABLE (desktop) -->
-        <div class="table-responsive d-none d-md-block" id="codes-table-wrap">
-          <table class="table table-sm table-hover table-bordered mb-0">
-            <thead class="table-light sticky-top">
-              <tr>
-                <th style="width:40px;">No.</th>
-                <th>Kode</th>
-                <th>Status</th>
-                <th>Nama/Pemesan</th>
-                <th>Madrasah</th>
-                <th>Role</th>
-                <th>Dibuat</th>
-                <th>Diaktifkan</th>
-                <th>Perangkat</th>
-                <th class="text-center">Aksi</th>
-              </tr>
-            </thead>
-            <tbody id="codes-tbody"></tbody>
-          </table>
-        </div>
-
-        <!-- CARDS (mobile) -->
-        <div id="codes-cards" class="d-md-none"></div>
-
-        <!-- PAGINATION -->
-        <div class="d-flex justify-content-between align-items-center mt-3 flex-wrap gap-2">
-          <div class="small text-muted" id="page-info"></div>
-          <div class="btn-group btn-group-sm" id="page-controls"></div>
-        </div>
-
+        <!-- TAB CONTENT -->
+        <div id="tab-content"></div>
       </div>
     </div>
 
-    <!-- CREATE MODAL -->
-    <div class="modal fade" id="modal-create-code" tabindex="-1">
+    <!-- CREATE CODE MODAL -->
+    <div class="modal fade" id="modal-create-code" tabindex="-1" data-bs-backdrop="static">
       <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
           <div class="modal-header bg-success text-white">
-            <h5 class="modal-title"><i class="bi bi-plus-circle"></i> Buat Kode Aktivasi Baru</h5>
+            <h5 class="modal-title"><i class="bi bi-magic"></i> Buat Kode Aktivasi Baru</h5>
             <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
           </div>
           <div class="modal-body">
             <div class="form-group mb-2">
               <label class="form-label small fw-bold">Nama Pemesan/Pengguna</label>
-              <input id="create-nama" type="text" class="form-control form-control-sm" placeholder="Contoh: Kamad MTsN 1 Jember" autocomplete="off">
+              <input id="create-nama" type="text" class="form-control form-control-sm" placeholder="Nama lengkap" autocomplete="off">
             </div>
             <div class="form-group mb-2">
               <label class="form-label small fw-bold">Nama Madrasah</label>
@@ -4697,7 +4644,7 @@ function viewKelolaAktivasi(view) {
     </div>
 
     <!-- REVOKE MODAL -->
-    <div class="modal fade" id="modal-revoke-confirm" tabindex="-1">
+    <div class="modal fade" id="modal-revoke-confirm" tabindex="-1" data-bs-backdrop="static">
       <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
           <div class="modal-header bg-danger text-white">
@@ -4708,7 +4655,18 @@ function viewKelolaAktivasi(view) {
             <div class="alert alert-warning small">
               <i class="bi bi-exclamation-triangle"></i> Kode yang dinonaktifkan tidak dapat digunakan untuk aktivasi baru. Kode yang sudah aktif tidak dapat dikembalikan menjadi "Belum Digunakan".
             </div>
-            <div id="revoke-code-info" class="small text-muted"></div>
+            <div id="revoke-code-info" class="small text-muted mb-2"></div>
+            <div class="form-group">
+              <label class="form-label small fw-bold">Alasan (opsional)</label>
+              <select id="revoke-reason" class="form-control form-control-sm">
+                <option value="">— Pilih Alasan —</option>
+                <option value="Permintaan pengguna">Permintaan pengguna</option>
+                <option value="Kode bocur/salah kirim">Kode bocur/salah kirim</option>
+                <option value="Pengguna tidak aktif">Pengguna tidak aktif</option>
+                <option value="Penyalahgunaan">Penyalahgunaan</option>
+                <option value="Lainnya">Lainnya</option>
+              </select>
+            </div>
           </div>
           <div class="modal-footer">
             <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Batal</button>
@@ -4723,9 +4681,258 @@ function viewKelolaAktivasi(view) {
     `;
 
     bindEvents();
-    if (state.adminLoggedIn) {
-      loadData();
+    renderTabContent();
+    checkServerHealth();
+  }
+
+  // === TAHAP 4: RENDER TAB CONTENT ===
+  function renderTabContent() {
+    var tabContent = document.getElementById('tab-content');
+    if (!tabContent) return;
+    if (state.activeTab === 'dashboard') {
+      renderDashboard();
+    } else if (state.activeTab === 'audit') {
+      renderAuditTab();
+    } else {
+      renderKodeTab();
     }
+  }
+
+  // === TAHAP 4: DASHBOARD TAB ===
+  function renderDashboard() {
+    var s = state.stats;
+    var suspiciousHtml = state.suspiciousActivity.length === 0
+      ? '<div class="text-center text-muted py-3 small"><i class="bi bi-check-circle"></i> Tidak ada aktivitas mencurigakan dalam 24 jam terakhir.</div>'
+      : state.suspiciousActivity.map(function(a) {
+          var badge = a.action === 'RATE_LIMITED' ? 'bg-danger' : 'bg-warning text-dark';
+          return '<div class="d-flex justify-content-between align-items-center border-bottom py-1">' +
+            '<span class="small"><span class="badge ' + badge + ' me-1">' + esc(a.action) + '</span> ' + esc(a.reason || '-') + '</span>' +
+            '<span class="small text-muted">' + formatDate(a.created_at) + '</span>' +
+          '</div>';
+        }).join('');
+
+    var tabContent = document.getElementById('tab-content');
+    if (!tabContent) return;
+    tabContent.innerHTML = `
+      <div class="row g-2 mb-4">
+        <div class="col-6 col-md-3">
+          <div class="border rounded p-2 text-center bg-light h-100">
+            <div class="small text-muted"><i class="bi bi-collection"></i> Total Kode</div>
+            <div class="h4 mb-0 text-primary" id="stat-total">${s.total}</div>
+          </div>
+        </div>
+        <div class="col-6 col-md-3">
+          <div class="border rounded p-2 text-center bg-light h-100">
+            <div class="small text-muted"><i class="bi bi-inbox"></i> Belum Digunakan</div>
+            <div class="h4 mb-0 text-warning" id="stat-unused">${s.unused}</div>
+          </div>
+        </div>
+        <div class="col-6 col-md-3">
+          <div class="border rounded p-2 text-center bg-light h-100">
+            <div class="small text-muted"><i class="bi bi-check-circle"></i> Sudah Digunakan</div>
+            <div class="h4 mb-0 text-success" id="stat-activated">${s.activated}</div>
+          </div>
+        </div>
+        <div class="col-6 col-md-3">
+          <div class="border rounded p-2 text-center bg-light h-100">
+            <div class="small text-muted"><i class="bi bi-x-circle"></i> Dinonaktifkan</div>
+            <div class="h4 mb-0 text-danger" id="stat-revoked">${s.revoked}</div>
+          </div>
+        </div>
+        <div class="col-6 col-md-3">
+          <div class="border rounded p-2 text-center bg-light h-100">
+            <div class="small text-muted"><i class="bi bi-calendar-day"></i> Aktivasi Hari Ini</div>
+            <div class="h4 mb-0 text-info" id="stat-today">${s.activatedToday}</div>
+          </div>
+        </div>
+        <div class="col-6 col-md-3">
+          <div class="border rounded p-2 text-center bg-light h-100">
+            <div class="small text-muted"><i class="bi bi-calendar-month"></i> Aktivasi 30 Hari</div>
+            <div class="h4 mb-0 text-primary" id="stat-30d">${s.activated30d}</div>
+          </div>
+        </div>
+        <div class="col-6 col-md-3">
+          <div class="border rounded p-2 text-center bg-light h-100">
+            <div class="small text-muted"><i class="bi bi-arrow-repeat"></i> Ganti Perangkat</div>
+            <div class="h4 mb-0 text-warning" id="stat-replacements">${s.replacements}</div>
+          </div>
+        </div>
+        <div class="col-6 col-md-3">
+          <div class="border rounded p-2 text-center bg-light h-100">
+            <div class="small text-muted"><i class="bi bi-exclamation-triangle"></i> Percobaan Gagal (24h)</div>
+            <div class="h4 mb-0 text-danger" id="stat-failed">${s.failedAttempts}</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card mb-3">
+        <div class="card-header bg-warning text-dark"><i class="bi bi-shield-exclamation"></i> Perlu Perhatian</div>
+        <div class="card-body" id="suspicious-list">${suspiciousHtml}</div>
+      </div>
+
+      <div class="d-flex gap-2 flex-wrap">
+        <button class="btn btn-sm btn-outline-success" id="btn-export-codes"><i class="bi bi-download"></i> Export Data Kode (CSV)</button>
+        <button class="btn btn-sm btn-outline-info" id="btn-export-audit"><i class="bi bi-download"></i> Export Audit Log (CSV)</button>
+      </div>
+    `;
+
+    var btnExportCodes = document.getElementById('btn-export-codes');
+    if (btnExportCodes) btnExportCodes.addEventListener('click', exportCodesCSV);
+    var btnExportAudit = document.getElementById('btn-export-audit');
+    if (btnExportAudit) btnExportAudit.addEventListener('click', exportAuditCSV);
+
+    loadDashboardData();
+  }
+
+  // === TAHAP 4: KODE TAB (existing UI preserved) ===
+  function renderKodeTab() {
+    var tabContent = document.getElementById('tab-content');
+    if (!tabContent) return;
+    tabContent.innerHTML = `
+        <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+          <h5 class="mb-0"><i class="bi bi-plus-circle"></i> Buat Kode Aktivasi</h5>
+          <button id="btn-create-code" class="btn btn-sm btn-success"><i class="bi bi-magic"></i> + Buat Kode Aktivasi</button>
+        </div>
+
+        <div class="row g-2 mb-3">
+          <div class="col-md-4">
+            <input id="search-input" type="text" class="form-control form-control-sm" placeholder="Cari kode/pengguna/madrasah..." value="${esc(state.search)}">
+          </div>
+          <div class="col-md-3">
+            <select id="filter-status" class="form-control form-control-sm">
+              <option value="">Semua Status</option>
+              <option value="unused" ${state.filterStatus === 'unused' ? 'selected' : ''}>Belum Digunakan</option>
+              <option value="activated" ${state.filterStatus === 'activated' ? 'selected' : ''}>Sudah Digunakan</option>
+              <option value="revoked" ${state.filterStatus === 'revoked' ? 'selected' : ''}>Dinonaktifkan</option>
+            </select>
+          </div>
+          <div class="col-md-3">
+            <select id="filter-role" class="form-control form-control-sm">
+              <option value="">Semua Role</option>
+              <option value="kamad" ${state.filterRole === 'kamad' ? 'selected' : ''}>Kepala Madrasah</option>
+              <option value="pengawas" ${state.filterRole === 'pengawas' ? 'selected' : ''}>Tim PKG</option>
+            </select>
+          </div>
+          <div class="col-md-2">
+            <select id="sort-by" class="form-control form-control-sm">
+              <option value="created_desc" ${state.sortBy === 'created_desc' ? 'selected' : ''}>Terbaru</option>
+              <option value="created_asc" ${state.sortBy === 'created_asc' ? 'selected' : ''}>Terlama</option>
+            </select>
+          </div>
+        </div>
+
+        <div id="codes-loading" class="text-center text-muted py-3 small d-none">
+          <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
+          <span class="ms-2">Memuat data dari server...</span>
+        </div>
+
+        <div class="table-responsive d-none d-md-block" id="codes-table-wrap">
+          <table class="table table-sm table-hover table-bordered mb-0">
+            <thead class="table-light sticky-top">
+              <tr>
+                <th style="width:40px;">No.</th>
+                <th>Kode</th>
+                <th>Status</th>
+                <th>Nama/Pemesan</th>
+                <th>Madrasah</th>
+                <th>Role</th>
+                <th>Dibuat</th>
+                <th>Diaktifkan</th>
+                <th>Perangkat</th>
+                <th class="text-center">Aksi</th>
+              </tr>
+            </thead>
+            <tbody id="codes-tbody"></tbody>
+          </table>
+        </div>
+
+        <div id="codes-cards" class="d-md-none"></div>
+
+        <div class="d-flex justify-content-between align-items-center mt-3 flex-wrap gap-2">
+          <span id="page-info" class="small text-muted"></span>
+          <div id="page-controls" class="btn-group btn-group-sm"></div>
+        </div>
+    `;
+
+    bindKodeTabEvents();
+    loadData();
+  }
+
+  // === TAHAP 4: AUDIT LOG TAB ===
+  function renderAuditTab() {
+    var tabContent = document.getElementById('tab-content');
+    if (!tabContent) return;
+    tabContent.innerHTML = `
+      <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+        <h5 class="mb-0"><i class="bi bi-clipboard-check"></i> Audit Log Aktivasi</h5>
+        <button class="btn btn-sm btn-outline-info" id="btn-export-audit-tab"><i class="bi bi-download"></i> Export CSV</button>
+      </div>
+
+      <div class="row g-2 mb-3">
+        <div class="col-md-3">
+          <input id="audit-search" type="text" class="form-control form-control-sm" placeholder="Cari..." value="${esc(state.auditSearch)}">
+        </div>
+        <div class="col-md-2">
+          <select id="audit-action" class="form-control form-control-sm">
+            <option value="">Semua Aksi</option>
+            <option value="CREATE_CODE" ${state.auditAction === 'CREATE_CODE' ? 'selected' : ''}>Buat Kode</option>
+            <option value="ACTIVATE_CODE" ${state.auditAction === 'ACTIVATE_CODE' ? 'selected' : ''}>Aktivasi</option>
+            <option value="FAILED_ACTIVATION" ${state.auditAction === 'FAILED_ACTIVATION' ? 'selected' : ''}>Aktivasi Gagal</option>
+            <option value="REVOKE_CODE" ${state.auditAction === 'REVOKE_CODE' ? 'selected' : ''}>Nonaktifkan</option>
+            <option value="DEVICE_REPLACEMENT" ${state.auditAction === 'DEVICE_REPLACEMENT' ? 'selected' : ''}>Ganti Perangkat</option>
+            <option value="DEVICE_VERIFICATION_SUCCESS" ${state.auditAction === 'DEVICE_VERIFICATION_SUCCESS' ? 'selected' : ''}>Verifikasi Berhasil</option>
+            <option value="DEVICE_VERIFICATION_FAILED" ${state.auditAction === 'DEVICE_VERIFICATION_FAILED' ? 'selected' : ''}>Verifikasi Gagal</option>
+            <option value="RATE_LIMITED" ${state.auditAction === 'RATE_LIMITED' ? 'selected' : ''}>Rate Limited</option>
+            <option value="ADMIN_LOGIN" ${state.auditAction === 'ADMIN_LOGIN' ? 'selected' : ''}>Admin Login</option>
+            <option value="ADMIN_LOGOUT" ${state.auditAction === 'ADMIN_LOGOUT' ? 'selected' : ''}>Admin Logout</option>
+            <option value="EXPORT_DATA" ${state.auditAction === 'EXPORT_DATA' ? 'selected' : ''}>Export Data</option>
+          </select>
+        </div>
+        <div class="col-md-2">
+          <input id="audit-date-from" type="date" class="form-control form-control-sm" value="${esc(state.auditDateFrom)}">
+        </div>
+        <div class="col-md-2">
+          <input id="audit-date-to" type="date" class="form-control form-control-sm" value="${esc(state.auditDateTo)}">
+        </div>
+        <div class="col-md-2">
+          <button class="btn btn-sm btn-primary w-100" id="btn-audit-search"><i class="bi bi-search"></i> Cari</button>
+        </div>
+        <div class="col-md-1">
+          <button class="btn btn-sm btn-outline-secondary w-100" id="btn-audit-reset" title="Reset"><i class="bi bi-arrow-clockwise"></i></button>
+        </div>
+      </div>
+
+      <div id="audit-loading" class="text-center text-muted py-3 small d-none">
+        <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
+        <span class="ms-2">Memuat audit log...</span>
+      </div>
+
+      <div class="table-responsive d-none d-md-block">
+        <table class="table table-sm table-hover table-bordered mb-0">
+          <thead class="table-light">
+            <tr>
+              <th>Waktu</th>
+              <th>Aksi</th>
+              <th>Admin</th>
+              <th>Device ID</th>
+              <th>Status</th>
+              <th>Alasan</th>
+            </tr>
+          </thead>
+          <tbody id="audit-tbody"></tbody>
+        </table>
+      </div>
+
+      <div id="audit-cards" class="d-md-none"></div>
+
+      <div class="d-flex justify-content-between align-items-center mt-3 flex-wrap gap-2">
+        <span id="audit-page-info" class="small text-muted"></span>
+        <div id="audit-page-controls" class="btn-group btn-group-sm"></div>
+      </div>
+    `;
+
+    bindAuditTabEvents();
+    loadAuditLogs();
   }
 
   // === HELPERS ===
@@ -5255,7 +5462,9 @@ function viewKelolaAktivasi(view) {
       newBtn.addEventListener('click', function() {
         newBtn.disabled = true;
         newBtn.innerHTML = '<div class="spinner-border spinner-border-sm"></div> Memproses...';
-        window.SupabaseSync.adminRevokeCode(codeId).then(function(r) {
+        var reasonEl = document.getElementById('revoke-reason');
+        var reason = reasonEl ? reasonEl.value : '';
+        window.SupabaseSync.adminRevokeCode(codeId, reason).then(function(r) {
           newBtn.disabled = false;
           newBtn.innerHTML = '<i class="bi bi-x-circle"></i> Nonaktifkan';
           if (r.sessionExpired) { bsModal.hide(); handleSessionExpired(); return; }
@@ -5350,8 +5559,18 @@ function viewKelolaAktivasi(view) {
     });
   }
 
-  // === BIND EVENTS ===
+  // === BIND EVENTS — TAHAP 4: tabs + kode + audit ===
   function bindEvents() {
+    // Tab switching
+    document.querySelectorAll('#admin-tabs .nav-link').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        state.activeTab = this.dataset.tab;
+        document.querySelectorAll('#admin-tabs .nav-link').forEach(function(b) { b.classList.remove('active'); });
+        this.classList.add('active');
+        renderTabContent();
+      });
+    });
+
     // Logout
     var btnLogout = document.getElementById('btn-admin-logout');
     if (btnLogout) btnLogout.addEventListener('click', function() {
@@ -5364,7 +5583,6 @@ function viewKelolaAktivasi(view) {
     // Create code button
     var btnCreate = document.getElementById('btn-create-code');
     if (btnCreate) btnCreate.addEventListener('click', showCreateModal);
-
     var btnConfirmCreate = document.getElementById('btn-confirm-create');
     if (btnConfirmCreate) btnConfirmCreate.addEventListener('click', doCreateCode);
 
@@ -5374,8 +5592,15 @@ function viewKelolaAktivasi(view) {
       var codeText = document.getElementById('result-code-text');
       if (codeText) copyToClipboard(codeText.textContent);
     });
+  }
 
-    // Search with debounce
+  // === TAHAP 4: KODE TAB EVENTS ===
+  function bindKodeTabEvents() {
+    var btnCreate = document.getElementById('btn-create-code');
+    if (btnCreate) btnCreate.addEventListener('click', showCreateModal);
+    var btnConfirmCreate = document.getElementById('btn-confirm-create');
+    if (btnConfirmCreate) btnConfirmCreate.addEventListener('click', doCreateCode);
+
     var searchInput = document.getElementById('search-input');
     if (searchInput) {
       var debounceTimer;
@@ -5389,7 +5614,6 @@ function viewKelolaAktivasi(view) {
       });
     }
 
-    // Filter status
     var filterStatus = document.getElementById('filter-status');
     if (filterStatus) filterStatus.addEventListener('change', function() {
       state.filterStatus = filterStatus.value;
@@ -5397,7 +5621,6 @@ function viewKelolaAktivasi(view) {
       loadData();
     });
 
-    // Filter role
     var filterRole = document.getElementById('filter-role');
     if (filterRole) filterRole.addEventListener('change', function() {
       state.filterRole = filterRole.value;
@@ -5405,12 +5628,303 @@ function viewKelolaAktivasi(view) {
       loadData();
     });
 
-    // Sort
     var sortBy = document.getElementById('sort-by');
     if (sortBy) sortBy.addEventListener('change', function() {
       state.sortBy = sortBy.value;
       renderTable();
     });
+  }
+
+  // === TAHAP 4: AUDIT TAB EVENTS ===
+  function bindAuditTabEvents() {
+    var btnSearch = document.getElementById('btn-audit-search');
+    if (btnSearch) btnSearch.addEventListener('click', function() {
+      state.auditSearch = (document.getElementById('audit-search') || {}).value || '';
+      state.auditAction = (document.getElementById('audit-action') || {}).value || '';
+      state.auditDateFrom = (document.getElementById('audit-date-from') || {}).value || '';
+      state.auditDateTo = (document.getElementById('audit-date-to') || {}).value || '';
+      state.auditPage = 1;
+      loadAuditLogs();
+    });
+
+    var btnReset = document.getElementById('btn-audit-reset');
+    if (btnReset) btnReset.addEventListener('click', function() {
+      state.auditSearch = ''; state.auditAction = '';
+      state.auditDateFrom = ''; state.auditDateTo = '';
+      state.auditPage = 1;
+      renderAuditTab();
+    });
+
+    var searchInput = document.getElementById('audit-search');
+    if (searchInput) {
+      var debounceTimer;
+      searchInput.addEventListener('input', function() {
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(function() {
+          state.auditSearch = searchInput.value.trim();
+          state.auditPage = 1;
+          loadAuditLogs();
+        }, 400);
+      });
+    }
+
+    var btnExportAudit = document.getElementById('btn-export-audit-tab');
+    if (btnExportAudit) btnExportAudit.addEventListener('click', exportAuditCSV);
+  }
+
+  // === TAHAP 4: LOAD DASHBOARD DATA ===
+  function loadDashboardData() {
+    if (!window.SupabaseSync || !window.SupabaseSync.isAdminLoggedIn()) return;
+    Promise.all([
+      window.SupabaseSync.adminStatsV2(),
+      window.SupabaseSync.adminGetSuspiciousActivity({ hours: 24, limit: 20 }),
+    ]).then(function(results) {
+      var statsRes = results[0];
+      var suspRes = results[1];
+
+      if (statsRes.sessionExpired || suspRes.sessionExpired) {
+        handleSessionExpired();
+        return;
+      }
+
+      if (statsRes.ok) {
+        state.stats = statsRes.stats;
+        updateDashboardStatsUI();
+      }
+
+      if (suspRes.ok) {
+        state.suspiciousActivity = suspRes.activities || [];
+        renderSuspiciousList();
+      }
+    }).catch(function(e) {
+      showToast('Error dashboard: ' + e.message, 'danger');
+    });
+  }
+
+  function updateDashboardStatsUI() {
+    var s = state.stats;
+    var el;
+    el = document.getElementById('stat-total');        if (el) el.textContent = s.total;
+    el = document.getElementById('stat-unused');        if (el) el.textContent = s.unused;
+    el = document.getElementById('stat-activated');    if (el) el.textContent = s.activated;
+    el = document.getElementById('stat-revoked');      if (el) el.textContent = s.revoked;
+    el = document.getElementById('stat-today');        if (el) el.textContent = s.activatedToday;
+    el = document.getElementById('stat-30d');           if (el) el.textContent = s.activated30d;
+    el = document.getElementById('stat-replacements');  if (el) el.textContent = s.replacements;
+    el = document.getElementById('stat-failed');        if (el) el.textContent = s.failedAttempts;
+  }
+
+  function renderSuspiciousList() {
+    var el = document.getElementById('suspicious-list');
+    if (!el) return;
+    if (state.suspiciousActivity.length === 0) {
+      el.innerHTML = '<div class="text-center text-muted py-3 small"><i class="bi bi-check-circle"></i> Tidak ada aktivitas mencurigakan dalam 24 jam terakhir.</div>';
+      return;
+    }
+    el.innerHTML = state.suspiciousActivity.map(function(a) {
+      var badge = a.action === 'RATE_LIMITED' ? 'bg-danger' : 'bg-warning text-dark';
+      return '<div class="d-flex justify-content-between align-items-center border-bottom py-1">' +
+        '<span class="small"><span class="badge ' + badge + ' me-1">' + esc(a.action) + '</span> ' + esc(a.reason || '-') + '</span>' +
+        '<span class="small text-muted">' + formatDate(a.created_at) + '</span>' +
+      '</div>';
+    }).join('');
+  }
+
+  // === TAHAP 4: CHECK SERVER HEALTH ===
+  function checkServerHealth() {
+    if (!window.SupabaseSync || !window.SupabaseSync.checkServerHealth) return;
+    window.SupabaseSync.checkServerHealth().then(function(r) {
+      state.serverHealth = r.status;
+      // Update badge
+      var healthBadge = {
+        online:   '<span class="badge bg-success"><i class="bi bi-wifi"></i> Server Online</span>',
+        offline:  '<span class="badge bg-danger"><i class="bi bi-wifi-off"></i> Server Offline</span>',
+        degraded: '<span class="badge bg-warning text-dark"><i class="bi bi-exclamation-triangle"></i> Server Terganggu</span>',
+        unknown:   '<span class="badge bg-secondary"><i class="bi bi-question-circle"></i> Cek Server...</span>',
+      }[state.serverHealth || 'unknown'];
+      var el = document.querySelector('.card-header .badge');
+      if (el) el.outerHTML = healthBadge;
+    }).catch(function() {
+      state.serverHealth = 'offline';
+    });
+  }
+
+  // === TAHAP 4: LOAD AUDIT LOGS ===
+  function loadAuditLogs() {
+    if (!window.SupabaseSync || !window.SupabaseSync.isAdminLoggedIn()) return;
+    var loadingEl = document.getElementById('audit-loading');
+    if (loadingEl) loadingEl.classList.remove('d-none');
+
+    window.SupabaseSync.adminListAuditLogs({
+      action: state.auditAction || null,
+      dateFrom: state.auditDateFrom || null,
+      dateTo: state.auditDateTo || null,
+      search: state.auditSearch || null,
+      page: state.auditPage,
+      limit: state.auditLimit,
+    }).then(function(r) {
+      if (loadingEl) loadingEl.classList.add('d-none');
+      if (r.sessionExpired) { handleSessionExpired(); return; }
+      if (r.ok) {
+        state.auditLogs = r.logs || [];
+        state.auditTotal = r.total || state.auditLogs.length;
+        renderAuditTable();
+        renderAuditPagination();
+      } else {
+        showToast(r.message || 'Gagal memuat audit log.', 'danger');
+      }
+    }).catch(function(e) {
+      if (loadingEl) loadingEl.classList.add('d-none');
+      showToast('Error: ' + e.message, 'danger');
+    });
+  }
+
+  function renderAuditTable() {
+    var logs = state.auditLogs;
+    var tbody = document.getElementById('audit-tbody');
+    var cardsEl = document.getElementById('audit-cards');
+
+    if (logs.length === 0) {
+      var emptyHtml = '<div class="text-center text-muted py-4 small">Tidak ada audit log yang ditemukan.</div>';
+      if (tbody) tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-3">' + emptyHtml + '</td></tr>';
+      if (cardsEl) cardsEl.innerHTML = emptyHtml;
+      return;
+    }
+
+    if (tbody) {
+      tbody.innerHTML = logs.map(function(a) {
+        var actionBadge = {
+          'CREATE_CODE': 'bg-success',
+          'ACTIVATE_CODE': 'bg-primary',
+          'FAILED_ACTIVATION': 'bg-warning text-dark',
+          'REVOKE_CODE': 'bg-danger',
+          'DEVICE_REPLACEMENT': 'bg-info text-dark',
+          'DEVICE_VERIFICATION_SUCCESS': 'bg-success',
+          'DEVICE_VERIFICATION_FAILED': 'bg-danger',
+          'RATE_LIMITED': 'bg-danger',
+          'ADMIN_LOGIN': 'bg-secondary',
+          'ADMIN_LOGOUT': 'bg-secondary',
+          'EXPORT_DATA': 'bg-info text-dark',
+        }[a.action] || 'bg-secondary';
+
+        return '<tr>' +
+          '<td class="small">' + formatDate(a.created_at) + '</td>' +
+          '<td><span class="badge ' + actionBadge + '">' + esc(a.action) + '</span></td>' +
+          '<td class="small">' + esc(a.admin_email || '-') + '</td>' +
+          '<td class="small">' + maskDeviceId(a.device_id) + '</td>' +
+          '<td class="small">' + esc(a.status || '-') + '</td>' +
+          '<td class="small">' + esc(a.reason || '-') + '</td>' +
+        '</tr>';
+      }).join('');
+    }
+
+    if (cardsEl) {
+      cardsEl.innerHTML = logs.map(function(a) {
+        var actionBadge = a.action === 'RATE_LIMITED' ? 'bg-danger' : 'bg-info text-dark';
+        return '<div class="border rounded p-2 mb-2 bg-light">' +
+          '<div class="d-flex justify-content-between">' +
+            '<span class="badge ' + actionBadge + '">' + esc(a.action) + '</span>' +
+            '<span class="small text-muted">' + formatDate(a.created_at) + '</span>' +
+          '</div>' +
+          '<div class="small mt-1"><strong>Admin:</strong> ' + esc(a.admin_email || '-') + '</div>' +
+          '<div class="small"><strong>Status:</strong> ' + esc(a.status || '-') + '</div>' +
+          '<div class="small"><strong>Alasan:</strong> ' + esc(a.reason || '-') + '</div>' +
+        '</div>';
+      }).join('');
+    }
+  }
+
+  function renderAuditPagination() {
+    var pageInfo = document.getElementById('audit-page-info');
+    var pageControls = document.getElementById('audit-page-controls');
+    if (!pageInfo || !pageControls) return;
+
+    var totalPages = Math.ceil(state.auditTotal / state.auditLimit) || 1;
+    var currentPage = state.auditPage;
+
+    pageInfo.textContent = 'Halaman ' + currentPage + ' dari ' + totalPages + ' (' + state.auditTotal + ' log)';
+
+    var html = '';
+    html += '<button class="btn btn-outline-primary btn-audit-page' + (currentPage <= 1 ? ' disabled' : '') + '" data-page="' + (currentPage - 1) + '"><i class="bi bi-chevron-left"></i></button>';
+    var startPage = Math.max(1, currentPage - 2);
+    var endPage = Math.min(totalPages, startPage + 4);
+    startPage = Math.max(1, endPage - 4);
+    for (var p = startPage; p <= endPage; p++) {
+      html += '<button class="btn btn-audit-page ' + (p === currentPage ? 'btn-primary' : 'btn-outline-primary') + '" data-page="' + p + '">' + p + '</button>';
+    }
+    html += '<button class="btn btn-outline-primary btn-audit-page' + (currentPage >= totalPages ? ' disabled' : '') + '" data-page="' + (currentPage + 1) + '"><i class="bi bi-chevron-right"></i></button>';
+
+    pageControls.innerHTML = html;
+    pageControls.querySelectorAll('.btn-audit-page').forEach(function(b) {
+      if (b.classList.contains('disabled')) return;
+      b.addEventListener('click', function() {
+        state.auditPage = parseInt(b.dataset.page);
+        loadAuditLogs();
+      });
+    });
+  }
+
+  // === TAHAP 4: EXPORT CSV ===
+  function exportCodesCSV() {
+    if (!window.SupabaseSync || !window.SupabaseSync.isAdminLoggedIn()) return;
+    showToast('Mengekspor data kode...', 'info');
+    window.SupabaseSync.adminExportData({}).then(function(r) {
+      if (r.sessionExpired) { handleSessionExpired(); return; }
+      if (!r.ok) { showToast(r.message || 'Gagal export.', 'danger'); return; }
+      var rows = r.data || [];
+      if (rows.length === 0) { showToast('Tidak ada data untuk diekspor.', 'warning'); return; }
+      var headers = ['code_hint', 'status', 'nama_pengguna', 'username', 'madrasah', 'kabupaten', 'role', 'device_id', 'device_info', 'created_at', 'activated_at', 'revoked_at', 'catatan'];
+      var csv = headers.join(',') + '\n';
+      rows.forEach(function(row) {
+        var vals = headers.map(function(h) {
+          var v = row[h] || '';
+          v = String(v).replace(/"/g, '""');
+          if (v.indexOf(',') >= 0 || v.indexOf('"') >= 0 || v.indexOf('\n') >= 0) v = '"' + v + '"';
+          return v;
+        });
+        csv += vals.join(',') + '\n';
+      });
+      downloadCSV(csv, 'pkg_kode_aktivasi_export.csv');
+      showToast('Export data kode berhasil (' + rows.length + ' baris).', 'success');
+    }).catch(function(e) {
+      showToast('Error export: ' + e.message, 'danger');
+    });
+  }
+
+  function exportAuditCSV() {
+    if (!window.SupabaseSync || !window.SupabaseSync.isAdminLoggedIn()) return;
+    showToast('Mengekspor audit log...', 'info');
+    window.SupabaseSync.adminExportAuditLog({}).then(function(r) {
+      if (r.sessionExpired) { handleSessionExpired(); return; }
+      if (!r.ok) { showToast(r.message || 'Gagal export.', 'danger'); return; }
+      var rows = r.data || [];
+      if (rows.length === 0) { showToast('Tidak ada audit log untuk diekspor.', 'warning'); return; }
+      var headers = ['action', 'admin_email', 'activation_code_id', 'device_id', 'status', 'reason', 'created_at'];
+      var csv = headers.join(',') + '\n';
+      rows.forEach(function(row) {
+        var vals = headers.map(function(h) {
+          var v = row[h] || '';
+          v = String(v).replace(/"/g, '""');
+          if (v.indexOf(',') >= 0 || v.indexOf('"') >= 0 || v.indexOf('\n') >= 0) v = '"' + v + '"';
+          return v;
+        });
+        csv += vals.join(',') + '\n';
+      });
+      downloadCSV(csv, 'pkg_audit_log_export.csv');
+      showToast('Export audit log berhasil (' + rows.length + ' baris).', 'success');
+    }).catch(function(e) {
+      showToast('Error export: ' + e.message, 'danger');
+    });
+  }
+
+  function downloadCSV(csv, filename) {
+    var blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    var link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   }
 
   // === INITIAL RENDER ===

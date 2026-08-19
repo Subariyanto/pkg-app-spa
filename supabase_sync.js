@@ -1,10 +1,10 @@
-// supabase_sync.js — V2 Activation Security (RPC-based) — TAHAP 3: Device Key
+// supabase_sync.js — V2 Activation Security (RPC-based) — TAHAP 4: Monitoring & Audit
 //
 // PRINSIP: 1 kode = 1 aktivasi = 1 perangkat = 1 device key. Server is source of truth.
 // Fail closed: kalau network error / Supabase tidak bisa dihubungi, aktivasi DITOLAK.
 //
-// TAHAP 3: +enrollDeviceKey, +checkActivationStatus, +getMyActivation, +adminReplaceDevice,
-//           activateCode sekarang mengirim device_public_key.
+// TAHAP 4: +adminListAuditLogs, +adminStatsV2, +adminGetSuspiciousActivity,
+//           +adminExportData, +adminExportAuditLog, +RATE_LIMITED handling.
 
 (function () {
   'use strict';
@@ -44,6 +44,7 @@
     REVOKED: 'Kode aktivasi telah dinonaktifkan oleh Admin.',
     SERVER_ERROR: 'Server aktivasi mengalami gangguan. Coba kembali beberapa saat lagi.',
     SESSION_EXPIRED: 'Sesi Admin telah berakhir. Silakan login kembali.',
+    RATE_LIMITED: 'Terlalu banyak percobaan aktivasi gagal. Tunggu 10 menit lalu coba kembali. Jika masalah berlanjut, hubungi Admin.',
     DEVICE_KEY_MISSING: 'Data keamanan aktivasi pada perangkat ini tidak lengkap. Silakan hubungi Admin untuk melakukan pemulihan aktivasi.',
     DEVICE_MISMATCH: 'Perangkat ini tidak sesuai dengan aktivasi yang terdaftar.',
   };
@@ -95,6 +96,7 @@
         case 'ALREADY_USED': return { ok: false, reason: 'ALREADY_USED', message: MSG.ALREADY_USED };
         case 'REVOKED':      return { ok: false, reason: 'REVOKED', message: MSG.REVOKED };
         case 'INVALID_CODE':return { ok: false, reason: 'INVALID_CODE', message: MSG.INVALID };
+        case 'RATE_LIMITED':return { ok: false, reason: 'RATE_LIMITED', message: MSG.RATE_LIMITED };
         default:             return { ok: false, reason: 'SERVER_ERROR', message: MSG.SERVER_ERROR };
       }
     } catch (e) {
@@ -240,6 +242,9 @@
       adminLogout();
       return { ok: false, message: MSG.SESSION_EXPIRED, sessionExpired: true };
     }
+    if (r.status === 429) {
+      return { ok: false, message: MSG.RATE_LIMITED, rateLimited: true };
+    }
     if (errText && errText.indexOf('UNAUTHORIZED') >= 0) {
       adminLogout();
       return { ok: false, message: MSG.SESSION_EXPIRED, sessionExpired: true };
@@ -381,14 +386,14 @@
     }
   }
 
-  async function adminRevokeCode(codeId) {
+  async function adminRevokeCode(codeId, reason) {
     if (!isAdminLoggedIn()) return { ok: false, message: 'Admin belum login.' };
     if (isSessionExpired()) { adminLogout(); return { ok: false, message: MSG.SESSION_EXPIRED, sessionExpired: true }; }
     try {
       var r = await fetch(endpoint('rpc/admin_revoke_activation_code'), {
         method: 'POST',
         headers: authHeaders(_adminSession.access_token),
-        body: JSON.stringify({ p_code_id: codeId }),
+        body: JSON.stringify({ p_code_id: codeId, p_reason: reason || 'Manual revocation by admin' }),
         cache: 'no-store',
       });
       if (!r.ok) {
@@ -508,6 +513,208 @@
   }
 
   // ====================================================================
+  // TAHAP 4: adminStatsV2 — 8 stat cards (total, unused, activated, revoked,
+  //          activated_today, activated_30d, replacements, failed_attempts)
+  // ====================================================================
+
+  async function adminStatsV2() {
+    if (!isAdminLoggedIn()) return { ok: false, message: 'Admin belum login.' };
+    if (isSessionExpired()) { adminLogout(); return { ok: false, message: MSG.SESSION_EXPIRED, sessionExpired: true }; }
+    try {
+      var r = await fetch(endpoint('rpc/admin_activation_stats_v2'), {
+        method: 'POST',
+        headers: authHeaders(_adminSession.access_token),
+        body: JSON.stringify({}),
+        cache: 'no-store',
+      });
+      if (!r.ok) {
+        var errText = await r.text();
+        return handleRpcError(r, errText);
+      }
+      var rows = await r.json();
+      if (!Array.isArray(rows) || rows.length === 0) {
+        return {
+          ok: true,
+          stats: {
+            total: 0, unused: 0, activated: 0, revoked: 0,
+            activatedToday: 0, activated30d: 0, replacements: 0, failedAttempts: 0
+          }
+        };
+      }
+      var row = rows[0];
+      return {
+        ok: true,
+        stats: {
+          total:            parseInt(row.total_codes) || 0,
+          unused:           parseInt(row.unused_codes) || 0,
+          activated:        parseInt(row.activated_codes) || 0,
+          revoked:          parseInt(row.revoked_codes) || 0,
+          activatedToday:   parseInt(row.activated_today) || 0,
+          activated30d:      parseInt(row.activated_30d) || 0,
+          replacements:     parseInt(row.device_replacements) || 0,
+          failedAttempts:   parseInt(row.failed_attempts) || 0,
+        }
+      };
+    } catch (e) {
+      return { ok: false, message: 'Network error: ' + e.message };
+    }
+  }
+
+  // ====================================================================
+  // TAHAP 4: adminListAuditLogs — filter/search/pagination
+  // ====================================================================
+
+  async function adminListAuditLogs(opts) {
+    if (!isAdminLoggedIn()) return { ok: false, message: 'Admin belum login.' };
+    if (isSessionExpired()) { adminLogout(); return { ok: false, message: MSG.SESSION_EXPIRED, sessionExpired: true }; }
+    opts = opts || {};
+    try {
+      var body = {
+        p_action:    opts.action || null,
+        p_date_from: opts.dateFrom || null,
+        p_date_to:   opts.dateTo || null,
+        p_search:    opts.search || null,
+        p_page:      opts.page || 1,
+        p_limit:     opts.limit || 25,
+      };
+      var r = await fetch(endpoint('rpc/admin_list_audit_logs'), {
+        method: 'POST',
+        headers: authHeaders(_adminSession.access_token),
+        body: JSON.stringify(body),
+        cache: 'no-store',
+      });
+      if (!r.ok) {
+        var errText = await r.text();
+        return handleRpcError(r, errText);
+      }
+      var rows = await r.json();
+      var logs = Array.isArray(rows) ? rows : [];
+      var totalCount = 0;
+      if (logs.length > 0 && logs[0].total_count !== undefined) {
+        totalCount = parseInt(logs[0].total_count) || logs.length;
+      }
+      return { ok: true, logs: logs, total: totalCount };
+    } catch (e) {
+      return { ok: false, message: 'Network error: ' + e.message };
+    }
+  }
+
+  // ====================================================================
+  // TAHAP 4: adminGetSuspiciousActivity — recent failed attempts
+  // ====================================================================
+
+  async function adminGetSuspiciousActivity(opts) {
+    if (!isAdminLoggedIn()) return { ok: false, message: 'Admin belum login.' };
+    if (isSessionExpired()) { adminLogout(); return { ok: false, message: MSG.SESSION_EXPIRED, sessionExpired: true }; }
+    opts = opts || {};
+    try {
+      var body = {
+        p_hours: opts.hours || 24,
+        p_limit: opts.limit || 20,
+      };
+      var r = await fetch(endpoint('rpc/admin_get_suspicious_activity'), {
+        method: 'POST',
+        headers: authHeaders(_adminSession.access_token),
+        body: JSON.stringify(body),
+        cache: 'no-store',
+      });
+      if (!r.ok) {
+        var errText = await r.text();
+        return handleRpcError(r, errText);
+      }
+      var rows = await r.json();
+      return { ok: true, activities: Array.isArray(rows) ? rows : [] };
+    } catch (e) {
+      return { ok: false, message: 'Network error: ' + e.message };
+    }
+  }
+
+  // ====================================================================
+  // TAHAP 4: adminExportData — export activation codes (NO secrets)
+  // ====================================================================
+
+  async function adminExportData(opts) {
+    if (!isAdminLoggedIn()) return { ok: false, message: 'Admin belum login.' };
+    if (isSessionExpired()) { adminLogout(); return { ok: false, message: MSG.SESSION_EXPIRED, sessionExpired: true }; }
+    opts = opts || {};
+    try {
+      var body = {
+        p_status: opts.status || null,
+        p_role:   opts.role || null,
+      };
+      var r = await fetch(endpoint('rpc/admin_export_data'), {
+        method: 'POST',
+        headers: authHeaders(_adminSession.access_token),
+        body: JSON.stringify(body),
+        cache: 'no-store',
+      });
+      if (!r.ok) {
+        var errText = await r.text();
+        return handleRpcError(r, errText);
+      }
+      var rows = await r.json();
+      return { ok: true, data: Array.isArray(rows) ? rows : [] };
+    } catch (e) {
+      return { ok: false, message: 'Network error: ' + e.message };
+    }
+  }
+
+  // ====================================================================
+  // TAHAP 4: adminExportAuditLog — export audit logs (NO secrets)
+  // ====================================================================
+
+  async function adminExportAuditLog(opts) {
+    if (!isAdminLoggedIn()) return { ok: false, message: 'Admin belum login.' };
+    if (isSessionExpired()) { adminLogout(); return { ok: false, message: MSG.SESSION_EXPIRED, sessionExpired: true }; }
+    opts = opts || {};
+    try {
+      var body = {
+        p_action:    opts.action || null,
+        p_date_from: opts.dateFrom || null,
+        p_date_to:   opts.dateTo || null,
+      };
+      var r = await fetch(endpoint('rpc/admin_export_audit_log'), {
+        method: 'POST',
+        headers: authHeaders(_adminSession.access_token),
+        body: JSON.stringify(body),
+        cache: 'no-store',
+      });
+      if (!r.ok) {
+        var errText = await r.text();
+        return handleRpcError(r, errText);
+      }
+      var rows = await r.json();
+      return { ok: true, data: Array.isArray(rows) ? rows : [] };
+    } catch (e) {
+      return { ok: false, message: 'Network error: ' + e.message };
+    }
+  }
+
+  // ====================================================================
+  // TAHAP 4: checkServerHealth — lightweight server health check
+  // ====================================================================
+
+  async function checkServerHealth() {
+    if (!isConfigured()) return { ok: false, status: 'offline' };
+    try {
+      // Lightweight request — just check if Supabase REST is reachable
+      var r = await fetch(SUPABASE_URL + '/rest/v1/', {
+        method: 'GET',
+        headers: rpcHeaders(),
+        cache: 'no-store',
+        signal: AbortSignal.timeout ? AbortSignal.timeout(5000) : undefined,
+      });
+      if (r.ok || r.status === 404 || r.status === 406 || r.status === 400) {
+        // 404/406 is expected for bare endpoint — server is alive
+        return { ok: true, status: 'online' };
+      }
+      return { ok: false, status: 'degraded' };
+    } catch (e) {
+      return { ok: false, status: 'offline', message: e.message };
+    }
+  }
+
+  // ====================================================================
   // DEVICE INFO PARSER
   // ====================================================================
 
@@ -551,14 +758,22 @@
     getAdminSession: getAdminSession,
     isAdminLoggedIn: isAdminLoggedIn,
     isSessionExpired: isSessionExpired,
-    // Admin RPCs
+    // Admin RPCs — Tahap 2
     adminCreateCode: adminCreateCode,
     adminListCodes: adminListCodes,
     adminRevokeCode: adminRevokeCode,
     adminActivationStats: adminActivationStats,
     adminGetCodeDetail: adminGetCodeDetail,
+    // Admin RPCs — Tahap 3
     adminReplaceDevice: adminReplaceDevice,
     adminCreateChallenge: adminCreateChallenge,
+    // Admin RPCs — Tahap 4
+    adminStatsV2: adminStatsV2,
+    adminListAuditLogs: adminListAuditLogs,
+    adminGetSuspiciousActivity: adminGetSuspiciousActivity,
+    adminExportData: adminExportData,
+    adminExportAuditLog: adminExportAuditLog,
+    checkServerHealth: checkServerHealth,
     // Utils
     parseDeviceInfo: parseDeviceInfo,
     // Error messages
