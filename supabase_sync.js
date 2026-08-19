@@ -1,20 +1,21 @@
-// supabase_sync.js — relay aktivasi dari HP user ke admin laptop via Supabase.
+// supabase_sync.js — V2 Activation Security (RPC-based) — TAHAP 2 ENHANCED
 //
-// Kenapa: GithubSync (PAT) cuma di admin browser, jadi HP user tidak bisa
-// update kolom "Dipakai Oleh" di codes.json. Solusinya: HP user POST ke
-// Supabase pakai anon key (RLS: INSERT-only). Admin laptop polling SELECT,
-// merge ke local codes, lalu push lewat GithubSync seperti biasa.
+// PRINSIP: 1 kode = 1 aktivasi = 1 perangkat. Server is source of truth.
+// Tidak ada akses langsung ke tabel. Semua via RPC.
+// Kode hanya dibuat Admin via RPC admin_create_activation_code.
+// Aktivasi dipanggil via RPC activate_pkg_code (anon boleh, RLS aman).
 //
-// Tabel: pkg_aktivasi_log (sama struktur dengan erhk-2026: aktivasi_log)
+// Fail closed: kalau network error / Supabase tidak bisa dihubungi,
+// aktivasi DITOLAK. Tidak ada best-effort.
+//
+// TAHAP 2: Enhanced admin RPCs — search, filter, pagination, stats, detail, audit log.
+
 (function () {
   'use strict';
 
   // === KONFIGURASI ===
-  // Project: pkg-pokjawas (region ap-southeast-1, Singapore).
-  // Publishable key boleh di-deploy ke browser (RLS yang melindungi).
   var SUPABASE_URL = 'https://veezuitkavznfipyyxln.supabase.co';
-  var SUPABASE_ANON_KEY = 'sb_publishable_71VsVcheY13eLPXoUteZkg_hUtaJh8S';
-  var TABLE = 'pkg_aktivasi_log';
+  var SUPABASE_ANON_KEY = 'sb_pub_71VsVcheY13eLPXoUteZkg_hUtaJh8S';
 
   function isConfigured() {
     return !!(SUPABASE_URL && SUPABASE_ANON_KEY);
@@ -24,165 +25,363 @@
     return SUPABASE_URL.replace(/\/$/, '') + '/rest/v1/' + path;
   }
 
-  function headers(extra) {
-    return Object.assign({
+  function rpcHeaders() {
+    return {
       apikey: SUPABASE_ANON_KEY,
       Authorization: 'Bearer ' + SUPABASE_ANON_KEY,
       'Content-Type': 'application/json',
-    }, extra || {});
+    };
   }
 
-  // Cek apakah kode sudah dipakai di device lain (real-time cross-device check).
-  // Dipanggil di register.js sebelum terima kode.
-  async function isCodeUsed(code) {
-    if (!isConfigured() || !code) return false;
+  function authHeaders(accessToken) {
+    return {
+      apikey: SUPABASE_ANON_KEY,
+      Authorization: 'Bearer ' + accessToken,
+      'Content-Type': 'application/json',
+    };
+  }
+
+  var MSG = {
+    NETWORK: 'Aktivasi memerlukan koneksi internet. Server aktivasi tidak dapat dihubungi. Periksa koneksi internet lalu coba kembali.',
+    INVALID: 'Kode aktivasi tidak valid. Silakan hubungi Admin.',
+    ALREADY_USED: 'Kode aktivasi ini sudah digunakan dan terikat pada perangkat lain. Silakan hubungi Admin untuk mendapatkan kode aktivasi baru.',
+    REVOKED: 'Kode aktivasi telah dinonaktifkan oleh Admin.',
+    SERVER_ERROR: 'Server aktivasi mengalami gangguan. Coba kembali beberapa saat lagi.',
+    SESSION_EXPIRED: 'Sesi Admin telah berakhir. Silakan login kembali.',
+  };
+
+  // ====================================================================
+  // USER ACTIVATION (anon, via RPC)
+  // ====================================================================
+
+  async function activateCode(payload) {
+    if (!isConfigured()) {
+      return { ok: false, reason: 'NETWORK', message: MSG.NETWORK };
+    }
+
+    var code = (payload.code || '').toUpperCase().trim();
+    if (!code) {
+      return { ok: false, reason: 'INVALID_CODE', message: MSG.INVALID };
+    }
+
+    var body = {
+      p_code: code,
+      p_device_id: payload.device_id || '',
+      p_nama_pengguna: payload.nama_pengguna || null,
+      p_username: payload.username || null,
+      p_madrasah: payload.madrasah || null,
+      p_kabupaten: payload.kabupaten || null,
+      p_role: payload.role || null,
+      p_device_info: payload.device_info || (navigator.userAgent || '').slice(0, 200),
+    };
+
     try {
-      var codeNorm = String(code).toUpperCase().trim();
-      var url = endpoint(TABLE) + '?code=eq.' + encodeURIComponent(codeNorm) + '&limit=1';
-      var r = await fetch(url, { headers: headers(), cache: 'no-store' });
+      var r = await fetch(endpoint('rpc/activate_pkg_code'), {
+        method: 'POST',
+        headers: rpcHeaders(),
+        body: JSON.stringify(body),
+        cache: 'no-store',
+      });
+
       if (!r.ok) {
-        console.warn('[SupabaseSync] isCodeUsed failed:', r.status);
-        return false;
+        console.warn('[SupabaseSync] activateCode HTTP error:', r.status);
+        return { ok: false, reason: 'SERVER_ERROR', message: MSG.SERVER_ERROR };
       }
-      var rows = await r.json();
-      return Array.isArray(rows) && rows.length > 0;
+
+      var result = await r.text();
+      result = result.replace(/"/g, '').trim();
+
+      switch (result) {
+        case 'ACTIVATED':    return { ok: true, reason: 'ACTIVATED' };
+        case 'ALREADY_USED': return { ok: false, reason: 'ALREADY_USED', message: MSG.ALREADY_USED };
+        case 'REVOKED':      return { ok: false, reason: 'REVOKED', message: MSG.REVOKED };
+        case 'INVALID_CODE':return { ok: false, reason: 'INVALID_CODE', message: MSG.INVALID };
+        default:             return { ok: false, reason: 'SERVER_ERROR', message: MSG.SERVER_ERROR };
+      }
     } catch (e) {
-      console.warn('[SupabaseSync] isCodeUsed error:', e.message);
-      return false;
+      console.error('[SupabaseSync] activateCode network error:', e.message);
+      return { ok: false, reason: 'NETWORK', message: MSG.NETWORK };
     }
   }
 
-  // HP user → POST setelah aktivasi sukses.
-  // Best-effort: kalau gagal, aktivasi tetap jalan.
-  async function reportActivation(payload) {
-    if (!isConfigured()) return { ok: false, reason: 'not-configured' };
+  // ====================================================================
+  // ADMIN: Supabase Auth (email/password login)
+  // ====================================================================
+
+  var _adminSession = null;
+
+  async function adminLogin(email, password) {
+    if (!isConfigured()) return { ok: false, message: 'Supabase tidak terkonfigurasi.' };
+    try {
+      var r = await fetch(SUPABASE_URL + '/auth/v1/token?grant_type=password', {
+        method: 'POST',
+        headers: {
+          apikey: SUPABASE_ANON_KEY,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email: email, password: password }),
+      });
+      var data = await r.json();
+      if (!r.ok) {
+        return { ok: false, message: data.error_description || data.message || 'Login gagal.' };
+      }
+      _adminSession = {
+        access_token: data.access_token,
+        refresh_token: data.refresh_token,
+        user: data.user,
+        expires_at: data.expires_at,
+      };
+      return { ok: true, access_token: data.access_token, user: data.user };
+    } catch (e) {
+      return { ok: false, message: 'Network error: ' + e.message };
+    }
+  }
+
+  function adminLogout() { _adminSession = null; }
+  function getAdminSession() { return _adminSession; }
+  function isAdminLoggedIn() { return !!(_adminSession && _adminSession.access_token); }
+
+  // Helper: check session expired (Supabase JWT exp claim)
+  function isSessionExpired() {
+    if (!_adminSession || !_adminSession.access_token) return true;
+    try {
+      var token = _adminSession.access_token;
+      var payload = JSON.parse(atob(token.split('.')[1]));
+      var exp = payload.exp;
+      if (!exp) return false;
+      return (Date.now() / 1000) > (exp - 30); // 30s buffer
+    } catch (e) { return false; }
+  }
+
+  // Helper: handle RPC error, detect 401/403
+  function handleRpcError(r, errText) {
+    if (r.status === 401 || r.status === 403) {
+      adminLogout();
+      return { ok: false, message: MSG.SESSION_EXPIRED, sessionExpired: true };
+    }
+    if (errText && errText.indexOf('UNAUTHORIZED') >= 0) {
+      adminLogout();
+      return { ok: false, message: MSG.SESSION_EXPIRED, sessionExpired: true };
+    }
+    return { ok: false, message: 'Error ' + r.status + (errText ? ': ' + errText.slice(0, 200) : '') };
+  }
+
+  // ====================================================================
+  // ADMIN RPCs
+  // ====================================================================
+
+  // adminCreateCode — RPC admin_create_activation_code (Tahap 2: + p_role)
+  async function adminCreateCode(payload) {
+    if (!isAdminLoggedIn()) return { ok: false, message: 'Admin belum login.' };
+    if (isSessionExpired()) { adminLogout(); return { ok: false, message: MSG.SESSION_EXPIRED, sessionExpired: true }; }
     try {
       var body = {
-        code: String(payload.code || '').toUpperCase(),
-        nama: String(payload.nama || ''),
-        username: payload.username ? String(payload.username) : null,
-        madrasah: payload.madrasah ? String(payload.madrasah) : null,
-        role: payload.role || 'kamad',
-        device_info: payload.device_info || (navigator.userAgent || '').slice(0, 200),
-        device_id: payload.device_id || null,
+        p_nama_pengguna: payload.nama_pengguna || null,
+        p_madrasah:      payload.madrasah || null,
+        p_kabupaten:     payload.kabupaten || null,
+        p_catatan:       payload.catatan || null,
+        p_role:          payload.role || null,
       };
-      var r = await fetch(endpoint(TABLE), {
+      var r = await fetch(endpoint('rpc/admin_create_activation_code'), {
         method: 'POST',
-        headers: headers({ Prefer: 'return=minimal' }),
+        headers: authHeaders(_adminSession.access_token),
         body: JSON.stringify(body),
+        cache: 'no-store',
       });
       if (!r.ok) {
-        var txt = await r.text();
-        console.warn('[SupabaseSync] reportActivation failed:', r.status, txt);
-        return { ok: false, reason: 'http-' + r.status };
+        var errText = await r.text();
+        return handleRpcError(r, errText);
       }
-      return { ok: true };
+      var rows = await r.json();
+      if (!Array.isArray(rows) || rows.length === 0) {
+        return { ok: false, message: 'Server tidak mengembalikan kode.' };
+      }
+      var row = rows[0];
+      return {
+        ok: true,
+        code: row.code,
+        code_id: row.code_id,
+        code_hint: row.code_hint,
+        status: row.status,
+        created_at: row.created_at,
+      };
     } catch (e) {
-      console.warn('[SupabaseSync] reportActivation error:', e.message);
-      return { ok: false, reason: 'network', error: e.message };
+      return { ok: false, message: 'Network error: ' + e.message };
     }
   }
 
-  // Admin laptop → SELECT semua row yang belum processed_at.
-  async function fetchUnprocessed() {
-    if (!isConfigured()) return [];
+  // adminListCodes — RPC admin_list_activation_codes (Tahap 2: search, filter, pagination)
+  async function adminListCodes(opts) {
+    if (!isAdminLoggedIn()) return { ok: false, message: 'Admin belum login.' };
+    if (isSessionExpired()) { adminLogout(); return { ok: false, message: MSG.SESSION_EXPIRED, sessionExpired: true }; }
+    opts = opts || {};
     try {
-      var url = endpoint(TABLE) + '?processed_at=is.null&order=activated_at.asc&limit=200';
-      var r = await fetch(url, { headers: headers() });
-      if (!r.ok) {
-        console.warn('[SupabaseSync] fetchUnprocessed failed:', r.status);
-        return [];
-      }
-      return await r.json();
-    } catch (e) {
-      console.warn('[SupabaseSync] fetchUnprocessed error:', e.message);
-      return [];
-    }
-  }
-
-  // Mark row sebagai processed.
-  async function markProcessed(ids) {
-    if (!isConfigured() || !ids || !ids.length) return { ok: true, count: 0 };
-    try {
-      var inFilter = '(' + ids.map(function (x) { return '"' + x + '"'; }).join(',') + ')';
-      var url = endpoint(TABLE) + '?id=in.' + encodeURIComponent(inFilter);
-      var r = await fetch(url, {
-        method: 'PATCH',
-        headers: headers({ Prefer: 'return=minimal' }),
-        body: JSON.stringify({ processed_at: new Date().toISOString() }),
+      var body = {
+        p_status: opts.status || null,
+        p_role:   opts.role || null,
+        p_search: opts.search || null,
+        p_page:   opts.page || 1,
+        p_limit:  opts.limit || 25,
+      };
+      var r = await fetch(endpoint('rpc/admin_list_activation_codes'), {
+        method: 'POST',
+        headers: authHeaders(_adminSession.access_token),
+        body: JSON.stringify(body),
+        cache: 'no-store',
       });
       if (!r.ok) {
-        var txt = await r.text();
-        console.warn('[SupabaseSync] markProcessed failed:', r.status, txt);
-        return { ok: false, reason: 'http-' + r.status };
+        var errText = await r.text();
+        return handleRpcError(r, errText);
       }
-      return { ok: true, count: ids.length };
+      var rows = await r.json();
+      var codes = Array.isArray(rows) ? rows : [];
+      var totalCount = 0;
+      if (codes.length > 0 && codes[0].total_count !== undefined) {
+        totalCount = parseInt(codes[0].total_count) || codes.length;
+      }
+      return { ok: true, codes: codes, total: totalCount };
     } catch (e) {
-      console.warn('[SupabaseSync] markProcessed error:', e.message);
-      return { ok: false, error: e.message };
+      return { ok: false, message: 'Network error: ' + e.message };
     }
   }
 
-  // Workflow lengkap untuk admin: pull unprocessed → merge ke local codes →
-  // push ke gh-pages → mark processed di Supabase.
-  async function syncAdminInbox() {
-    if (!isConfigured()) return { merged: 0, pushed: false, processed: 0, errors: ['not-configured'] };
-    var errors = [];
-    var rows = await fetchUnprocessed();
-    if (!rows.length) return { merged: 0, pushed: false, processed: 0, errors: errors };
-
-    var list = window.PKGAuth ? window.PKGAuth.listActivationCodes() : [];
-    var processedIds = [];
-    var merged = 0;
-
-    for (var i = 0; i < rows.length; i++) {
-      var row = rows[i];
-      var codeNorm = String(row.code || '').toUpperCase().trim();
-      if (!codeNorm) { processedIds.push(row.id); continue; }
-      var idx = -1;
-      for (var j = 0; j < list.length; j++) {
-        if (String(list[j].code || '').toUpperCase() === codeNorm) { idx = j; break; }
+  // adminActivationStats — RPC admin_activation_stats
+  async function adminActivationStats() {
+    if (!isAdminLoggedIn()) return { ok: false, message: 'Admin belum login.' };
+    if (isSessionExpired()) { adminLogout(); return { ok: false, message: MSG.SESSION_EXPIRED, sessionExpired: true }; }
+    try {
+      var r = await fetch(endpoint('rpc/admin_activation_stats'), {
+        method: 'POST',
+        headers: authHeaders(_adminSession.access_token),
+        body: JSON.stringify({}),
+        cache: 'no-store',
+      });
+      if (!r.ok) {
+        var errText = await r.text();
+        return handleRpcError(r, errText);
       }
-      var noteParts = [row.nama];
-      if (row.username) noteParts.push('u: ' + row.username);
-      if (row.madrasah) noteParts.push(row.madrasah);
-      var noteText = noteParts.filter(Boolean).join(' · ') + ' · auto ' + new Date(row.activated_at).toLocaleDateString('id-ID');
-      if (idx >= 0) {
-        if (!list[idx].deviceId) {
-          list[idx].deviceId = row.device_id || row.device_info || '';
-          list[idx].fullname = row.nama || list[idx].fullname || '';
-          list[idx].madrasah = row.madrasah || list[idx].madrasah || '';
-          list[idx].status = 'Used';
-          list[idx].dateUsed = row.activated_at ? new Date(row.activated_at).toLocaleString() : new Date().toLocaleString();
-        }
-        if (!list[idx].notes || list[idx].notes === '') {
-          list[idx].notes = 'auto: ' + noteText;
-        }
-        merged++;
+      var rows = await r.json();
+      if (!Array.isArray(rows) || rows.length === 0) {
+        return { ok: true, stats: { total: 0, unused: 0, activated: 0, revoked: 0 } };
       }
-      processedIds.push(row.id);
+      var row = rows[0];
+      return {
+        ok: true,
+        stats: {
+          total:     parseInt(row.total) || 0,
+          unused:    parseInt(row.unused) || 0,
+          activated: parseInt(row.activated) || 0,
+          revoked:   parseInt(row.revoked) || 0,
+        }
+      };
+    } catch (e) {
+      return { ok: false, message: 'Network error: ' + e.message };
     }
-
-    var pushed = false;
-    if (merged > 0 && window.PKGAuth) {
-      window.PKGAuth.saveActivationCodes(list);
-      pushed = true;
-    }
-    var processed = 0;
-    if (processedIds.length) {
-      var r = await markProcessed(processedIds);
-      if (r.ok) processed = r.count || processedIds.length;
-      else errors.push('markProcessed: ' + (r.reason || r.error || 'unknown'));
-    }
-    return { merged: merged, pushed: pushed, processed: processed, errors: errors };
   }
 
+  // adminGetCodeDetail — RPC admin_get_code_detail
+  async function adminGetCodeDetail(codeId) {
+    if (!isAdminLoggedIn()) return { ok: false, message: 'Admin belum login.' };
+    if (isSessionExpired()) { adminLogout(); return { ok: false, message: MSG.SESSION_EXPIRED, sessionExpired: true }; }
+    try {
+      var r = await fetch(endpoint('rpc/admin_get_code_detail'), {
+        method: 'POST',
+        headers: authHeaders(_adminSession.access_token),
+        body: JSON.stringify({ p_code_id: codeId }),
+        cache: 'no-store',
+      });
+      if (!r.ok) {
+        var errText = await r.text();
+        return handleRpcError(r, errText);
+      }
+      var rows = await r.json();
+      if (!Array.isArray(rows) || rows.length === 0) {
+        return { ok: false, message: 'Kode tidak ditemukan.' };
+      }
+      return { ok: true, detail: rows[0] };
+    } catch (e) {
+      return { ok: false, message: 'Network error: ' + e.message };
+    }
+  }
+
+  // adminRevokeCode — RPC admin_revoke_activation_code
+  async function adminRevokeCode(codeId) {
+    if (!isAdminLoggedIn()) return { ok: false, message: 'Admin belum login.' };
+    if (isSessionExpired()) { adminLogout(); return { ok: false, message: MSG.SESSION_EXPIRED, sessionExpired: true }; }
+    try {
+      var r = await fetch(endpoint('rpc/admin_revoke_activation_code'), {
+        method: 'POST',
+        headers: authHeaders(_adminSession.access_token),
+        body: JSON.stringify({ p_code_id: codeId }),
+        cache: 'no-store',
+      });
+      if (!r.ok) {
+        var errText = await r.text();
+        return handleRpcError(r, errText);
+      }
+      var result = await r.text();
+      result = result.replace(/"/g, '').trim();
+      if (result === 'REVOKED')         return { ok: true, result: 'REVOKED' };
+      if (result === 'ALREADY_REVOKED') return { ok: false, message: 'Kode sudah dinonaktifkan sebelumnya.' };
+      if (result === 'NOT_FOUND')       return { ok: false, message: 'Kode tidak ditemukan.' };
+      return { ok: false, message: 'Response tidak dikenal: ' + result };
+    } catch (e) {
+      return { ok: false, message: 'Network error: ' + e.message };
+    }
+  }
+
+  // ====================================================================
+  // DEVICE INFO PARSER (for display in detail modal)
+  // ====================================================================
+
+  function parseDeviceInfo(ua) {
+    if (!ua) return { browser: '-', os: '-', device: '-' };
+    var browser = 'Unknown';
+    var os = 'Unknown';
+    var device = 'Desktop';
+
+    // Browser
+    if (ua.indexOf('Edg/') > -1) browser = 'Microsoft Edge';
+    else if (ua.indexOf('OPR/') > -1 || ua.indexOf('Opera') > -1) browser = 'Opera';
+    else if (ua.indexOf('Chrome/') > -1) browser = 'Google Chrome';
+    else if (ua.indexOf('Firefox/') > -1) browser = 'Mozilla Firefox';
+    else if (ua.indexOf('Safari/') > -1) browser = 'Safari';
+
+    // OS
+    if (ua.indexOf('Windows') > -1) os = 'Windows';
+    else if (ua.indexOf('Android') > -1) os = 'Android';
+    else if (ua.indexOf('iPhone') > -1 || ua.indexOf('iPad') > -1) os = 'iOS';
+    else if (ua.indexOf('Mac OS') > -1 || ua.indexOf('MacOS') > -1) os = 'macOS';
+    else if (ua.indexOf('Linux') > -1) os = 'Linux';
+
+    // Device type
+    if (ua.indexOf('Mobile') > -1 || ua.indexOf('Android') > -1) device = 'HP/Mobile';
+    else if (ua.indexOf('iPad') > -1 || ua.indexOf('Tablet') > -1) device = 'Tablet';
+    else if (ua.indexOf('Windows') > -1 && ua.indexOf('Touch') > -1) device = 'Tablet/Touch';
+
+    return { browser: browser, os: os, device: device };
+  }
+
+  // === EXPORT ===
   window.SupabaseSync = {
     isConfigured: isConfigured,
-    isCodeUsed: isCodeUsed,
-    reportActivation: reportActivation,
-    fetchUnprocessed: fetchUnprocessed,
-    markProcessed: markProcessed,
-    syncAdminInbox: syncAdminInbox,
+    // User activation (anon)
+    activateCode: activateCode,
+    // Admin auth
+    adminLogin: adminLogin,
+    adminLogout: adminLogout,
+    getAdminSession: getAdminSession,
+    isAdminLoggedIn: isAdminLoggedIn,
+    isSessionExpired: isSessionExpired,
+    // Admin RPCs
+    adminCreateCode: adminCreateCode,
+    adminListCodes: adminListCodes,
+    adminRevokeCode: adminRevokeCode,
+    adminActivationStats: adminActivationStats,
+    adminGetCodeDetail: adminGetCodeDetail,
+    // Utils
+    parseDeviceInfo: parseDeviceInfo,
+    // Error messages
+    MSG: MSG,
   };
 })();
