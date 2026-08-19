@@ -1,7 +1,7 @@
 // sw.js - Service worker for PKG app
-// V2 (2026-08-19): Secure activation system — cache bumped to force update.
+// V3 (2026-08-19): Tahap 3 — Device key (ECDSA + IndexedDB) + challenge-response.
 // Strategy: network-first for app code (instant updates), cache-first for static assets.
-const CACHE_VERSION = 'pkg-v2-2026-08-19-tahap2';
+const CACHE_VERSION = 'pkg-v3-2026-08-19-tahap3';
 
 const NETWORK_FIRST = [
   // Same-origin app code: always try network first so updates show immediately
@@ -14,6 +14,7 @@ const NETWORK_FIRST = [
   'saran-indikator.js',
   'laporan.js',
   'auth.js',
+  'activation_device.js',
   'supabase_sync.js',
   'github_sync.js',
   'style.css',
@@ -31,6 +32,7 @@ const PRECACHE = [
   './importer.js',
   './laporan.js',
   './auth.js',
+  './activation_device.js',
   './supabase_sync.js',
   './github_sync.js',
   './app.js',

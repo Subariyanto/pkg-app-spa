@@ -1,8 +1,9 @@
 // auth.js - Sistem Aktivasi Aman, Registrasi Akun, Login, & PIN Lock untuk PKG App SPA
-// V2 (2026-08-19): Server-authoritative activation via Supabase RPC.
-// 1 kode = 1 aktivasi = 1 perangkat. Fail closed.
+// V3 (2026-08-19): Tahap 3 — Device key (ECDSA P-256) + IndexedDB + challenge-response.
+// 1 kode = 1 aktivasi = 1 perangkat = 1 device key. Fail closed.
 // Tidak ada lagi: ACTIVATION_SALT, ADMIN_MASTER_CODE, TRIAL_CODE, hardcoded admin,
 // client-side code generation, checksum validation, best-effort activation.
+// Device key: private key di IndexedDB (non-exportable), public key di server.
 
 (function () {
   'use strict';
@@ -16,7 +17,6 @@
   const KEY_ACTIVATED = 'pkg_v1_activated';
   const KEY_ACTIVATION_CODE = 'pkg_v1_activation_code';
   const KEY_DEVICE_ID = 'pkg_v1_device_id';
-  const KEY_DEVICE_BINDING = 'pkg_v1_device_binding';
 
   const KEY_USER_ROLE = 'pkg_v1_user_role'; // admin | pengawas | kamad
   const KEY_USER_USERNAME = 'pkg_v1_user_username';
@@ -69,6 +69,9 @@
 
   // --- DEVICE ID (crypto.randomUUID) ---
   function getDeviceId() {
+    // TAHAP 3: Delegate to ActivationDevice module
+    if (window.ActivationDevice) return window.ActivationDevice.getDeviceId();
+    // Fallback if ActivationDevice not loaded yet
     let id = localStorage.getItem(KEY_DEVICE_ID);
     if (!id) {
       if (window.crypto && typeof window.crypto.randomUUID === 'function') {
@@ -124,16 +127,13 @@
 
   // --- AUTH STATUS CHECKS ---
   function isActivated() {
-    const activated = localStorage.getItem(KEY_ACTIVATED) === 'true';
-    if (!activated) return false;
-
-    // Verifikasi Device Binding (mencegah copy data ke device lain)
-    const code = localStorage.getItem(KEY_ACTIVATION_CODE);
-    const devId = getDeviceId();
-    const binding = localStorage.getItem(KEY_DEVICE_BINDING);
-    const expectedBinding = fnv1aHash(devId + ':' + code);
-
-    return binding === expectedBinding;
+    // TAHAP 3: Use ActivationDevice state (no more FNV hash binding)
+    if (window.ActivationDevice) {
+      var state = window.ActivationDevice.getActivationState();
+      return state.activated;
+    }
+    // Fallback
+    return localStorage.getItem(KEY_ACTIVATED) === 'true';
   }
 
   function isLoggedIn() {
@@ -316,38 +316,38 @@
         return;
       }
 
-      // === SERVER-AUTHORITATIVE ACTIVATION (FAIL CLOSED) ===
+      // === TAHAP 3: ACTIVATION VIA ActivationDevice (device key + RPC) ===
       btn.disabled = true;
       btn.textContent = 'Memverifikasi ke server...';
-      infoEl.textContent = 'Menghubungi server aktivasi...';
+      infoEl.textContent = 'Menghubungi server aktivasi & membuat device key...';
 
-      const devId = getDeviceId();
-      const result = await window.SupabaseSync.activateCode({
-        code: code,
-        device_id: devId,
-        nama_pengguna: fullname,
-        username: username,
-        madrasah: madrasah || null,
-        kabupaten: kabupaten,
-        role: role,
-        device_info: navigator.userAgent || ''
-      });
-
-      if (!result.ok) {
-        // FAIL CLOSED: tidak simpan aktivasi lokal
+      var actResult;
+      try {
+        actResult = await window.ActivationDevice.performActivation({
+          code: code,
+          nama_pengguna: fullname,
+          username: username,
+          madrasah: madrasah || null,
+          kabupaten: kabupaten,
+          role: role,
+        });
+      } catch (e) {
         btn.disabled = false;
         btn.textContent = 'Aktifkan & Daftar Akun';
-        errEl.textContent = result.message || 'Aktivasi gagal.';
+        errEl.textContent = 'Gagal: ' + (e.message || 'unknown error');
         return;
       }
 
-      // === SERVER KONFIRMASI ACTIVATED → simpan aktivasi lokal ===
-      const binding = fnv1aHash(devId + ':' + code);
-      const passHash = fnv1aHash(password);
+      if (!actResult.ok) {
+        // FAIL CLOSED: tidak simpan aktivasi lokal
+        btn.disabled = false;
+        btn.textContent = 'Aktifkan & Daftar Akun';
+        errEl.textContent = actResult.message || 'Aktivasi gagal.';
+        return;
+      }
 
-      localStorage.setItem(KEY_ACTIVATED, 'true');
-      localStorage.setItem(KEY_ACTIVATION_CODE, code);
-      localStorage.setItem(KEY_DEVICE_BINDING, binding);
+      // === SERVER KONFIRMASI ACTIVATED → simpan akun lokal ===
+      const passHash = fnv1aHash(password);
       localStorage.setItem(KEY_USER_ROLE, role);
       localStorage.setItem(KEY_USER_USERNAME, username);
       localStorage.setItem(KEY_USER_PASSWORD_HASH, passHash);
@@ -355,7 +355,7 @@
       localStorage.setItem(KEY_USER_MADRASAH, madrasah);
       localStorage.setItem(KEY_USER_KABUPATEN, kabupaten);
 
-      alert('Aktivasi berhasil! Silakan login menggunakan akun yang baru saja dibuat.');
+      alert('Aktivasi berhasil! Device key telah dibuat. Silakan login menggunakan akun yang baru saja dibuat.');
       location.hash = '#/';
       location.reload();
     });
@@ -586,7 +586,11 @@
       const keys = Object.keys(localStorage).filter(k => k.startsWith('pkg_v1_'));
       for (const k of keys) localStorage.removeItem(k);
       sessionStorage.clear();
-      alert('Semua data PKG dan PIN sudah dihapus. Halaman akan di-reload.');
+      // TAHAP 3: Clear IndexedDB device key juga
+      if (window.ActivationDevice) {
+        window.ActivationDevice.clearActivation().catch(function () {});
+      }
+      alert('Semua data PKG, PIN, dan device key sudah dihapus. Halaman akan di-reloaded.');
       location.reload();
     });
   }
@@ -782,6 +786,47 @@
       return new Promise(() => {}); // Gated forever
     }
 
+    // 1b. TAHAP 3: Device Key Integrity Check
+    if (window.ActivationDevice) {
+      var integrity = await window.ActivationDevice.checkDeviceKeyIntegrity();
+      if (integrity.status === 'DEVICE_KEY_MISSING' || integrity.status === 'DEVICE_ID_MISSING') {
+        // Private key hilang → tampilkan layar recovery
+        renderRecoveryScreen(integrity.message);
+        return new Promise(() => {});
+      }
+
+      // 1c. TAHAP 3: Legacy Enrollment (untuk user Tahap 1/2 yang belum punya device key)
+      if (integrity.status === 'OK') {
+        var state = window.ActivationDevice.getActivationState();
+        if (!state.deviceKeyEnrolled) {
+          // Coba enroll device key ke server (one-time migration)
+          var enrollResult = await window.ActivationDevice.tryLegacyEnrollment();
+          if (enrollResult.enrolled) {
+            console.log('[Auth] Device key enrolled successfully (legacy migration).');
+          } else if (enrollResult.reason === 'ALREADY_ENROLLED') {
+            // Server sudah punya key tapi tidak cocok → tampilkan recovery
+            renderRecoveryScreen(enrollResult.message || 'Device key tidak cocok dengan server. Hubungi Admin.');
+            return new Promise(() => {});
+          } else if (enrollResult.reason === 'DEVICE_MISMATCH' || enrollResult.reason === 'NOT_FOUND' || enrollResult.reason === 'NOT_ACTIVATED') {
+            renderRecoveryScreen(enrollResult.message || 'Aktivasi tidak valid. Hubungi Admin.');
+            return new Promise(() => {});
+          }
+          // NETWORK_ERROR → lanjut offline, akan retry di sesi berikutnya
+        }
+      }
+
+      // 1d. TAHAP 3: Periodic Server Verification (7 hari)
+      if (window.ActivationDevice.needsServerVerification()) {
+        // Fire-and-forget — jangan block app
+        window.ActivationDevice.performServerVerification().then(function (vr) {
+          if (vr.revoked) {
+            alert('Aktivasi Anda telah dinonaktifkan: ' + (vr.message || ''));
+            location.reload();
+          }
+        }).catch(function () {});
+      }
+    }
+
     // 2. Cek Login
     if (!isLoggedIn()) {
       renderLoginScreen();
@@ -804,6 +849,50 @@
     // Lolos semua gate
     const overlay = document.getElementById('pkg-auth-overlay');
     if (overlay) overlay.remove();
+  }
+
+  // TAHAP 3: Recovery Screen — device key missing or mismatch
+  function renderRecoveryScreen(message) {
+    var old = document.getElementById('pkg-auth-overlay');
+    if (old) old.remove();
+    var overlay = document.createElement('div');
+    overlay.id = 'pkg-auth-overlay';
+    overlay.innerHTML = `
+      <style>
+        #pkg-auth-overlay {
+          position: fixed; inset: 0; z-index: 3000;
+          background: linear-gradient(135deg, #7f1d1d 0%, #991b1b 100%);
+          display: flex; align-items: center; justify-content: center;
+          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+          padding: 1rem;
+        }
+        .recovery-card {
+          background: #fff; border-radius: 12px; padding: 2rem;
+          width: 100%; max-width: 420px;
+          box-shadow: 0 12px 40px rgba(0,0,0,.3);
+          text-align: center;
+        }
+        .recovery-card .icon {
+          font-size: 3rem; color: #dc2626;
+          margin-bottom: 1rem;
+        }
+        .recovery-card h2 { color: #dc2626; margin: 0 0 1rem; font-size: 1.4rem; }
+        .recovery-card p { color: #555; font-size: 0.9rem; line-height: 1.5; margin-bottom: 1.5rem; }
+        .recovery-card .device-id {
+          background: #f3f4f6; padding: 0.5rem; border-radius: 6px;
+          font-family: monospace; font-size: 0.75rem; color: #666;
+          word-break: break-all; margin-bottom: 1rem;
+        }
+      </style>
+      <div class="recovery-card">
+        <div class="icon"><i class="bi bi-exclamation-triangle"></i></div>
+        <h2>Aktivasi Bermasalah</h2>
+        <p>${escapeHtml(message)}</p>
+        <div class="device-id">Device ID: ${escapeHtml(getDeviceId())}</div>
+        <p class="small text-muted">Silakan hubungi Admin dengan menunjukkan Device ID di atas untuk pemulihan aktivasi (device replacement).</p>
+      </div>
+    `;
+    document.body.appendChild(overlay);
   }
 
   function logout() {

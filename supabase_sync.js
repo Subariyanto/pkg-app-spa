@@ -1,14 +1,10 @@
-// supabase_sync.js — V2 Activation Security (RPC-based) — TAHAP 2 ENHANCED
+// supabase_sync.js — V2 Activation Security (RPC-based) — TAHAP 3: Device Key
 //
-// PRINSIP: 1 kode = 1 aktivasi = 1 perangkat. Server is source of truth.
-// Tidak ada akses langsung ke tabel. Semua via RPC.
-// Kode hanya dibuat Admin via RPC admin_create_activation_code.
-// Aktivasi dipanggil via RPC activate_pkg_code (anon boleh, RLS aman).
+// PRINSIP: 1 kode = 1 aktivasi = 1 perangkat = 1 device key. Server is source of truth.
+// Fail closed: kalau network error / Supabase tidak bisa dihubungi, aktivasi DITOLAK.
 //
-// Fail closed: kalau network error / Supabase tidak bisa dihubungi,
-// aktivasi DITOLAK. Tidak ada best-effort.
-//
-// TAHAP 2: Enhanced admin RPCs — search, filter, pagination, stats, detail, audit log.
+// TAHAP 3: +enrollDeviceKey, +checkActivationStatus, +getMyActivation, +adminReplaceDevice,
+//           activateCode sekarang mengirim device_public_key.
 
 (function () {
   'use strict';
@@ -48,10 +44,12 @@
     REVOKED: 'Kode aktivasi telah dinonaktifkan oleh Admin.',
     SERVER_ERROR: 'Server aktivasi mengalami gangguan. Coba kembali beberapa saat lagi.',
     SESSION_EXPIRED: 'Sesi Admin telah berakhir. Silakan login kembali.',
+    DEVICE_KEY_MISSING: 'Data keamanan aktivasi pada perangkat ini tidak lengkap. Silakan hubungi Admin untuk melakukan pemulihan aktivasi.',
+    DEVICE_MISMATCH: 'Perangkat ini tidak sesuai dengan aktivasi yang terdaftar.',
   };
 
   // ====================================================================
-  // USER ACTIVATION (anon, via RPC)
+  // USER ACTIVATION (anon, via RPC) — TAHAP 3: +device_public_key
   // ====================================================================
 
   async function activateCode(payload) {
@@ -73,6 +71,7 @@
       p_kabupaten: payload.kabupaten || null,
       p_role: payload.role || null,
       p_device_info: payload.device_info || (navigator.userAgent || '').slice(0, 200),
+      p_device_public_key: payload.device_public_key || null,
     };
 
     try {
@@ -101,6 +100,90 @@
     } catch (e) {
       console.error('[SupabaseSync] activateCode network error:', e.message);
       return { ok: false, reason: 'NETWORK', message: MSG.NETWORK };
+    }
+  }
+
+  // ====================================================================
+  // TAHAP 3: get_my_activation — Get activation_id after activation
+  // ====================================================================
+
+  async function getMyActivation(deviceId, code) {
+    if (!isConfigured()) return { ok: false };
+    try {
+      var body = {
+        p_device_id: deviceId,
+        p_code: code.toUpperCase().trim(),
+      };
+      var r = await fetch(endpoint('rpc/get_my_activation'), {
+        method: 'POST',
+        headers: rpcHeaders(),
+        body: JSON.stringify(body),
+        cache: 'no-store',
+      });
+      if (!r.ok) return { ok: false };
+      var rows = await r.json();
+      if (!Array.isArray(rows) || rows.length === 0) return { ok: false };
+      return {
+        ok: true,
+        activationId: rows[0].activation_id,
+        status: rows[0].status,
+        deviceKeyEnrolled: rows[0].device_key_enrolled,
+      };
+    } catch (e) {
+      return { ok: false };
+    }
+  }
+
+  // ====================================================================
+  // TAHAP 3: enrollDeviceKey — Legacy one-time enrollment
+  // ====================================================================
+
+  async function enrollDeviceKey(activationId, deviceId, publicJwk) {
+    if (!isConfigured()) return { ok: false, status: 'NETWORK', message: MSG.NETWORK };
+    try {
+      var body = {
+        p_activation_id: activationId,
+        p_device_id: deviceId,
+        p_device_public_key: publicJwk,
+      };
+      var r = await fetch(endpoint('rpc/enroll_pkg_device_key'), {
+        method: 'POST',
+        headers: rpcHeaders(),
+        body: JSON.stringify(body),
+        cache: 'no-store',
+      });
+      if (!r.ok) return { ok: false, status: 'SERVER_ERROR', message: MSG.SERVER_ERROR };
+      var result = await r.text();
+      result = result.replace(/"/g, '').trim();
+      return { ok: result === 'ENROLLED', status: result };
+    } catch (e) {
+      return { ok: false, status: 'NETWORK', message: MSG.NETWORK };
+    }
+  }
+
+  // ====================================================================
+  // TAHAP 3: checkActivationStatus — User-side revoke check
+  // ====================================================================
+
+  async function checkActivationStatus(activationId, deviceId) {
+    if (!isConfigured()) return { ok: false, status: 'NETWORK' };
+    try {
+      var body = {
+        p_activation_id: activationId,
+        p_device_id: deviceId,
+      };
+      var r = await fetch(endpoint('rpc/check_activation_status'), {
+        method: 'POST',
+        headers: rpcHeaders(),
+        body: JSON.stringify(body),
+        cache: 'no-store',
+      });
+      if (!r.ok) return { ok: false, status: 'SERVER_ERROR' };
+      var result = await r.text();
+      result = result.replace(/"/g, '').trim();
+      return { ok: true, status: result };
+    } catch (e) {
+      return { ok: false, status: 'NETWORK' };
     }
   }
 
@@ -141,7 +224,6 @@
   function getAdminSession() { return _adminSession; }
   function isAdminLoggedIn() { return !!(_adminSession && _adminSession.access_token); }
 
-  // Helper: check session expired (Supabase JWT exp claim)
   function isSessionExpired() {
     if (!_adminSession || !_adminSession.access_token) return true;
     try {
@@ -149,11 +231,10 @@
       var payload = JSON.parse(atob(token.split('.')[1]));
       var exp = payload.exp;
       if (!exp) return false;
-      return (Date.now() / 1000) > (exp - 30); // 30s buffer
+      return (Date.now() / 1000) > (exp - 30);
     } catch (e) { return false; }
   }
 
-  // Helper: handle RPC error, detect 401/403
   function handleRpcError(r, errText) {
     if (r.status === 401 || r.status === 403) {
       adminLogout();
@@ -170,7 +251,6 @@
   // ADMIN RPCs
   // ====================================================================
 
-  // adminCreateCode — RPC admin_create_activation_code (Tahap 2: + p_role)
   async function adminCreateCode(payload) {
     if (!isAdminLoggedIn()) return { ok: false, message: 'Admin belum login.' };
     if (isSessionExpired()) { adminLogout(); return { ok: false, message: MSG.SESSION_EXPIRED, sessionExpired: true }; }
@@ -210,7 +290,6 @@
     }
   }
 
-  // adminListCodes — RPC admin_list_activation_codes (Tahap 2: search, filter, pagination)
   async function adminListCodes(opts) {
     if (!isAdminLoggedIn()) return { ok: false, message: 'Admin belum login.' };
     if (isSessionExpired()) { adminLogout(); return { ok: false, message: MSG.SESSION_EXPIRED, sessionExpired: true }; }
@@ -245,7 +324,6 @@
     }
   }
 
-  // adminActivationStats — RPC admin_activation_stats
   async function adminActivationStats() {
     if (!isAdminLoggedIn()) return { ok: false, message: 'Admin belum login.' };
     if (isSessionExpired()) { adminLogout(); return { ok: false, message: MSG.SESSION_EXPIRED, sessionExpired: true }; }
@@ -279,7 +357,6 @@
     }
   }
 
-  // adminGetCodeDetail — RPC admin_get_code_detail
   async function adminGetCodeDetail(codeId) {
     if (!isAdminLoggedIn()) return { ok: false, message: 'Admin belum login.' };
     if (isSessionExpired()) { adminLogout(); return { ok: false, message: MSG.SESSION_EXPIRED, sessionExpired: true }; }
@@ -304,7 +381,6 @@
     }
   }
 
-  // adminRevokeCode — RPC admin_revoke_activation_code
   async function adminRevokeCode(codeId) {
     if (!isAdminLoggedIn()) return { ok: false, message: 'Admin belum login.' };
     if (isSessionExpired()) { adminLogout(); return { ok: false, message: MSG.SESSION_EXPIRED, sessionExpired: true }; }
@@ -331,7 +407,108 @@
   }
 
   // ====================================================================
-  // DEVICE INFO PARSER (for display in detail modal)
+  // TAHAP 3: adminReplaceDevice — Revoke old + issue new code
+  // ====================================================================
+
+  async function adminReplaceDevice(activationId, reason, catatan) {
+    if (!isAdminLoggedIn()) return { ok: false, message: 'Admin belum login.' };
+    if (isSessionExpired()) { adminLogout(); return { ok: false, message: MSG.SESSION_EXPIRED, sessionExpired: true }; }
+    try {
+      var body = {
+        p_activation_id: activationId,
+        p_reason: reason || 'Lainnya',
+        p_catatan: catatan || null,
+      };
+      var r = await fetch(endpoint('rpc/admin_replace_device'), {
+        method: 'POST',
+        headers: authHeaders(_adminSession.access_token),
+        body: JSON.stringify(body),
+        cache: 'no-store',
+      });
+      if (!r.ok) {
+        var errText = await r.text();
+        return handleRpcError(r, errText);
+      }
+      var rows = await r.json();
+      if (!Array.isArray(rows) || rows.length === 0) {
+        return { ok: false, message: 'Server tidak mengembalikan kode pengganti.' };
+      }
+      var row = rows[0];
+      if (!row.new_code) {
+        return { ok: false, message: 'Aktivasi tidak berstatus activated (status: ' + (row.old_status || 'unknown') + ')' };
+      }
+      return {
+        ok: true,
+        newCode: row.new_code,
+        newCodeId: row.new_code_id,
+        newCodeHint: row.new_code_hint,
+      };
+    } catch (e) {
+      return { ok: false, message: 'Network error: ' + e.message };
+    }
+  }
+
+  // ====================================================================
+  // TAHAP 3: Device Challenge — Admin generates challenge
+  // ====================================================================
+
+  async function adminCreateChallenge(activationId) {
+    if (!isAdminLoggedIn()) return { ok: false, message: 'Admin belum login.' };
+    if (isSessionExpired()) { adminLogout(); return { ok: false, message: MSG.SESSION_EXPIRED, sessionExpired: true }; }
+    try {
+      var r = await fetch(endpoint('rpc/admin_create_device_challenge'), {
+        method: 'POST',
+        headers: authHeaders(_adminSession.access_token),
+        body: JSON.stringify({ p_activation_id: activationId }),
+        cache: 'no-store',
+      });
+      if (!r.ok) {
+        var errText = await r.text();
+        return handleRpcError(r, errText);
+      }
+      var rows = await r.json();
+      if (!Array.isArray(rows) || rows.length === 0) {
+        return { ok: false, message: 'Gagal membuat challenge.' };
+      }
+      return {
+        ok: true,
+        challengeId: rows[0].challenge_id,
+        challenge: rows[0].challenge,
+        expiresAt: rows[0].expires_at,
+      };
+    } catch (e) {
+      return { ok: false, message: 'Network error: ' + e.message };
+    }
+  }
+
+  // ====================================================================
+  // TAHAP 3: Verify Device Challenge (user-side signs, admin verifies)
+  // ====================================================================
+
+  async function submitChallengeResponse(challengeId, signatureBase64) {
+    if (!isConfigured()) return { ok: false, status: 'NETWORK' };
+    try {
+      var body = {
+        p_challenge_id: challengeId,
+        p_signature: signatureBase64,
+      };
+      var r = await fetch(endpoint('rpc/verify_device_challenge'), {
+        method: 'POST',
+        headers: rpcHeaders(),
+        body: JSON.stringify(body),
+        cache: 'no-store',
+      });
+      if (!r.ok) return { ok: false, status: 'SERVER_ERROR' };
+      var result = await r.text();
+      result = result.replace(/"/g, '').trim();
+      return { ok: result === 'RECORDED', status: result };
+    } catch (e) {
+      return { ok: false, status: 'NETWORK' };
+    }
+  }
+
+  // ====================================================================
+  // DEVICE INFO PARSER
   // ====================================================================
 
   function parseDeviceInfo(ua) {
@@ -340,21 +517,18 @@
     var os = 'Unknown';
     var device = 'Desktop';
 
-    // Browser
     if (ua.indexOf('Edg/') > -1) browser = 'Microsoft Edge';
     else if (ua.indexOf('OPR/') > -1 || ua.indexOf('Opera') > -1) browser = 'Opera';
     else if (ua.indexOf('Chrome/') > -1) browser = 'Google Chrome';
     else if (ua.indexOf('Firefox/') > -1) browser = 'Mozilla Firefox';
     else if (ua.indexOf('Safari/') > -1) browser = 'Safari';
 
-    // OS
     if (ua.indexOf('Windows') > -1) os = 'Windows';
     else if (ua.indexOf('Android') > -1) os = 'Android';
     else if (ua.indexOf('iPhone') > -1 || ua.indexOf('iPad') > -1) os = 'iOS';
     else if (ua.indexOf('Mac OS') > -1 || ua.indexOf('MacOS') > -1) os = 'macOS';
     else if (ua.indexOf('Linux') > -1) os = 'Linux';
 
-    // Device type
     if (ua.indexOf('Mobile') > -1 || ua.indexOf('Android') > -1) device = 'HP/Mobile';
     else if (ua.indexOf('iPad') > -1 || ua.indexOf('Tablet') > -1) device = 'Tablet';
     else if (ua.indexOf('Windows') > -1 && ua.indexOf('Touch') > -1) device = 'Tablet/Touch';
@@ -365,8 +539,12 @@
   // === EXPORT ===
   window.SupabaseSync = {
     isConfigured: isConfigured,
-    // User activation (anon)
+    // User activation (anon) — Tahap 3: +device_public_key
     activateCode: activateCode,
+    getMyActivation: getMyActivation,
+    enrollDeviceKey: enrollDeviceKey,
+    checkActivationStatus: checkActivationStatus,
+    submitChallengeResponse: submitChallengeResponse,
     // Admin auth
     adminLogin: adminLogin,
     adminLogout: adminLogout,
@@ -379,6 +557,8 @@
     adminRevokeCode: adminRevokeCode,
     adminActivationStats: adminActivationStats,
     adminGetCodeDetail: adminGetCodeDetail,
+    adminReplaceDevice: adminReplaceDevice,
+    adminCreateChallenge: adminCreateChallenge,
     // Utils
     parseDeviceInfo: parseDeviceInfo,
     // Error messages

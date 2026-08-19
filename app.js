@@ -5023,19 +5023,222 @@ function viewKelolaAktivasi(view) {
             <tr><td><strong>Browser:</strong></td><td>${esc(devInfo.browser)}</td></tr>
             <tr><td><strong>Sistem Operasi:</strong></td><td>${esc(devInfo.os)}</td></tr>
             <tr><td><strong>Tipe Perangkat:</strong></td><td>${esc(devInfo.device)}</td></tr>
+            <tr><td><strong>Device Key:</strong></td><td>${d.device_public_key ? '<span class="badge bg-success"><i class="bi bi-shield-check"></i> Terdaftar</span>' : '<span class="badge bg-warning text-dark"><i class="bi bi-exclamation-triangle"></i> Belum terdaftar</span>'}</td></tr>
+            ${d.replaced_activation_id ? '<tr><td><strong>Pengganti:</strong></td><td><code class="small">' + esc(d.replaced_activation_id) + '</code></td></tr>' : ''}
+            ${d.replacement_for ? '<tr><td><strong>Menggantikan:</strong></td><td><code class="small">' + esc(d.replacement_for) + '</code></td></tr>' : ''}
           </table>` : ''}
 
           ${d.catatan ? `
           <h6 class="text-primary border-bottom pb-2 mt-3"><i class="bi bi-sticky"></i> Catatan Admin</h6>
           <div class="small text-muted">${esc(d.catatan)}</div>` : ''}
+
+          ${d.status === 'activated' ? `
+          <div class="mt-3 d-flex gap-2">
+            <button class="btn btn-sm btn-warning" id="btn-replace-device" data-id="${esc(d.id)}" data-hint="${esc(d.code_hint || '')}"><i class="bi bi-arrow-repeat"></i> Ganti Perangkat</button>
+            <button class="btn btn-sm btn-info" id="btn-verify-device" data-id="${esc(d.id)}"><i class="bi bi-shield-check"></i> Verifikasi Device Key</button>
+          </div>` : ''}
         `;
+      }
+      // TAHAP 3: Wire up device replacement & verification buttons
+      var btnReplace = document.getElementById('btn-replace-device');
+      if (btnReplace) {
+        btnReplace.addEventListener('click', function() {
+          var id = this.getAttribute('data-id');
+          var h = this.getAttribute('data-hint');
+          // Close detail modal first
+          var detailModalEl = document.getElementById('modal-detail-code');
+          if (detailModalEl) { var bs = bootstrap.Modal.getInstance(detailModalEl); if (bs) bs.hide(); }
+          setTimeout(function() { showReplaceDeviceModal(id, h); }, 300);
+        });
+      }
+      var btnVerify = document.getElementById('btn-verify-device');
+      if (btnVerify) {
+        btnVerify.addEventListener('click', function() {
+          var id = this.getAttribute('data-id');
+          var detailModalEl = document.getElementById('modal-detail-code');
+          if (detailModalEl) { var bs = bootstrap.Modal.getInstance(detailModalEl); if (bs) bs.hide(); }
+          setTimeout(function() { showVerifyDeviceModal(id); }, 300);
+        });
       }
     }).catch(function(e) {
       if (bodyEl) bodyEl.innerHTML = '<div class="alert alert-danger">Error: ' + esc(e.message) + '</div>';
     });
   }
 
-  // === REVOKE CONFIRM ===
+  // === TAHAP 3: DEVICE REPLACEMENT ===
+  function showReplaceDeviceModal(activationId, hint) {
+    var oldModal = document.getElementById('modal-replace-device');
+    if (oldModal) oldModal.remove();
+
+    var modalEl = document.createElement('div');
+    modalEl.className = 'modal fade';
+    modalEl.id = 'modal-replace-device';
+    modalEl.tabIndex = -1;
+    modalEl.innerHTML = `
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+          <div class="modal-header bg-warning text-dark">
+            <h5 class="modal-title"><i class="bi bi-arrow-repeat"></i> Ganti Perangkat</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body">
+            <p class="small text-muted">Kode lama: <code>${esc(hint || '****')}</code></p>
+            <p class="small">Operasi ini akan:</p>
+            <ol class="small">
+              <li>Menonaktifkan kode lama (status → revoked)</li>
+              <li>Membuat kode baru yang belum terpakai</li>
+              <li>Menautkan kode baru sebagai pengganti kode lama</li>
+            </ol>
+            <div class="mb-2">
+              <label class="form-label small fw-bold">Alasan Penggantian</label>
+              <select class="form-select form-select-sm" id="replace-reason">
+                <option value="HP hilang">HP hilang</option>
+                <option value="HP rusak">HP rusak</option>
+                <option value="Ganti HP">Ganti HP</option>
+                <option value="Reset browser">Reset browser</option>
+                <option value="Lainnya">Lainnya</option>
+              </select>
+            </div>
+            <div class="mb-2">
+              <label class="form-label small fw-bold">Catatan (opsional)</label>
+              <textarea class="form-control form-control-sm" id="replace-catatan" rows="2" placeholder="Catatan tambahan..."></textarea>
+            </div>
+            <div class="alert alert-warning small mb-0">
+              <i class="bi bi-exclamation-triangle"></i> Kode lama tidak dapat digunakan lagi setelah penggantian.
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Batal</button>
+            <button type="button" class="btn btn-sm btn-warning" id="btn-confirm-replace"><i class="bi bi-arrow-repeat"></i> Proses Penggantian</button>
+          </div>
+        </div>
+      </div>`;
+    document.body.appendChild(modalEl);
+    var bsModal = new bootstrap.Modal(modalEl);
+    bsModal.show();
+    modalEl.addEventListener('hidden.bs.modal', function () { modalEl.remove(); });
+
+    var btnConfirm = document.getElementById('btn-confirm-replace');
+    btnConfirm.addEventListener('click', function () {
+      btnConfirm.disabled = true;
+      btnConfirm.innerHTML = '<div class="spinner-border spinner-border-sm"></div> Memproses...';
+      var reason = document.getElementById('replace-reason').value;
+      var catatan = document.getElementById('replace-catatan').value.trim();
+
+      window.SupabaseSync.adminReplaceDevice(activationId, reason, catatan).then(function (r) {
+        btnConfirm.disabled = false;
+        btnConfirm.innerHTML = '<i class="bi bi-arrow-repeat"></i> Proses Penggantian';
+        if (r.sessionExpired) { bsModal.hide(); handleSessionExpired(); return; }
+        if (r.ok) {
+          bsModal.hide();
+          showCodeResultModal(r.newCode, 'Kode pengganti baru berhasil dibuat. Berikan kode ini ke pengguna.');
+          loadCodes();
+          loadStats();
+        } else {
+          alert(r.message || 'Gagal mengganti perangkat.');
+        }
+      }).catch(function (e) {
+        btnConfirm.disabled = false;
+        btnConfirm.innerHTML = '<i class="bi bi-arrow-repeat"></i> Proses Penggantian';
+        alert('Error: ' + e.message);
+      });
+    });
+  }
+
+  // === TAHAP 3: DEVICE CHALLENGE VERIFICATION ===
+  function showVerifyDeviceModal(activationId) {
+    var oldModal = document.getElementById('modal-verify-device');
+    if (oldModal) oldModal.remove();
+
+    var modalEl = document.createElement('div');
+    modalEl.className = 'modal fade';
+    modalEl.id = 'modal-verify-device';
+    modalEl.tabIndex = -1;
+    modalEl.innerHTML = `
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+          <div class="modal-header bg-info text-dark">
+            <h5 class="modal-title"><i class="bi bi-shield-check"></i> Verifikasi Device Key</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body">
+            <div id="verify-step-1">
+              <p class="small">Klik tombol di bawah untuk membuat challenge. Pengguna harus membuka aplikasi dan menyelesaikan challenge dalam 5 menit.</p>
+              <button class="btn btn-sm btn-info w-100" id="btn-create-challenge"><i class="bi bi-shield-plus"></i> Buat Challenge</button>
+            </div>
+            <div id="verify-step-2" style="display:none;">
+              <p class="small text-muted">Challenge dibuat. Minta pengguna membuka aplikasi dan menyelesaikan verifikasi.</p>
+              <div class="alert alert-info small mb-2">
+                <strong>Challenge ID:</strong><br><code id="challenge-id-display"></code>
+              </div>
+              <div class="mb-2">
+                <label class="form-label small fw-bold">Signature (dari pengguna)</label>
+                <textarea class="form-control form-control-sm" id="challenge-signature" rows="4" placeholder="Tempel signature dari pengguna..."></textarea>
+              </div>
+              <button class="btn btn-sm btn-success w-100" id="btn-submit-signature"><i class="bi bi-check-circle"></i> Verifikasi</button>
+            </div>
+            <div id="verify-step-3" style="display:none;"></div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Tutup</button>
+          </div>
+        </div>
+      </div>`;
+    document.body.appendChild(modalEl);
+    var bsModal = new bootstrap.Modal(modalEl);
+    bsModal.show();
+    modalEl.addEventListener('hidden.bs.modal', function () { modalEl.remove(); });
+
+    document.getElementById('btn-create-challenge').addEventListener('click', function () {
+      var btn = this;
+      btn.disabled = true;
+      btn.innerHTML = '<div class="spinner-border spinner-border-sm"></div>';
+      window.SupabaseSync.adminCreateChallenge(activationId).then(function (r) {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-shield-plus"></i> Buat Challenge';
+        if (r.sessionExpired) { bsModal.hide(); handleSessionExpired(); return; }
+        if (r.ok) {
+          document.getElementById('verify-step-1').style.display = 'none';
+          document.getElementById('verify-step-2').style.display = 'block';
+          document.getElementById('challenge-id-display').textContent = r.challengeId || '';
+          // Store challenge text for verification
+          modalEl.dataset.challenge = r.challenge || '';
+          modalEl.dataset.challengeId = r.challengeId || '';
+        } else {
+          alert(r.message || 'Gagal membuat challenge.');
+        }
+      }).catch(function (e) {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-shield-plus"></i> Buat Challenge';
+        alert('Error: ' + e.message);
+      });
+    });
+
+    document.getElementById('btn-submit-signature').addEventListener('click', function () {
+      var btn = this;
+      var sig = document.getElementById('challenge-signature').value.trim();
+      var challengeId = modalEl.dataset.challengeId;
+      if (!sig) { alert('Tempel signature dari pengguna terlebih dahulu.'); return; }
+      btn.disabled = true;
+      btn.innerHTML = '<div class="spinner-border spinner-border-sm"></div>';
+      window.SupabaseSync.submitChallengeResponse(challengeId, sig).then(function (r) {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-check-circle"></i> Verifikasi';
+        var step3 = document.getElementById('verify-step-3');
+        document.getElementById('verify-step-2').style.display = 'none';
+        step3.style.display = 'block';
+        if (r.ok) {
+          step3.innerHTML = '<div class="alert alert-success"><i class="bi bi-check-circle"></i> Signature diterima. Admin dapat memverifikasi signature menggunakan public key di detail kode.</div>';
+        } else {
+          step3.innerHTML = '<div class="alert alert-danger"><i class="bi bi-x-circle"></i> Gagal: ' + esc(r.status || 'unknown error') + '</div>';
+        }
+      }).catch(function (e) {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-check-circle"></i> Verifikasi';
+        alert('Error: ' + e.message);
+      });
+    });
+  }
   function showRevokeConfirm(codeId, hint) {
     var modalEl = document.getElementById('modal-revoke-confirm');
     if (!modalEl) return;
