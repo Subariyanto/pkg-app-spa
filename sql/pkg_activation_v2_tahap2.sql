@@ -310,8 +310,10 @@ $$;
 -- 9. REVOKE & GRANT execute
 -- ======================================================================
 
--- Revoke old signatures
-revoke execute on function public.admin_create_activation_code(text, text, text, text) from public, anon, authenticated;
+-- Revoke old signatures (wrap in DO block karena function mungkin sudah di-drop)
+do $$ begin
+  revoke execute on function public.admin_create_activation_code(text, text, text, text) from public, anon, authenticated;
+exception when others then null; end $$;
 -- Old admin_list_activation_codes() sudah di-DROP, tidak perlu revoke
 
 -- Grant new signatures

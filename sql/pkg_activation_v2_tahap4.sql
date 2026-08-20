@@ -671,7 +671,9 @@ $$;
 -- Helper functions (_check_rate_limit, _clear_rate_limit, _cleanup_old_rate_limits)
 -- are SECURITY DEFINER and only called internally — NO GRANT to anyone.
 
-revoke execute on function public.admin_revoke_activation_code(uuid) from public, anon, authenticated;
+do $$ begin
+  revoke execute on function public.admin_revoke_activation_code(uuid) from public, anon, authenticated;
+exception when others then null; end $$;
 grant execute on function public.admin_revoke_activation_code(uuid, text) to authenticated;
 
 grant execute on function public.admin_list_audit_logs(text, date, date, text, int, int) to authenticated;
