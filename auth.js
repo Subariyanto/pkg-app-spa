@@ -773,7 +773,17 @@
 
   // --- INITIALIZATION ---
   async function init() {
-    // 0. Kalau diminta ke halaman aktivasi (dari link 'Buat Akun Baru')
+    // 0. Bypass aktivasi kalau admin akses #/kelola-aktivasi (chicken-and-egg fix)
+    var hash = window.location.hash || '';
+    var isAdminRoute = hash.indexOf('kelola-aktivasi') >= 0;
+    if (isAdminRoute) {
+      // Skip aktivasi, biarkan app.js render halaman kelola-aktivasi
+      var o = document.getElementById('pkg-auth-overlay');
+      if (o) o.remove();
+      return;
+    }
+
+    // 0a. Kalau diminta ke halaman aktivasi (dari link 'Buat Akun Baru')
     var forceActivation = localStorage.getItem('pkg_v1_force_activation') === 'true';
     if (forceActivation) {
       localStorage.removeItem('pkg_v1_force_activation');
