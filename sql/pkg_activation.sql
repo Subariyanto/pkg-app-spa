@@ -513,7 +513,7 @@ begin
   end if;
 
   select count(*) into v_count from public.pkg_activation_codes;
-  delete from public.pkg_activation_codes;
+  delete from public.pkg_activation_codes where id is not null;
 
   return json_build_object('ok', true, 'deleted', v_count);
 end;
