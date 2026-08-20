@@ -4534,8 +4534,10 @@ function viewKelolaAktivasi(view) {
     var html = '\
     <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">\
       <h4 class="mb-0"><i class="bi bi-key-fill"></i> Kelola Kode Aktivasi</h4>\
-      <div class="d-flex gap-2">\
-        <button id="btn-buat-kode" class="btn btn-sm btn-primary" ' + (state.creating ? 'disabled' : '') + '><i class="bi bi-plus-circle"></i> Buat Kode</button>\
+      <div class="d-flex gap-2 flex-wrap">\
+        <button id="btn-buat-1" class="btn btn-sm btn-primary" ' + (state.creating ? 'disabled' : '') + '><i class="bi bi-plus-circle"></i> Buat 1 Kode</button>\
+        <button id="btn-buat-5" class="btn btn-sm btn-primary" ' + (state.creating ? 'disabled' : '') + '><i class="bi bi-plus-circle"></i> Buat 5 Kode</button>\
+        <button id="btn-buat-10" class="btn btn-sm btn-primary" ' + (state.creating ? 'disabled' : '') + '><i class="bi bi-plus-circle"></i> Buat 10 Kode</button>\
         <button id="btn-refresh" class="btn btn-sm btn-outline-secondary"><i class="bi bi-arrow-clockwise"></i> Refresh</button>\
         <button id="btn-export-csv" class="btn btn-sm btn-success"><i class="bi bi-download"></i> Export CSV</button>\
         <button id="btn-admin-logout" class="btn btn-sm btn-outline-danger"><i class="bi bi-box-arrow-right"></i> Logout</button>\
@@ -4567,7 +4569,7 @@ function viewKelolaAktivasi(view) {
             <tbody>';
 
     if (filtered.length === 0) {
-      html += '<tr><td colspan="7" class="text-center text-muted py-4"><i class="bi bi-inbox"></i> ' + (state.loading ? 'Memuat...' : 'Tidak ada kode. Klik "Buat Kode" untuk membuat kode baru.') + '</td></tr>';
+      html += '<tr><td colspan="7" class="text-center text-muted py-4"><i class="bi bi-inbox"></i> ' + (state.loading ? 'Memuat...' : 'Tidak ada kode. Klik tombol Buat Kode untuk membuat kode baru.') + '</td></tr>';
     } else {
       filtered.forEach(function(k) {
         var statusBadge;
@@ -4610,46 +4612,191 @@ function viewKelolaAktivasi(view) {
     wirePanel();
   }
 
-  async function wirePanel() {
-    var btnBuat = document.getElementById('btn-buat-kode');
-    if (btnBuat) btnBuat.addEventListener('click', async function() {
-      if (state.creating) return;
-      var nama = prompt('Nama Penerima (opsional):', '');
-      if (nama === null) return;
-      var madrasah = prompt('Nama Madrasah (opsional):', '');
-      if (madrasah === null) return;
-      var kabupaten = prompt('Kabupaten/Kota (opsional):', '');
-      if (kabupaten === null) return;
-      var role = prompt('Role (pengawas/kamad, kosongkan untuk default):', '');
-      if (role === null) return;
-      var catatan = prompt('Catatan (opsional):', '');
-      if (catatan === null) return;
+  function showCreateModal(jumlah) {
+    // Remove any existing modal
+    var old = document.getElementById('modal-buat-kode');
+    if (old) old.remove();
 
-      state.creating = true;
-      btnBuat.disabled = true;
-      btnBuat.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Membuat...';
-      var result = await window.SupabaseSync.adminCreateCode(
-        nama.trim() || null,
-        madrasah.trim() || null,
-        kabupaten.trim() || null,
-        role.trim() || null,
-        catatan.trim() || null,
-        state.adminUsername
-      );
-      state.creating = false;
-      btnBuat.disabled = false;
-      btnBuat.innerHTML = '<i class="bi bi-plus-circle"></i> Buat Kode';
+    var modalHtml = '<div class="modal fade" id="modal-buat-kode" tabindex="-1" aria-hidden="true">' +
+      '<div class="modal-dialog modal-dialog-centered">' +
+      '<div class="modal-content">' +
+      '<div class="modal-header bg-primary text-white">' +
+      '<h5 class="modal-title"><i class="bi bi-plus-circle"></i> Buat ' + jumlah + ' Kode Aktivasi</h5>' +
+      '<button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>' +
+      '</div>' +
+      '<div class="modal-body">' +
+      '<form id="form-buat-kode">' +
+      '<div class="mb-3">' +
+      '<label class="form-label fw-bold">Nama Penerima <span class="text-muted small">(opsional)</span></label>' +
+      '<input type="text" class="form-control" id="buat-nama" placeholder="Nama lengkap penerima kode">' +
+      '</div>' +
+      '<div class="mb-3">' +
+      '<label class="form-label fw-bold">Nama Madrasah <span class="text-muted small">(opsional)</span></label>' +
+      '<input type="text" class="form-control" id="buat-madrasah" placeholder="Contoh: MTs Negeri 1 Jember">' +
+      '</div>' +
+      '<div class="mb-3">' +
+      '<label class="form-label fw-bold">Kabupaten/Kota <span class="text-muted small">(opsional)</span></label>' +
+      '<input type="text" class="form-control" id="buat-kabupaten" placeholder="Contoh: Kabupaten Jember">' +
+      '</div>' +
+      '<div class="mb-3">' +
+      '<label class="form-label fw-bold">Role <span class="text-danger">*</span></label>' +
+      '<select class="form-select" id="buat-role">' +
+      '<option value="">-- Pilih Role --</option>' +
+      '<option value="pengawas">Pengawas - Pembina</option>' +
+      '<option value="kamad">Kepala Madrasah (Kamad)</option>' +
+      '</select>' +
+      '</div>' +
+      '<div class="mb-3">' +
+      '<label class="form-label fw-bold">Catatan <span class="text-muted small">(opsional)</span></label>' +
+      '<textarea class="form-control" id="buat-catatan" rows="2" placeholder="Catatan internal"></textarea>' +
+      '</div>' +
+      '<input type="hidden" id="buat-jumlah" value="' + jumlah + '">' +
+      '</form>' +
+      '</div>' +
+      '<div class="modal-footer">' +
+      '<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>' +
+      '<button type="button" class="btn btn-primary" id="btn-submit-buat-kode"><i class="bi bi-check-circle"></i> Buat Kode</button>' +
+      '</div>' +
+      '</div></div></div>';
 
-      if (result && result.ok) {
-        toast('Kode dibuat: ' + result.code, 'success');
-        // Tampilkan kode ke admin
-        prompt('Kode Aktivasi Baru (salin dan berikan ke pengguna):', result.code);
-        await loadCodes();
-        await loadStats();
-        renderPanel();
-      } else {
-        toast('Gagal membuat kode: ' + ((result && result.message) || 'unknown'), 'danger');
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+    var modalEl = document.getElementById('modal-buat-kode');
+    var modal = new bootstrap.Modal(modalEl);
+    modal.show();
+
+    // Cleanup on hidden
+    modalEl.addEventListener('hidden.bs.modal', function () {
+      modalEl.remove();
+    });
+
+    var btnSubmit = document.getElementById('btn-submit-buat-kode');
+    var form = document.getElementById('form-buat-kode');
+    btnSubmit.addEventListener('click', async function () {
+      var nama = document.getElementById('buat-nama').value.trim();
+      var madrasah = document.getElementById('buat-madrasah').value.trim();
+      var kabupaten = document.getElementById('buat-kabupaten').value.trim();
+      var role = document.getElementById('buat-role').value;
+      var catatan = document.getElementById('buat-catatan').value.trim();
+      var jumlah = parseInt(document.getElementById('buat-jumlah').value, 10);
+
+      if (!role) {
+        toast('Pilih role terlebih dahulu.', 'warning');
+        return;
       }
+
+      // Disable form
+      btnSubmit.disabled = true;
+      btnSubmit.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Membuat ' + jumlah + ' kode...';
+      form.querySelectorAll('input, select, textarea').forEach(function (el) { el.disabled = true; });
+
+      var results = [];
+      var success = 0;
+      var fail = 0;
+      for (var i = 0; i < jumlah; i++) {
+        var result = await window.SupabaseSync.adminCreateCode(
+          nama || null,
+          madrasah || null,
+          kabupaten || null,
+          role || null,
+          catatan || null,
+          state.adminUsername
+        );
+        if (result && result.ok) {
+          results.push(result.code);
+          success++;
+        } else {
+          fail++;
+        }
+      }
+
+      // Hide create modal
+      modal.hide();
+
+      // Show results modal
+      showResultsModal(success, fail, results);
+
+      // Refresh data
+      await loadCodes();
+      await loadStats();
+      renderPanel();
+    });
+  }
+
+  function showResultsModal(success, fail, codes) {
+    var old = document.getElementById('modal-hasil-kode');
+    if (old) old.remove();
+
+    var codesHtml = codes.map(function (c) {
+      return '<div class="d-flex align-items-center justify-content-between border-bottom py-2">' +
+        '<code class="text-primary fw-bold fs-5">' + c + '</code>' +
+        '<button class="btn btn-sm btn-outline-secondary btn-copy-code" data-code="' + c + '"><i class="bi bi-clipboard"></i> Salin</button>' +
+        '</div>';
+    }).join('');
+
+    var summary = success + ' dari ' + (success + fail) + ' kode berhasil dibuat';
+    var alertClass = fail > 0 ? 'alert-warning' : 'alert-success';
+
+    var modalHtml = '<div class="modal fade" id="modal-hasil-kode" tabindex="-1" aria-hidden="true">' +
+      '<div class="modal-dialog modal-dialog-centered">' +
+      '<div class="modal-content">' +
+      '<div class="modal-header bg-success text-white">' +
+      '<h5 class="modal-title"><i class="bi bi-check-circle"></i> Hasil Pembuatan Kode</h5>' +
+      '<button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>' +
+      '</div>' +
+      '<div class="modal-body">' +
+      '<div class="alert ' + alertClass + '"><strong>' + summary + '</strong></div>' +
+      (codes.length > 0 ? '<div class="mb-2"><strong>Daftar Kode:</strong></div>' + codesHtml : '') +
+      (codes.length > 1 ? '<button class="btn btn-sm btn-outline-primary mt-3 w-100" id="btn-copy-all"><i class="bi bi-clipboard"></i> Salin Semua Kode</button>' : '') +
+      '</div>' +
+      '<div class="modal-footer">' +
+      '<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Tutup</button>' +
+      '</div>' +
+      '</div></div></div>';
+
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+    var modalEl = document.getElementById('modal-hasil-kode');
+    var modal = new bootstrap.Modal(modalEl);
+    modal.show();
+
+    modalEl.addEventListener('hidden.bs.modal', function () {
+      modalEl.remove();
+    });
+
+    document.querySelectorAll('.btn-copy-code').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var code = btn.dataset.code;
+        navigator.clipboard.writeText(code).then(function () {
+          toast('Kode disalin: ' + code, 'success');
+        });
+      });
+    });
+
+    var btnCopyAll = document.getElementById('btn-copy-all');
+    if (btnCopyAll) btnCopyAll.addEventListener('click', function () {
+      var allCodes = codes.join('\n');
+      navigator.clipboard.writeText(allCodes).then(function () {
+        toast('Semua kode disalin', 'success');
+      });
+    });
+  }
+
+  async function wirePanel() {
+    var btnBuat1 = document.getElementById('btn-buat-1');
+    if (btnBuat1) btnBuat1.addEventListener('click', function () {
+      if (state.creating) return;
+      showCreateModal(1);
+    });
+
+    var btnBuat5 = document.getElementById('btn-buat-5');
+    if (btnBuat5) btnBuat5.addEventListener('click', function () {
+      if (state.creating) return;
+      showCreateModal(5);
+    });
+
+    var btnBuat10 = document.getElementById('btn-buat-10');
+    if (btnBuat10) btnBuat10.addEventListener('click', function () {
+      if (state.creating) return;
+      showCreateModal(10);
     });
 
     var btnRefresh = document.getElementById('btn-refresh');
