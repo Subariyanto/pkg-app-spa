@@ -260,6 +260,8 @@
         \
         <div style="text-align:center; margin-top:1rem; font-size:.85rem;">\
           <a id="link-to-login" style="color:#1f5d3a; cursor:pointer; text-decoration:none; font-weight:600;">Sudah Memiliki Akun? Login di sini</a>\
+          <span style="margin:0 .5rem; color:#ccc;">|</span>\
+          <a id="link-to-admin" style="color:#1e40af; cursor:pointer; text-decoration:none; font-weight:600;">Login Admin</a>\
         </div>\
       </div>';
 
@@ -270,6 +272,15 @@
         var oldOverlay = document.getElementById('pkg-auth-overlay');
         if (oldOverlay) oldOverlay.remove();
         renderLoginScreen();
+      });
+    }
+
+    var linkAdmin = document.getElementById('link-to-admin');
+    if (linkAdmin) {
+      linkAdmin.addEventListener('click', function () {
+        var oldOverlay = document.getElementById('pkg-auth-overlay');
+        if (oldOverlay) oldOverlay.remove();
+        window.location.hash = '#/kelola-aktivasi';
       });
     }
 
