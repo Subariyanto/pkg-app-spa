@@ -4565,11 +4565,11 @@ function viewKelolaAktivasi(view) {
       <div class="card-body p-0">\
         <div class="table-responsive">\
           <table class="table table-sm table-hover mb-0">\
-            <thead class="table-light"><tr><th>Kode</th><th>Nama Penerima</th><th>Madrasah</th><th>Kabupaten</th><th>Status</th><th>Dibuat</th><th>Aksi</th></tr></thead>\
+            <thead class="table-light"><tr><th>Kode</th><th>Nama Penerima</th><th>Madrasah</th><th>Kabupaten</th><th>Role</th><th>Status</th><th>Dibuat</th><th>Aksi</th></tr></thead>\
             <tbody>';
 
     if (filtered.length === 0) {
-      html += '<tr><td colspan="7" class="text-center text-muted py-4"><i class="bi bi-inbox"></i> ' + (state.loading ? 'Memuat...' : 'Tidak ada kode. Klik tombol Buat Kode untuk membuat kode baru.') + '</td></tr>';
+      html += '<tr><td colspan="8" class="text-center text-muted py-4"><i class="bi bi-inbox"></i> ' + (state.loading ? 'Memuat...' : 'Tidak ada kode. Klik tombol Buat Kode untuk membuat kode baru.') + '</td></tr>';
     } else {
       filtered.forEach(function(k) {
         var statusBadge;
@@ -4581,16 +4581,20 @@ function viewKelolaAktivasi(view) {
           statusBadge = '<span class="badge bg-warning text-dark">Belum Dipakai</span>';
         }
         var createdDate = k.created_at ? new Date(k.created_at).toLocaleString('id-ID') : '-';
-        var activatedDate = k.activated_at ? new Date(k.activated_at).toLocaleString('id-ID') : '-';
+        var roleText = k.role === 'pengawas' ? 'Pengawas' : (k.role === 'kamad' ? 'Kepala Madrasah' : (k.role || '-'));
         html += '<tr>\
-          <td><code class="text-primary fw-bold">' + escapeHtml(k.code_hint || '?') + '</code></td>\
+          <td><code class="text-primary fw-bold">' + escapeHtml(k.code_full || k.code_hint || '?') + '</code></td>\
           <td>' + escapeHtml(k.nama_pengguna || '-') + '</td>\
           <td>' + escapeHtml(k.madrasah || '-') + '</td>\
           <td class="small">' + escapeHtml(k.kabupaten || '-') + '</td>\
+          <td class="small">' + escapeHtml(roleText) + '</td>\
           <td>' + statusBadge + '</td>\
           <td class="small">' + escapeHtml(createdDate) + '</td>\
-          <td>\
-            ' + (k.status !== 'revoked' ? '<button class="btn btn-sm btn-outline-danger btn-revoke-kode" data-id="' + escapeHtml(k.id) + '" title="Cabut Kode"><i class="bi bi-x-circle"></i></button>' : '') + '\
+          <td class="text-nowrap">\
+            <button class="btn btn-sm btn-outline-info btn-copy-kode" data-code="' + escapeHtml(k.code_full || '') + '" title="Salin Kode"><i class="bi bi-clipboard"></i></button> \
+            <button class="btn btn-sm btn-outline-warning btn-edit-kode" data-id="' + escapeHtml(k.id) + '" title="Edit"><i class="bi bi-pencil"></i></button> \
+            <button class="btn btn-sm btn-outline-danger btn-delete-kode" data-id="' + escapeHtml(k.id) + '" title="Hapus"><i class="bi bi-trash"></i></button> \
+            ' + (k.status !== 'revoked' ? '<button class="btn btn-sm btn-outline-secondary btn-revoke-kode" data-id="' + escapeHtml(k.id) + '" title="Cabut Kode"><i class="bi bi-x-circle"></i></button>' : '') + '\
           </td>\
         </tr>';
       });
@@ -4780,6 +4784,69 @@ function viewKelolaAktivasi(view) {
     });
   }
 
+  function showEditModal(k) {
+    var old = document.getElementById('modal-edit-kode');
+    if (old) old.remove();
+
+    var modalHtml = '<div class="modal fade" id="modal-edit-kode" tabindex="-1" aria-hidden="true">' +
+      '<div class="modal-dialog modal-dialog-centered">' +
+      '<div class="modal-content">' +
+      '<div class="modal-header bg-warning text-white">' +
+      '<h5 class="modal-title"><i class="bi bi-pencil"></i> Edit Kode</h5>' +
+      '<button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>' +
+      '</div>' +
+      '<div class="modal-body">' +
+      '<form id="form-edit-kode">' +
+      '<div class="mb-2"><label class="form-label small fw-bold">Kode</label><input type="text" class="form-control" value="' + escapeHtml(k.code_full || k.code_hint || '') + '" readonly></div>' +
+      '<div class="mb-2"><label class="form-label fw-bold">Nama Penerima</label><input type="text" class="form-control" id="edit-nama" value="' + escapeHtml(k.nama_pengguna || '') + '"></div>' +
+      '<div class="mb-2"><label class="form-label fw-bold">Nama Madrasah</label><input type="text" class="form-control" id="edit-madrasah" value="' + escapeHtml(k.madrasah || '') + '"></div>' +
+      '<div class="mb-2"><label class="form-label fw-bold">Kabupaten/Kota</label><input type="text" class="form-control" id="edit-kabupaten" value="' + escapeHtml(k.kabupaten || '') + '"></div>' +
+      '<div class="mb-2"><label class="form-label fw-bold">Role</label><select class="form-select" id="edit-role"><option value="">-- Pilih Role --</option><option value="pengawas"' + (k.role === 'pengawas' ? ' selected' : '') + '>Pengawas - Pembina</option><option value="kamad"' + (k.role === 'kamad' ? ' selected' : '') + '>Kepala Madrasah (Kamad)</option></select></div>' +
+      '<div class="mb-2"><label class="form-label fw-bold">Catatan</label><textarea class="form-control" id="edit-catatan" rows="2">' + escapeHtml(k.catatan || '') + '</textarea></div>' +
+      '</form>' +
+      '</div>' +
+      '<div class="modal-footer">' +
+      '<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>' +
+      '<button type="button" class="btn btn-warning" id="btn-submit-edit-kode"><i class="bi bi-check-circle"></i> Simpan</button>' +
+      '</div>' +
+      '</div></div></div>';
+
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+    var modalEl = document.getElementById('modal-edit-kode');
+    var modal = new bootstrap.Modal(modalEl);
+    modal.show();
+
+    modalEl.addEventListener('hidden.bs.modal', function () {
+      modalEl.remove();
+    });
+
+    var btnSubmit = document.getElementById('btn-submit-edit-kode');
+    btnSubmit.addEventListener('click', async function () {
+      var nama = document.getElementById('edit-nama').value.trim();
+      var madrasah = document.getElementById('edit-madrasah').value.trim();
+      var kabupaten = document.getElementById('edit-kabupaten').value.trim();
+      var role = document.getElementById('edit-role').value;
+      var catatan = document.getElementById('edit-catatan').value.trim();
+
+      btnSubmit.disabled = true;
+      btnSubmit.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Menyimpan...';
+
+      var result = await window.SupabaseSync.adminEditCode(k.id, state.adminUsername, nama, madrasah, kabupaten, role, catatan);
+
+      if (result && result.ok) {
+        toast('Kode diperbarui.', 'success');
+        modal.hide();
+        await loadCodes();
+        await loadStats();
+        renderPanel();
+      } else {
+        toast('Gagal: ' + (result && result.message || 'unknown'), 'danger');
+        btnSubmit.disabled = false;
+        btnSubmit.innerHTML = '<i class="bi bi-check-circle"></i> Simpan';
+      }
+    });
+  }
+
   async function wirePanel() {
     var btnBuat1 = document.getElementById('btn-buat-1');
     if (btnBuat1) btnBuat1.addEventListener('click', function () {
@@ -4862,6 +4929,54 @@ function viewKelolaAktivasi(view) {
           renderPanel();
         } else {
           toast('Gagal: ' + (result || 'unknown'), 'danger');
+          btn.disabled = false;
+        }
+      });
+    });
+
+    // --- COPY KODE ---
+    document.querySelectorAll('.btn-copy-kode').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var code = btn.dataset.code || '';
+        if (!code) { toast('Kode tidak tersedia.', 'warning'); return; }
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(code).then(function() {
+            toast('Kode disalin: ' + code, 'success');
+          }).catch(function() {
+            prompt('Salin kode ini:', code);
+          });
+        } else {
+          prompt('Salin kode ini:', code);
+        }
+      });
+    });
+
+    // --- EDIT KODE ---
+    document.querySelectorAll('.btn-edit-kode').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var codeId = btn.dataset.id;
+        var k = (state.kodes || []).find(function(x) { return x.id === codeId; });
+        if (!k) { toast('Data kode tidak ditemukan.', 'danger'); return; }
+        showEditModal(k);
+      });
+    });
+
+    // --- DELETE KODE ---
+    document.querySelectorAll('.btn-delete-kode').forEach(function(btn) {
+      btn.addEventListener('click', async function() {
+        var codeId = btn.dataset.id;
+        var k = (state.kodes || []).find(function(x) { return x.id === codeId; });
+        var codeLabel = k ? (k.code_full || k.code_hint || '') : '';
+        if (!confirm('Hapus kode ' + codeLabel + '?\nKode akan dihapus permanen dan tidak bisa dikembalikan.')) return;
+        btn.disabled = true;
+        var result = await window.SupabaseSync.adminDeleteCode(codeId, state.adminUsername);
+        if (result === 'DELETED' || (result && result === 'DELETED')) {
+          toast('Kode dihapus.', 'success');
+          await loadCodes();
+          await loadStats();
+          renderPanel();
+        } else {
+          toast('Gagal hapus: ' + (result || 'unknown'), 'danger');
           btn.disabled = false;
         }
       });

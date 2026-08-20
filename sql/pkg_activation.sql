@@ -64,6 +64,7 @@ where username = 'Subariyanto' and password_hash <> public.fnv1a('@riyant1970');
 create table if not exists public.pkg_activation_codes (
   id              uuid primary key default gen_random_uuid(),
   code_hash       text not null unique,
+  code_full       text,
   code_hint       text,
   status          text not null default 'unused'
                   check (status in ('unused','activated','revoked')),
@@ -79,6 +80,9 @@ create table if not exists public.pkg_activation_codes (
   revoked_at      timestamptz,
   catatan         text
 );
+
+-- Add code_full column if not exists (for re-run safety)
+alter table public.pkg_activation_codes add column if not exists code_full text;
 
 create index if not exists idx_pkg_act_codes_hash   on public.pkg_activation_codes (code_hash);
 create index if not exists idx_pkg_act_codes_status on public.pkg_activation_codes (status);
@@ -181,8 +185,8 @@ begin
 
   <<gen_loop>> loop
     begin
-      insert into public.pkg_activation_codes (code_hash, code_hint, status, nama_pengguna, madrasah, kabupaten, role, catatan, created_by, created_at)
-      values (v_hash, v_hint, 'unused', p_nama, p_madrasah, p_kabupaten, p_role, p_catatan, v_admin.username, now())
+      insert into public.pkg_activation_codes (code_hash, code_full, code_hint, status, nama_pengguna, madrasah, kabupaten, role, catatan, created_by, created_at)
+      values (v_hash, v_code, v_hint, 'unused', p_nama, p_madrasah, p_kabupaten, p_role, p_catatan, v_admin.username, now())
       returning id, created_at into v_id, v_created;
       exit gen_loop;
     exception when unique_violation then
@@ -196,6 +200,7 @@ begin
     'ok', true,
     'code_id', v_id,
     'code', v_code,
+    'code_full', v_code,
     'code_hint', v_hint,
     'status', 'unused',
     'created_at', v_created
@@ -288,6 +293,7 @@ begin
   from (
     select
       id,
+      code_full,
       code_hint,
       status,
       nama_pengguna,
@@ -411,7 +417,82 @@ end;
 $$;
 
 -- ======================================================================
--- 12. GRANT execute permissions
+-- 12. RPC: admin_edit_activation_code
+-- ======================================================================
+drop function if exists public.admin_edit_activation_code(uuid, text, text, text, text, text, text);
+create or replace function public.admin_edit_activation_code(
+  p_code_id         uuid,
+  p_admin_username  text default null,
+  p_nama            text default null,
+  p_madrasah        text default null,
+  p_kabupaten       text default null,
+  p_role            text default null,
+  p_catatan         text default null
+)
+returns json
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_admin public.pkg_admins%rowtype;
+  v_row   public.pkg_activation_codes%rowtype;
+begin
+  select * into v_admin from public.pkg_admins where username = p_admin_username limit 1;
+  if not found then
+    return json_build_object('ok', false, 'message', 'UNAUTHORIZED');
+  end if;
+
+  select * into v_row from public.pkg_activation_codes where id = p_code_id for update;
+  if not found then
+    return json_build_object('ok', false, 'message', 'NOT_FOUND');
+  end if;
+
+  update public.pkg_activation_codes
+  set
+    nama_pengguna = coalesce(p_nama, nama_pengguna),
+    madrasah      = coalesce(p_madrasah, madrasah),
+    kabupaten     = coalesce(p_kabupaten, kabupaten),
+    role          = coalesce(p_role, role),
+    catatan       = coalesce(p_catatan, catatan)
+  where id = p_code_id;
+
+  return json_build_object('ok', true, 'message', 'UPDATED');
+end;
+$$;
+
+-- ======================================================================
+-- 13. RPC: admin_delete_activation_code
+-- ======================================================================
+drop function if exists public.admin_delete_activation_code(uuid, text);
+create or replace function public.admin_delete_activation_code(
+  p_code_id        uuid,
+  p_admin_username text default null
+)
+returns text
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_admin public.pkg_admins%rowtype;
+begin
+  select * into v_admin from public.pkg_admins where username = p_admin_username limit 1;
+  if not found then
+    return 'UNAUTHORIZED';
+  end if;
+
+  delete from public.pkg_activation_codes where id = p_code_id;
+  if not found then
+    return 'NOT_FOUND';
+  end if;
+
+  return 'DELETED';
+end;
+$$;
+
+-- ======================================================================
+-- 14. GRANT execute permissions
 -- Semua RPC di-grant ke anon (admin pakai custom login, bukan Supabase Auth)
 -- ======================================================================
 
@@ -425,3 +506,5 @@ grant execute on function public.admin_create_activation_code(text, text, text, 
 grant execute on function public.admin_list_activation_codes(text) to anon, authenticated;
 grant execute on function public.admin_revoke_activation_code(uuid, text) to anon, authenticated;
 grant execute on function public.admin_activation_stats(text) to anon, authenticated;
+grant execute on function public.admin_edit_activation_code(uuid, text, text, text, text, text, text) to anon, authenticated;
+grant execute on function public.admin_delete_activation_code(uuid, text) to anon, authenticated;

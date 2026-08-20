@@ -90,6 +90,27 @@
     });
   }
 
+  // --- ADMIN EDIT CODE ---
+  async function adminEditCode(codeId, adminUsername, nama, madrasah, kabupaten, role, catatan) {
+    return callRpc('admin_edit_activation_code', {
+      p_code_id: codeId,
+      p_admin_username: adminUsername || null,
+      p_nama: nama || null,
+      p_madrasah: madrasah || null,
+      p_kabupaten: kabupaten || null,
+      p_role: role || null,
+      p_catatan: catatan || null
+    });
+  }
+
+  // --- ADMIN DELETE CODE ---
+  async function adminDeleteCode(codeId, adminUsername) {
+    return callRpc('admin_delete_activation_code', {
+      p_code_id: codeId,
+      p_admin_username: adminUsername || null
+    });
+  }
+
   // --- ADMIN STATS ---
   async function adminStats(adminUsername) {
     return callRpc('admin_activation_stats', {
@@ -135,6 +156,8 @@
     adminCreateCode: adminCreateCode,
     adminListCodes: adminListCodes,
     adminRevokeCode: adminRevokeCode,
+    adminEditCode: adminEditCode,
+    adminDeleteCode: adminDeleteCode,
     adminStats: adminStats,
     activateCode: activateCode,
     checkCodeStatus: checkCodeStatus
