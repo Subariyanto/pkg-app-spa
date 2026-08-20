@@ -103,7 +103,7 @@ function renderShell() {
             <a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown"><i class="bi bi-person-circle"></i> Akun</a>
             <ul class="dropdown-menu dropdown-menu-end">
               <li><a class="dropdown-item" href="#/pengaturan-pin"><i class="bi bi-shield-lock"></i> Pengaturan PIN / Akun</a></li>
-              ${isAdmin ? `<li><a class="dropdown-item" href="#/kelola-aktivasi"><i class="bi bi-key-fill"></i> Kelola Kode Aktivasi</a></li>` : ''}
+              <li><a class="dropdown-item" href="#/kelola-aktivasi"><i class="bi bi-key-fill"></i> Kelola Kode Aktivasi</a></li>
               <li><hr class="dropdown-divider"></li>
               <li><a class="dropdown-item text-danger" href="#" id="nav-logout"><i class="bi bi-box-arrow-right"></i> Logout</a></li>
             </ul>
@@ -4413,9 +4413,11 @@ function viewKelolaAktivasi(view) {
   var userInfo = window.PKGAuth ? window.PKGAuth.getUserInfo() : { role: 'kamad' };
   var adminLoggedIn = window.PKGAuth && window.PKGAuth.isAdminLoggedIn();
 
-  if (userInfo.role !== 'admin' && !adminLoggedIn) {
-    view.innerHTML = '<div class="alert alert-danger"><i class="bi bi-exclamation-triangle"></i> Halaman ini hanya dapat diakses oleh Admin (Ketua Pokjawas).</div>';
-    return;
+  // Admin bisa akses halaman ini bahkan sebelum aktivasi (chicken-and-egg fix)
+  // Jika belum login admin dan belum aktivasi, tampilkan login admin langsung
+  if (!adminLoggedIn && userInfo.role !== 'admin') {
+    // Jangan blokir — tampilkan login admin supaya admin bisa login tanpa aktivasi
+    // Lanjut ke render() di bawah yang akan tampilkan form login admin
   }
 
   // === SISTEM AKTIVASI VIA SUPABASE ===
