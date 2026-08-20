@@ -53,7 +53,7 @@ function getNamaKabupaten(userInfo) {
 function renderShell() {
   const userInfo = window.PKGAuth ? window.PKGAuth.getUserInfo() : { role: 'kamad' };
   const namaKabupaten = getNamaKabupaten(userInfo);
-  const isAdmin = userInfo.role === 'admin'; // Ketua Pokjawas
+  const isAdmin = userInfo.role === 'admin' || (window.PKGAuth && window.PKGAuth.isAdminLoggedIn()); // Ketua Pokjawas atau admin Supabase
   const isPengawas = userInfo.role === 'admin' || userInfo.role === 'pengawas' || userInfo.role === 'trial'; // admin, pengawas & trial
   const html = `
   <nav class="navbar navbar-expand-xl navbar-dark bg-primary mb-3 no-print">
@@ -4411,46 +4411,26 @@ window.addEventListener('DOMContentLoaded', async () => {
 
 function viewKelolaAktivasi(view) {
   var userInfo = window.PKGAuth ? window.PKGAuth.getUserInfo() : { role: 'kamad' };
+  var adminLoggedIn = window.PKGAuth && window.PKGAuth.isAdminLoggedIn();
 
-  if (userInfo.role !== 'admin') {
+  if (userInfo.role !== 'admin' && !adminLoggedIn) {
     view.innerHTML = '<div class="alert alert-danger"><i class="bi bi-exclamation-triangle"></i> Halaman ini hanya dapat diakses oleh Admin (Ketua Pokjawas).</div>';
     return;
   }
 
-  // === SISTEM AKTIVASI SIMPEL (localStorage) ===
-  var KEY_ADMIN_KODES = 'pkg_admin_kodes';
+  // === SISTEM AKTIVASI VIA SUPABASE ===
   var KEY_ADMIN_LOGGED_IN = 'pkg_admin_session';
 
   var state = {
-    adminLoggedIn: sessionStorage.getItem(KEY_ADMIN_LOGGED_IN) === 'true',
+    adminLoggedIn: localStorage.getItem(KEY_ADMIN_LOGGED_IN) === 'true',
+    adminUsername: localStorage.getItem('pkg_admin_username') || '',
     kodes: [],
+    stats: { total: 0, unused: 0, activated: 0, revoked: 0 },
     search: '',
     filterStatus: '',
     loading: false,
     creating: false,
   };
-
-  // --- KODE UTILS ---
-  var CHARSET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no I,O,0,1
-  function randomSegment() {
-    var s = '';
-    for (var i = 0; i < 4; i++) s += CHARSET[Math.floor(Math.random() * CHARSET.length)];
-    return s;
-  }
-  function generateKode() {
-    return 'PKG-' + randomSegment() + '-' + randomSegment();
-  }
-  function loadKodes() {
-    try {
-      var raw = localStorage.getItem(KEY_ADMIN_KODES);
-      state.kodes = raw ? JSON.parse(raw) : [];
-    } catch (e) {
-      state.kodes = [];
-    }
-  }
-  function saveKodes() {
-    localStorage.setItem(KEY_ADMIN_KODES, JSON.stringify(state.kodes));
-  }
 
   function render() {
     if (!state.adminLoggedIn) {
@@ -4468,7 +4448,11 @@ function viewKelolaAktivasi(view) {
         <div class="border rounded p-4 bg-light text-center" style="max-width: 480px; margin: 0 auto;">\
           <i class="bi bi-shield-lock" style="font-size: 2.5rem; color: #1e40af;"></i>\
           <h5 class="mt-2 mb-3">Login Admin</h5>\
-          <p class="small text-muted mb-3">Masukkan password Admin untuk mengelola kode aktivasi.</p>\
+          <p class="small text-muted mb-3">Login via Supabase. Username: Subariyanto.</p>\
+          <div class="form-group text-start mb-2">\
+            <label class="form-label small fw-bold">Username Admin</label>\
+            <input id="admin-username" type="text" class="form-control form-control-sm" placeholder="Username Admin" autocomplete="off">\
+          </div>\
           <div class="form-group text-start mb-2">\
             <label class="form-label small fw-bold">Password Admin</label>\
             <input id="admin-pass" type="password" class="form-control form-control-sm" placeholder="Password Admin" autocomplete="off">\
@@ -4481,17 +4465,31 @@ function viewKelolaAktivasi(view) {
 
     var btn = document.getElementById('btn-admin-login');
     var errEl = document.getElementById('admin-login-err');
+    var userInput = document.getElementById('admin-username');
     var passInput = document.getElementById('admin-pass');
 
-    function doLogin() {
+    async function doLogin() {
+      var username = userInput.value.trim();
       var pass = passInput.value;
-      var adminPass = localStorage.getItem('pkg_admin_pass') || 'pokjawas2026';
-      if (pass === adminPass) {
-        sessionStorage.setItem(KEY_ADMIN_LOGGED_IN, 'true');
+      errEl.textContent = '';
+      if (!username || !pass) {
+        errEl.textContent = 'Isi username dan password.';
+        return;
+      }
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Cek...';
+      var result = await window.PKGAuth.adminLogin(username, pass);
+      btn.disabled = false;
+      btn.innerHTML = '<i class="bi bi-box-arrow-in-right"></i> Login';
+      if (result && result.ok) {
+        localStorage.setItem(KEY_ADMIN_LOGGED_IN, 'true');
+        localStorage.setItem('pkg_admin_username', result.username || username);
+        localStorage.setItem('pkg_admin_nama', result.nama || username);
         state.adminLoggedIn = true;
+        state.adminUsername = result.username || username;
         render();
       } else {
-        errEl.textContent = 'Password admin salah.';
+        errEl.textContent = (result && result.message) || 'Login gagal.';
       }
     }
 
@@ -4499,75 +4497,96 @@ function viewKelolaAktivasi(view) {
     passInput.addEventListener('keydown', function(e) {
       if (e.key === 'Enter') doLogin();
     });
-    passInput.focus();
+    userInput.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') passInput.focus();
+    });
+    userInput.focus();
+  }
+
+  async function loadCodes() {
+    state.loading = true;
+    var codes = await window.SupabaseSync.adminListCodes(state.adminUsername);
+    state.kodes = Array.isArray(codes) ? codes : [];
+    state.loading = false;
+  }
+
+  async function loadStats() {
+    var stats = await window.SupabaseSync.adminStats(state.adminUsername);
+    if (stats && stats.ok) {
+      state.stats = stats;
+    }
   }
 
   function renderPanel() {
-    loadKodes();
-
-    var filtered = state.kodes.filter(function(k) {
+    var kodes = state.kodes || [];
+    var filtered = kodes.filter(function(k) {
       var matchSearch = !state.search ||
-        (k.code && k.code.toLowerCase().indexOf(state.search.toLowerCase()) >= 0) ||
-        (k.nama && k.nama.toLowerCase().indexOf(state.search.toLowerCase()) >= 0) ||
+        (k.code_hint && k.code_hint.toLowerCase().indexOf(state.search.toLowerCase()) >= 0) ||
+        (k.nama_pengguna && k.nama_pengguna.toLowerCase().indexOf(state.search.toLowerCase()) >= 0) ||
         (k.madrasah && k.madrasah.toLowerCase().indexOf(state.search.toLowerCase()) >= 0);
       var matchStatus = !state.filterStatus || k.status === state.filterStatus;
       return matchSearch && matchStatus;
     });
 
-    var totalUnused = state.kodes.filter(function(k){ return k.status === 'unused'; }).length;
-    var totalActivated = state.kodes.filter(function(k){ return k.status === 'activated'; }).length;
-
+    var s = state.stats;
     var html = '\
     <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">\
       <h4 class="mb-0"><i class="bi bi-key-fill"></i> Kelola Kode Aktivasi</h4>\
       <div class="d-flex gap-2">\
-        <button id="btn-buat-kode" class="btn btn-sm btn-primary"><i class="bi bi-plus-circle"></i> Buat Kode</button>\
+        <button id="btn-buat-kode" class="btn btn-sm btn-primary" ' + (state.creating ? 'disabled' : '') + '><i class="bi bi-plus-circle"></i> Buat Kode</button>\
+        <button id="btn-refresh" class="btn btn-sm btn-outline-secondary"><i class="bi bi-arrow-clockwise"></i> Refresh</button>\
         <button id="btn-export-csv" class="btn btn-sm btn-success"><i class="bi bi-download"></i> Export CSV</button>\
         <button id="btn-admin-logout" class="btn btn-sm btn-outline-danger"><i class="bi bi-box-arrow-right"></i> Logout</button>\
       </div>\
     </div>\
     <div class="row g-3 mb-3">\
-      <div class="col-md-3"><div class="card text-center"><div class="card-body py-3"><div class="display-6 text-primary">' + state.kodes.length + '</div><div class="small text-muted">Total Kode</div></div></div></div>\
-      <div class="col-md-3"><div class="card text-center"><div class="card-body py-3"><div class="display-6 text-success">' + totalUnused + '</div><div class="small text-muted">Belum Dipakai</div></div></div></div>\
-      <div class="col-md-3"><div class="card text-center"><div class="card-body py-3"><div class="display-6 text-info">' + totalActivated + '</div><div class="small text-muted">Sudah Diaktivasi</div></div></div></div>\
-      <div class="col-md-3"><div class="card text-center"><div class="card-body py-3"><div class="display-6 text-warning"><i class="bi bi-info-circle"></i></div><div class="small text-muted">1 Kode = 1 Perangkat</div></div></div></div>\
+      <div class="col-md-3"><div class="card text-center"><div class="card-body py-3"><div class="display-6 text-primary">' + (s.total || 0) + '</div><div class="small text-muted">Total Kode</div></div></div></div>\
+      <div class="col-md-3"><div class="card text-center"><div class="card-body py-3"><div class="display-6 text-success">' + (s.unused || 0) + '</div><div class="small text-muted">Belum Dipakai</div></div></div></div>\
+      <div class="col-md-3"><div class="card text-center"><div class="card-body py-3"><div class="display-6 text-info">' + (s.activated || 0) + '</div><div class="small text-muted">Sudah Diaktivasi</div></div></div></div>\
+      <div class="col-md-3"><div class="card text-center"><div class="card-body py-3"><div class="display-6 text-warning">' + (s.revoked || 0) + '</div><div class="small text-muted">Dicabut</div></div></div></div>\
     </div>\
     <div class="card mb-3">\
       <div class="card-header d-flex gap-2 align-items-center flex-wrap">\
-        <i class="bi bi-list-ul"></i> <strong>Daftar Kode Aktivasi</strong>\
+        <i class="bi bi-list-ul"></i> <strong>Daftar Kode Aktivasi</strong> ' + (state.loading ? '<span class="spinner-border spinner-border-sm ms-2"></span>' : '') + '\
         <div class="d-flex gap-2 ms-auto">\
           <input id="search-kode" type="text" class="form-control form-control-sm" placeholder="Cari kode/nama/madrasah..." value="' + escapeHtml(state.search) + '" style="width:200px;">\
           <select id="filter-status" class="form-select form-select-sm" style="width:auto;">\
             <option value="">Semua Status</option>\
             <option value="unused" ' + (state.filterStatus === 'unused' ? 'selected' : '') + '>Belum Dipakai</option>\
             <option value="activated" ' + (state.filterStatus === 'activated' ? 'selected' : '') + '>Sudah Diaktivasi</option>\
+            <option value="revoked" ' + (state.filterStatus === 'revoked' ? 'selected' : '') + '>Dicabut</option>\
           </select>\
         </div>\
       </div>\
       <div class="card-body p-0">\
         <div class="table-responsive">\
           <table class="table table-sm table-hover mb-0">\
-            <thead class="table-light"><tr><th>Kode</th><th>Nama Penerima</th><th>Madrasah</th><th>Status</th><th>Dibuat</th><th>Aksi</th></tr></thead>\
+            <thead class="table-light"><tr><th>Kode</th><th>Nama Penerima</th><th>Madrasah</th><th>Kabupaten</th><th>Status</th><th>Dibuat</th><th>Aksi</th></tr></thead>\
             <tbody>';
 
     if (filtered.length === 0) {
-      html += '<tr><td colspan="6" class="text-center text-muted py-4"><i class="bi bi-inbox"></i> Tidak ada kode. Klik "Buat Kode" untuk membuat kode baru.</td></tr>';
+      html += '<tr><td colspan="7" class="text-center text-muted py-4"><i class="bi bi-inbox"></i> ' + (state.loading ? 'Memuat...' : 'Tidak ada kode. Klik "Buat Kode" untuk membuat kode baru.') + '</td></tr>';
     } else {
       filtered.forEach(function(k) {
-        var statusBadge = k.status === 'activated'
-          ? '<span class="badge bg-success">Diaktivasi</span>'
-          : '<span class="badge bg-warning text-dark">Belum Dipakai</span>';
-        var idx = state.kodes.indexOf(k);
+        var statusBadge;
+        if (k.status === 'activated') {
+          statusBadge = '<span class="badge bg-success">Diaktivasi</span>';
+        } else if (k.status === 'revoked') {
+          statusBadge = '<span class="badge bg-danger">Dicabut</span>';
+        } else {
+          statusBadge = '<span class="badge bg-warning text-dark">Belum Dipakai</span>';
+        }
+        var createdDate = k.created_at ? new Date(k.created_at).toLocaleString('id-ID') : '-';
+        var activatedDate = k.activated_at ? new Date(k.activated_at).toLocaleString('id-ID') : '-';
         html += '<tr>\
-          <td><code class="text-primary fw-bold">' + escapeHtml(k.code) + '</code></td>\
-          <td>' + escapeHtml(k.nama || '-') + '</td>\
+          <td><code class="text-primary fw-bold">' + escapeHtml(k.code_hint || '?') + '</code></td>\
+          <td>' + escapeHtml(k.nama_pengguna || '-') + '</td>\
           <td>' + escapeHtml(k.madrasah || '-') + '</td>\
+          <td class="small">' + escapeHtml(k.kabupaten || '-') + '</td>\
           <td>' + statusBadge + '</td>\
-          <td class="small">' + escapeHtml(k.created_at || '-') + '</td>\
+          <td class="small">' + escapeHtml(createdDate) + '</td>\
           <td>\
-            <button class="btn btn-sm btn-outline-primary btn-copy-kode" data-kode="' + escapeHtml(k.code) + '" title="Salin Kode"><i class="bi bi-clipboard"></i></button>\
-            <button class="btn btn-sm btn-outline-secondary btn-edit-kode" data-idx="' + idx + '" title="Edit"><i class="bi bi-pencil"></i></button>\
-            <button class="btn btn-sm btn-outline-danger btn-hapus-kode" data-idx="' + idx + '" title="Hapus"><i class="bi bi-trash"></i></button>\
+            ' + (k.status !== 'revoked' ? '<button class="btn btn-sm btn-outline-danger btn-revoke-kode" data-id="' + escapeHtml(k.id) + '" title="Cabut Kode"><i class="bi bi-x-circle"></i></button>' : '') + '\
           </td>\
         </tr>';
       });
@@ -4577,11 +4596,11 @@ function viewKelolaAktivasi(view) {
     <div class="alert alert-info small">\
       <i class="bi bi-info-circle"></i> <strong>Cara Kerja:</strong>\
       <ol class="mb-0">\
-        <li>Buat kode aktivasi di sini (format: PKG-XXXX-XXXX).</li>\
+        <li>Buat kode aktivasi di sini (format: PKG-XXXX-XXXX). Kode disimpan di server Supabase.</li>\
         <li>Berikan kode ke pengguna via WhatsApp/dll (1 kode = 1 orang = 1 perangkat).</li>\
-        <li>Pengguna input kode di halaman aktivasi, kode dikunci ke Device ID browser mereka.</li>\
-        <li>Jika pengguna pindah perangkat/browser clear cache, harus input kode lagi.</li>\
-        <li>Admin catat kode siapa punya siapa (edit kolom Nama/Madrasah).</li>\
+        <li>Pengguna input kode di halaman aktivasi, kode divalidasi ke Supabase dan dikunci ke Device ID.</li>\
+        <li>Admin bisa cabut (revoke) kode jika perlu.</li>\
+        <li>Data hasil penilaian PKG tetap di localStorage perangkat pengguna.</li>\
       </ol>\
     </div>';
 
@@ -4589,30 +4608,61 @@ function viewKelolaAktivasi(view) {
     wirePanel();
   }
 
-  function wirePanel() {
+  async function wirePanel() {
     var btnBuat = document.getElementById('btn-buat-kode');
-    if (btnBuat) btnBuat.addEventListener('click', function() {
-      var kode = generateKode();
-      loadKodes();
-      state.kodes.unshift({
-        code: kode,
-        nama: '',
-        madrasah: '',
-        status: 'unused',
-        created_at: new Date().toLocaleString('id-ID'),
-        activated_at: null,
-        device_id: null
-      });
-      saveKodes();
-      toast('Kode dibuat: ' + kode, 'success');
+    if (btnBuat) btnBuat.addEventListener('click', async function() {
+      if (state.creating) return;
+      var nama = prompt('Nama Penerima (opsional):', '');
+      if (nama === null) return;
+      var madrasah = prompt('Nama Madrasah (opsional):', '');
+      if (madrasah === null) return;
+      var kabupaten = prompt('Kabupaten/Kota (opsional):', '');
+      if (kabupaten === null) return;
+      var role = prompt('Role (pengawas/kamad, kosongkan untuk default):', '');
+      if (role === null) return;
+      var catatan = prompt('Catatan (opsional):', '');
+      if (catatan === null) return;
+
+      state.creating = true;
+      btnBuat.disabled = true;
+      btnBuat.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Membuat...';
+      var result = await window.SupabaseSync.adminCreateCode(
+        nama.trim() || null,
+        madrasah.trim() || null,
+        kabupaten.trim() || null,
+        role.trim() || null,
+        catatan.trim() || null,
+        state.adminUsername
+      );
+      state.creating = false;
+      btnBuat.disabled = false;
+      btnBuat.innerHTML = '<i class="bi bi-plus-circle"></i> Buat Kode';
+
+      if (result && result.ok) {
+        toast('Kode dibuat: ' + result.code, 'success');
+        // Tampilkan kode ke admin
+        prompt('Kode Aktivasi Baru (salin dan berikan ke pengguna):', result.code);
+        await loadCodes();
+        await loadStats();
+        renderPanel();
+      } else {
+        toast('Gagal membuat kode: ' + ((result && result.message) || 'unknown'), 'danger');
+      }
+    });
+
+    var btnRefresh = document.getElementById('btn-refresh');
+    if (btnRefresh) btnRefresh.addEventListener('click', async function() {
+      btnRefresh.disabled = true;
+      await loadCodes();
+      await loadStats();
+      btnRefresh.disabled = false;
       renderPanel();
     });
 
     var btnExport = document.getElementById('btn-export-csv');
     if (btnExport) btnExport.addEventListener('click', function() {
-      loadKodes();
-      if (state.kodes.length === 0) { toast('Tidak ada kode untuk diekspor.', 'warning'); return; }
-      var headers = ['code', 'nama', 'madrasah', 'status', 'created_at', 'activated_at', 'device_id'];
+      if (!state.kodes || state.kodes.length === 0) { toast('Tidak ada kode untuk diekspor.', 'warning'); return; }
+      var headers = ['code_hint', 'status', 'nama_pengguna', 'username', 'madrasah', 'kabupaten', 'role', 'device_id', 'created_by', 'created_at', 'activated_at', 'revoked_at', 'catatan'];
       var csv = headers.join(',') + '\n';
       state.kodes.forEach(function(k) {
         var vals = headers.map(function(h) {
@@ -4633,7 +4683,7 @@ function viewKelolaAktivasi(view) {
 
     var btnLogout = document.getElementById('btn-admin-logout');
     if (btnLogout) btnLogout.addEventListener('click', function() {
-      sessionStorage.removeItem(KEY_ADMIN_LOGGED_IN);
+      window.PKGAuth.adminLogout();
       state.adminLoggedIn = false;
       render();
     });
@@ -4650,51 +4700,33 @@ function viewKelolaAktivasi(view) {
       renderPanel();
     });
 
-    document.querySelectorAll('.btn-copy-kode').forEach(function(btn) {
-      btn.addEventListener('click', function() {
-        var kode = btn.dataset.kode;
-        if (navigator.clipboard) {
-          navigator.clipboard.writeText(kode).then(function() {
-            toast('Kode disalin: ' + kode, 'success');
-          });
+    document.querySelectorAll('.btn-revoke-kode').forEach(function(btn) {
+      btn.addEventListener('click', async function() {
+        var codeId = btn.dataset.id;
+        if (!confirm('Cabut (revoke) kode ini? Kode tidak akan bisa dipakai lagi.')) return;
+        btn.disabled = true;
+        var result = await window.SupabaseSync.adminRevokeCode(codeId, state.adminUsername);
+        if (result === 'REVOKED' || (result && result === 'REVOKED')) {
+          toast('Kode dicabut.', 'success');
+          await loadCodes();
+          await loadStats();
+          renderPanel();
         } else {
-          prompt('Salin kode ini:', kode);
+          toast('Gagal: ' + (result || 'unknown'), 'danger');
+          btn.disabled = false;
         }
-      });
-    });
-
-    document.querySelectorAll('.btn-edit-kode').forEach(function(btn) {
-      btn.addEventListener('click', function() {
-        var idx = parseInt(btn.dataset.idx);
-        loadKodes();
-        var k = state.kodes[idx];
-        if (!k) return;
-        var nama = prompt('Nama Penerima:', k.nama || '');
-        if (nama === null) return;
-        var madrasah = prompt('Nama Madrasah:', k.madrasah || '');
-        if (madrasah === null) return;
-        k.nama = nama.trim();
-        k.madrasah = madrasah.trim();
-        saveKodes();
-        toast('Data kode diperbarui.', 'success');
-        renderPanel();
-      });
-    });
-
-    document.querySelectorAll('.btn-hapus-kode').forEach(function(btn) {
-      btn.addEventListener('click', function() {
-        var idx = parseInt(btn.dataset.idx);
-        if (!confirm('Hapus kode ini?')) return;
-        loadKodes();
-        state.kodes.splice(idx, 1);
-        saveKodes();
-        toast('Kode dihapus.', 'success');
-        renderPanel();
       });
     });
   }
 
-  render();
+  // Init: load codes + stats, then render
+  (async function() {
+    if (state.adminLoggedIn) {
+      await loadCodes();
+      await loadStats();
+    }
+    render();
+  })();
 }
 
 function showUpdateBanner() {

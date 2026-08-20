@@ -1,6 +1,6 @@
 // sw.js - Service worker for PKG app
-// V5 Simple (2026-08-20): localStorage-based activation, no Supabase.
-const CACHE_VERSION = 'pkg-v5-2026-08-20-simple';
+// V6 Supabase (2026-08-20): Aktivasi via Supabase, data PKG di localStorage.
+const CACHE_VERSION = 'pkg-v6-2026-08-20-supabase';
 
 const NETWORK_FIRST = [
   'index.html',
@@ -12,6 +12,7 @@ const NETWORK_FIRST = [
   'saran-indikator.js',
   'laporan.js',
   'auth.js',
+  'supabase_sync.js',
   'style.css',
   'manifest.json',
 ];
@@ -27,6 +28,7 @@ const PRECACHE = [
   './importer.js',
   './laporan.js',
   './auth.js',
+  './supabase_sync.js',
   './app.js',
   './manifest.json',
   './icon-192.png',
@@ -62,6 +64,13 @@ function isAppCode(url) {
 self.addEventListener('fetch', (ev) => {
   const req = ev.request;
   if (req.method !== 'GET') return;
+
+  // Supabase API requests: always network-first, don't cache
+  const supabasePattern = /supabase\.co\/rest\/v1\/rpc\//;
+  if (supabasePattern.test(req.url)) {
+    ev.respondWith(fetch(req));
+    return;
+  }
 
   if (isAppCode(req.url)) {
     ev.respondWith(

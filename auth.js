@@ -1,7 +1,8 @@
-// auth.js - Sistem Aktivasi Sederhana, Login, & PIN Lock untuk PKG App SPA
-// V4 Simple (2026-08-20): 100% localStorage, tanpa Supabase, tanpa ECDSA.
+// auth.js - Sistem Aktivasi Supabase + Login + PIN Lock untuk PKG App SPA
+// V5 Supabase (2026-08-20): Kode aktivasi di server (Supabase), data PKG di localStorage.
+// Admin login via Supabase RPC (tabel pkg_admins).
+// User login: 100% localStorage (username + password_hash FNV1a).
 // 1 kode = 1 perangkat (device ID binding via localStorage).
-// Admin generate kode → user input kode → app simpan kode+deviceId → unlocked.
 
 (function () {
   'use strict';
@@ -24,6 +25,11 @@
   var KEY_USER_KABUPATEN = 'pkg_v1_user_kabupaten';
 
   var KEY_LOGGED_IN = 'pkg_v1_logged_in';
+
+  // Admin session keys
+  var KEY_ADMIN_LOGGED_IN = 'pkg_admin_session';
+  var KEY_ADMIN_USERNAME = 'pkg_admin_username';
+  var KEY_ADMIN_NAMA = 'pkg_admin_nama';
 
   // --- CRYPTO UTILS (simple) ---
   function fnv1aHash(str) {
@@ -125,6 +131,17 @@
     return sessionStorage.getItem(KEY_LOGGED_IN) === 'true';
   }
 
+  function isAdminLoggedIn() {
+    return localStorage.getItem(KEY_ADMIN_LOGGED_IN) === 'true';
+  }
+
+  function getAdminInfo() {
+    return {
+      username: localStorage.getItem(KEY_ADMIN_USERNAME) || '',
+      nama: localStorage.getItem(KEY_ADMIN_NAMA) || ''
+    };
+  }
+
   function getUserInfo() {
     return {
       role: localStorage.getItem(KEY_USER_ROLE) || 'kamad',
@@ -138,7 +155,7 @@
 
   // --- VIEWS & RENDER OVERLAYS ---
 
-  // 1. Screen Aktivasi & Registrasi (simple localStorage)
+  // 1. Screen Aktivasi & Registrasi (kode divalidasi via Supabase)
   function renderActivationScreen() {
     var overlay = document.getElementById('pkg-auth-overlay');
     if (!overlay) {
@@ -302,19 +319,57 @@
         return;
       }
 
-      // Simpan aktivasi & akun ke localStorage
-      localStorage.setItem(KEY_ACTIVATED, 'true');
-      localStorage.setItem(KEY_ACTIVATION_CODE, code);
-      localStorage.setItem(KEY_USER_ROLE, role);
-      localStorage.setItem(KEY_USER_USERNAME, username);
-      localStorage.setItem(KEY_USER_PASSWORD_HASH, fnv1aHash(password));
-      localStorage.setItem(KEY_USER_FULLNAME, fullname);
-      localStorage.setItem(KEY_USER_MADRASAH, madrasah);
-      localStorage.setItem(KEY_USER_KABUPATEN, kabupaten);
+      // --- VALIDASI KODE KE SUPABASE ---
+      if (!window.SupabaseSync || !window.SupabaseSync.hasConfig()) {
+        errEl.textContent = 'Server aktivasi tidak terkonfigurasi. Hubungi Admin.';
+        return;
+      }
 
-      alert('Aktivasi berhasil! Akun telah dibuat. Silakan login menggunakan akun yang baru saja dibuat.');
-      location.hash = '#/';
-      location.reload();
+      btn.disabled = true;
+      btn.textContent = 'Memvalidasi kode...';
+      infoEl.textContent = 'Mengecek kode ke server...';
+
+      var deviceId = getDeviceId();
+      var result = await window.SupabaseSync.activateCode(
+        code,
+        deviceId,
+        fullname,
+        username,
+        madrasah,
+        kabupaten,
+        role,
+        navigator.userAgent || ''
+      );
+
+      btn.disabled = false;
+      btn.textContent = 'Aktifkan & Daftar Akun';
+
+      // result bisa string atau object
+      var status = (typeof result === 'string') ? result : (result && result.data) || result;
+
+      if (status === 'ACTIVATED' || (result && result === 'ACTIVATED')) {
+        // Simpan aktivasi & akun ke localStorage
+        localStorage.setItem(KEY_ACTIVATED, 'true');
+        localStorage.setItem(KEY_ACTIVATION_CODE, code);
+        localStorage.setItem(KEY_USER_ROLE, role);
+        localStorage.setItem(KEY_USER_USERNAME, username);
+        localStorage.setItem(KEY_USER_PASSWORD_HASH, fnv1aHash(password));
+        localStorage.setItem(KEY_USER_FULLNAME, fullname);
+        localStorage.setItem(KEY_USER_MADRASAH, madrasah);
+        localStorage.setItem(KEY_USER_KABUPATEN, kabupaten);
+
+        alert('Aktivasi berhasil! Kode tervalidasi di server. Akun telah dibuat. Silakan login.');
+        location.hash = '#/';
+        location.reload();
+      } else if (status === 'INVALID_CODE') {
+        errEl.textContent = 'Kode aktivasi tidak ditemukan di server. Periksa kembali kode Anda.';
+      } else if (status === 'ALREADY_USED') {
+        errEl.textContent = 'Kode aktivasi ini sudah dipakai perangkat lain.';
+      } else if (status === 'REVOKED') {
+        errEl.textContent = 'Kode aktivasi telah dicabut (revoke) oleh Admin.';
+      } else {
+        errEl.textContent = 'Gagal aktivasi: ' + (status || 'kesalahan tidak diketahui') + '. Cek koneksi internet.';
+      }
     });
   }
 
@@ -323,7 +378,7 @@
     return /^PKG-[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}$/.test(code);
   }
 
-  // 2. Screen Login Akun (Username + Password)
+  // 2. Screen Login Akun (Username + Password) — 100% localStorage
   function renderLoginScreen() {
     var overlay = document.getElementById('pkg-auth-overlay');
     if (!overlay) {
@@ -656,7 +711,7 @@
             <p class="mb-2"><strong>PIN aktif:</strong> ' + (isSet ? '<span class="text-success">Ya, PIN terpasang.</span>' : '<span class="text-muted">Belum diatur.</span>') + '</p>\
             <p class="small text-muted mb-3">' + (isSet
               ? 'Aplikasi terkunci saat dibuka di tab baru.'
-              : 'Aktifkan PIN untuk pengamanan ekstra.') + '</p>\
+              : 'Aktifkan PIN for pengamanan ekstra.') + '</p>\
             ' + (isSet ? '\
               <button id="btn-change-pin" class="btn btn-sm btn-primary w-100 mb-2"><i class="bi bi-key"></i> Ganti PIN</button>\
               <button id="btn-remove-pin" class="btn btn-sm btn-outline-danger w-100"><i class="bi bi-shield-slash"></i> Hapus PIN</button>\
@@ -700,6 +755,20 @@
         }
       });
     }
+  }
+
+  // --- ADMIN LOGIN via Supabase ---
+  async function adminLogin(username, password) {
+    if (!window.SupabaseSync || !window.SupabaseSync.hasConfig()) {
+      return { ok: false, message: 'Server tidak terkonfigurasi' };
+    }
+    return window.SupabaseSync.adminLogin(username, password);
+  }
+
+  function adminLogout() {
+    localStorage.removeItem(KEY_ADMIN_LOGGED_IN);
+    localStorage.removeItem(KEY_ADMIN_USERNAME);
+    localStorage.removeItem(KEY_ADMIN_NAMA);
   }
 
   // --- INITIALIZATION ---
@@ -777,6 +846,11 @@
     escapeHtml: escapeHtml,
     getDeviceId: getDeviceId,
     validateCodeFormat: validateCodeFormat,
+    // Admin
+    isAdminLoggedIn: isAdminLoggedIn,
+    getAdminInfo: getAdminInfo,
+    adminLogin: adminLogin,
+    adminLogout: adminLogout,
   };
 
   // Auto boot sequence
