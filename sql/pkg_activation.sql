@@ -492,6 +492,34 @@ end;
 $$;
 
 -- ======================================================================
+-- 14. RPC: admin_delete_all_codes
+-- ======================================================================
+drop function if exists public.admin_delete_all_codes(text);
+create or replace function public.admin_delete_all_codes(
+  p_admin_username text default null
+)
+returns json
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_admin public.pkg_admins%rowtype;
+  v_count int;
+begin
+  select * into v_admin from public.pkg_admins where username = p_admin_username limit 1;
+  if not found then
+    return json_build_object('ok', false, 'message', 'UNAUTHORIZED');
+  end if;
+
+  select count(*) into v_count from public.pkg_activation_codes;
+  delete from public.pkg_activation_codes;
+
+  return json_build_object('ok', true, 'deleted', v_count);
+end;
+$$;
+
+-- ======================================================================
 -- 14. GRANT execute permissions
 -- Semua RPC di-grant ke anon (admin pakai custom login, bukan Supabase Auth)
 -- ======================================================================
@@ -508,3 +536,4 @@ grant execute on function public.admin_revoke_activation_code(uuid, text) to ano
 grant execute on function public.admin_activation_stats(text) to anon, authenticated;
 grant execute on function public.admin_edit_activation_code(uuid, text, text, text, text, text, text) to anon, authenticated;
 grant execute on function public.admin_delete_activation_code(uuid, text) to anon, authenticated;
+grant execute on function public.admin_delete_all_codes(text) to anon, authenticated;

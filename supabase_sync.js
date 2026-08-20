@@ -111,6 +111,13 @@
     });
   }
 
+  // --- ADMIN DELETE ALL CODES ---
+  async function adminDeleteAllCodes(adminUsername) {
+    return callRpc('admin_delete_all_codes', {
+      p_admin_username: adminUsername || null
+    });
+  }
+
   // --- ADMIN STATS ---
   async function adminStats(adminUsername) {
     return callRpc('admin_activation_stats', {
@@ -158,6 +165,7 @@
     adminRevokeCode: adminRevokeCode,
     adminEditCode: adminEditCode,
     adminDeleteCode: adminDeleteCode,
+    adminDeleteAllCodes: adminDeleteAllCodes,
     adminStats: adminStats,
     activateCode: activateCode,
     checkCodeStatus: checkCodeStatus

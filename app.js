@@ -4540,6 +4540,7 @@ function viewKelolaAktivasi(view) {
         <button id="btn-buat-10" class="btn btn-sm btn-primary" ' + (state.creating ? 'disabled' : '') + '><i class="bi bi-plus-circle"></i> Buat 10 Kode</button>\
         <button id="btn-refresh" class="btn btn-sm btn-outline-secondary"><i class="bi bi-arrow-clockwise"></i> Refresh</button>\
         <button id="btn-export-csv" class="btn btn-sm btn-success"><i class="bi bi-download"></i> Export CSV</button>\
+        <button id="btn-hapus-semua" class="btn btn-sm btn-outline-danger"><i class="bi bi-trash3"></i> Hapus Semua Kode</button>\
         <button id="btn-admin-logout" class="btn btn-sm btn-outline-danger"><i class="bi bi-box-arrow-right"></i> Logout</button>\
       </div>\
     </div>\
@@ -4980,6 +4981,28 @@ function viewKelolaAktivasi(view) {
           btn.disabled = false;
         }
       });
+    });
+
+    // --- HAPUS SEMUA KODE ---
+    var btnHapusSemua = document.getElementById('btn-hapus-semua');
+    if (btnHapusSemua) btnHapusSemua.addEventListener('click', async function() {
+      var total = (state.kodes || []).length;
+      if (total === 0) { toast('Tidak ada kode untuk dihapus.', 'info'); return; }
+      if (!confirm('Hapus SEMUA ' + total + ' kode aktivasi?\n\nIni akan menghapus semua kode permanen dan tidak bisa dikembalikan.')) return;
+      if (!confirm('Konfirmasi terakhir: Yakin hapus semua ' + total + ' kode?')) return;
+      btnHapusSemua.disabled = true;
+      btnHapusSemua.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Menghapus...';
+      var result = await window.SupabaseSync.adminDeleteAllCodes(state.adminUsername);
+      if (result && result.ok) {
+        toast(result.deleted + ' kode dihapus.', 'success');
+        await loadCodes();
+        await loadStats();
+        renderPanel();
+      } else {
+        toast('Gagal: ' + (result && result.message || 'unknown'), 'danger');
+      }
+      btnHapusSemua.disabled = false;
+      btnHapusSemua.innerHTML = '<i class="bi bi-trash3"></i> Hapus Semua Kode';
     });
   }
 
