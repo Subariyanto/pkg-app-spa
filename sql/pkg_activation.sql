@@ -263,57 +263,48 @@ $$;
 
 -- ======================================================================
 -- 8. RPC: admin_list_activation_codes
--- FIX: ambiguous column — pakai alias c. untuk semua kolom
+-- FIX: return json (bukan TABLE) untuk hindari ambiguous column
 -- ======================================================================
 create or replace function public.admin_list_activation_codes(
   p_admin_username text default null
 )
-returns table (
-  id             uuid,
-  code_hint      text,
-  status         text,
-  nama_pengguna  text,
-  username       text,
-  madrasah       text,
-  kabupaten      text,
-  role           text,
-  device_id      text,
-  created_by     text,
-  created_at     timestamptz,
-  activated_at   timestamptz,
-  revoked_at     timestamptz,
-  catatan        text
-)
+returns json
 language plpgsql
 security definer
 set search_path = public
 as $$
 declare
   v_admin public.pkg_admins%rowtype;
+  v_rows  json;
 begin
   select * into v_admin from public.pkg_admins where username = p_admin_username limit 1;
   if not found then
-    return;
+    return json_build_object('ok', false, 'message', 'UNAUTHORIZED');
   end if;
 
-  return query
-  select
-    c.id,
-    c.code_hint,
-    c.status,
-    c.nama_pengguna,
-    c.username,
-    c.madrasah,
-    c.kabupaten,
-    c.role,
-    c.device_id,
-    c.created_by,
-    c.created_at,
-    c.activated_at,
-    c.revoked_at,
-    c.catatan
-  from public.pkg_activation_codes c
-  order by c.created_at desc;
+  select coalesce(json_agg(row_to_json(t)), '[]'::json)
+  into v_rows
+  from (
+    select
+      id,
+      code_hint,
+      status,
+      nama_pengguna,
+      username as user_name,
+      madrasah,
+      kabupaten,
+      role,
+      device_id,
+      created_by,
+      created_at,
+      activated_at,
+      revoked_at,
+      catatan
+    from public.pkg_activation_codes
+    order by created_at desc
+  ) t;
+
+  return json_build_object('ok', true, 'data', v_rows);
 end;
 $$;
 

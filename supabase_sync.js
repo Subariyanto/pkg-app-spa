@@ -72,13 +72,13 @@
   }
 
   // --- ADMIN LIST CODES ---
+  // Returns: { ok, data: [...] } atau { ok: false, message }
   async function adminListCodes(adminUsername) {
     var result = await callRpc('admin_list_activation_codes', {
       p_admin_username: adminUsername || null
     });
-    if (Array.isArray(result)) return result;
-    if (result && result.message) return [];
-    if (!result) return [];
+    if (result && result.ok && Array.isArray(result.data)) return result.data;
+    if (Array.isArray(result)) return result; // fallback old format
     return [];
   }
 
