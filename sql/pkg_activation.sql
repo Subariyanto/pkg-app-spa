@@ -265,6 +265,7 @@ $$;
 -- 8. RPC: admin_list_activation_codes
 -- FIX: return json (bukan TABLE) untuk hindari ambiguous column
 -- ======================================================================
+drop function if exists public.admin_list_activation_codes(text);
 create or replace function public.admin_list_activation_codes(
   p_admin_username text default null
 )
