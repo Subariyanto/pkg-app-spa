@@ -6,7 +6,7 @@
   'use strict';
 
   var SUPABASE_URL = 'https://veezuitkavznfipyyxln.supabase.co';
-  var SUPABASE_ANON_KEY = 'sb_pub_71VsVcheY13eLPXoUteZkg_hUtaJh8S';
+  var SUPABASE_ANON_KEY = 'sb_publishable_71VsVcheY13eLPXoUteZkg_hUtaJh8S';
 
   function hasConfig() {
     return !!(SUPABASE_URL && SUPABASE_ANON_KEY);
