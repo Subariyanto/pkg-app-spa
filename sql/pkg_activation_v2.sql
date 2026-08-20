@@ -11,8 +11,10 @@
 -- ======================================================================
 -- 0. DEPRECATED: Tabel lama pkg_aktivasi_log
 -- ======================================================================
-comment on table if exists public.pkg_aktivasi_log is
-  'DEPRECATED sejak pkg_activation_v2. Tabel lama relay aktivasi client-side. Tidak digunakan lagi sebagai sumber utama aktivasi. Lihat pkg_activation_codes.';
+do $$ begin
+  comment on table public.pkg_aktivasi_log is
+    'DEPRECATED sejak pkg_activation_v2. Tabel lama relay aktivasi client-side. Tidak digunakan lagi sebagai sumber utama aktivasi. Lihat pkg_activation_codes.';
+exception when others then null; end $$;
 
 -- ======================================================================
 -- 1. TABEL UTAMA: pkg_activation_codes
