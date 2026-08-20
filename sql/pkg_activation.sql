@@ -431,10 +431,10 @@ grant execute on function public.activate_pkg_code(text, text, text, text, text,
 grant execute on function public.check_code_status(text) to anon, authenticated;
 
 -- admin functions: authenticated only
-grant execute on function public.admin_create_activation_code(text, text, text, text, text, text) to authenticated;
-grant execute on function public.admin_list_activation_codes(text) to authenticated;
-grant execute on function public.admin_revoke_activation_code(uuid, text) to authenticated;
-grant execute on function public.admin_activation_stats(text) to authenticated;
+grant execute on function public.admin_create_activation_code(text, text, text, text, text, text) to anon, authenticated;
+grant execute on function public.admin_list_activation_codes(text) to anon, authenticated;
+grant execute on function public.admin_revoke_activation_code(uuid, text) to anon, authenticated;
+grant execute on function public.admin_activation_stats(text) to anon, authenticated;
 
 -- ======================================================================
 -- INSTRUKSI SETUP:
