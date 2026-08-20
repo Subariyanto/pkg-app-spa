@@ -1,10 +1,8 @@
 // sw.js - Service worker for PKG app
-// V4 (2026-08-19): Tahap 4 — Monitoring dashboard, audit log, rate limiting, export.
-// Strategy: network-first for app code (instant updates), cache-first for static assets.
-const CACHE_VERSION = 'pkg-v4-2026-08-19-tahap4';
+// V5 Simple (2026-08-20): localStorage-based activation, no Supabase.
+const CACHE_VERSION = 'pkg-v5-2026-08-20-simple';
 
 const NETWORK_FIRST = [
-  // Same-origin app code: always try network first so updates show immediately
   'index.html',
   'app.js',
   'db.js',
@@ -14,9 +12,6 @@ const NETWORK_FIRST = [
   'saran-indikator.js',
   'laporan.js',
   'auth.js',
-  'activation_device.js',
-  'supabase_sync.js',
-  'github_sync.js',
   'style.css',
   'manifest.json',
 ];
@@ -32,9 +27,6 @@ const PRECACHE = [
   './importer.js',
   './laporan.js',
   './auth.js',
-  './activation_device.js',
-  './supabase_sync.js',
-  './github_sync.js',
   './app.js',
   './manifest.json',
   './icon-192.png',
@@ -71,7 +63,6 @@ self.addEventListener('fetch', (ev) => {
   const req = ev.request;
   if (req.method !== 'GET') return;
 
-  // Network-first for same-origin app shell
   if (isAppCode(req.url)) {
     ev.respondWith(
       fetch(req).then(res => {
@@ -85,7 +76,6 @@ self.addEventListener('fetch', (ev) => {
     return;
   }
 
-  // Cache-first for everything else (CDN, icons)
   ev.respondWith(
     caches.match(req).then(cached => {
       if (cached) return cached;
