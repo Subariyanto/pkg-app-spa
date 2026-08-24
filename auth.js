@@ -501,6 +501,9 @@
       document.body.appendChild(overlay);
     }
 
+    // Clear session supaya back button tidak auto-login
+    sessionStorage.removeItem(KEY_LOGGED_IN);
+
     var regName = localStorage.getItem(KEY_USER_FULLNAME) || '';
 
     overlay.innerHTML = '\
@@ -575,6 +578,39 @@
       var password = passInput.value;
       errEl.textContent = '';
 
+      if (!username || !password) {
+        errEl.textContent = 'Isi username dan password.';
+        return;
+      }
+
+      // 1. Coba login admin via Supabase
+      if (window.SupabaseSync && window.SupabaseSync.hasConfig && window.SupabaseSync.hasConfig()) {
+        errEl.textContent = 'Memeriksa akun...';
+        adminLogin(username, password).then(function (res) {
+          if (res && res.ok) {
+            localStorage.setItem(KEY_ADMIN_LOGGED_IN, 'true');
+            localStorage.setItem(KEY_ADMIN_USERNAME, res.username || username);
+            localStorage.setItem(KEY_ADMIN_NAMA, res.nama || username);
+            var ov = document.getElementById('pkg-auth-overlay');
+            if (ov) ov.remove();
+            window.location.hash = '#/kelola-aktivasi';
+            if (typeof window.render === 'function') window.render();
+            return;
+          }
+          // 2. Admin gagal → coba login lokal (localStorage)
+          tryLocalLogin(username, password);
+        }).catch(function () {
+          tryLocalLogin(username, password);
+        });
+        return;
+      }
+
+      // Tidak ada Supabase → langsung login lokal
+      tryLocalLogin(username, password);
+    }
+
+    function tryLocalLogin(username, password) {
+      errEl.textContent = '';
       var storedUsername = localStorage.getItem(KEY_USER_USERNAME);
       var storedHash = localStorage.getItem(KEY_USER_PASSWORD_HASH);
 
