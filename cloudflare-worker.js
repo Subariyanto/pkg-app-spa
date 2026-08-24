@@ -21,12 +21,12 @@ const CORS = {
 
 // Simple admin token for basic auth (Cloudflare env var: ADMIN_TOKEN)
 // This is a lightweight auth for the Worker itself — separate from admin login
-function checkAdminToken(request) {
+function checkAdminToken(request, env) {
   const token = request.headers.get('X-Admin-Token');
   // If no ADMIN_TOKEN env set, allow all (Worker URL is secret enough)
   // If set, require matching token
-  if (!ADMIN_TOKEN) return true;
-  return token === ADMIN_TOKEN;
+  if (!env.ADMIN_TOKEN) return true;
+  return token === env.ADMIN_TOKEN;
 }
 
 export default {
@@ -97,7 +97,7 @@ export default {
 
       // === ADMIN PROTECTED ROUTES ===
       // All routes below require X-Admin-Token (if ADMIN_TOKEN env is set)
-      if (!checkAdminToken(request)) {
+      if (!checkAdminToken(request, env)) {
         return json({ ok: false, message: 'Unauthorized' }, 401);
       }
 
