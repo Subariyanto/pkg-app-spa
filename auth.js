@@ -329,8 +329,6 @@
         \
         <div style="text-align:center; margin-top:1rem; font-size:.85rem;">\
           <a id="link-to-login" style="color:#1f5d3a; cursor:pointer; text-decoration:none; font-weight:600;">Sudah Memiliki Akun? Login di sini</a>\
-          <span style="margin:0 .5rem; color:#ccc;">|</span>\
-          <a id="link-to-admin" style="color:#1e40af; cursor:pointer; text-decoration:none; font-weight:600;">Login Admin</a>\
         </div>\
         <div style="text-align:center; margin-top:1.25rem; padding-top:1rem; border-top:1px dashed #ddd;">\
           <div id="trial-expired-msg" style="display:none; color:#c0392b; font-size:.85rem; margin-bottom:.75rem; font-weight:600;">\
@@ -350,15 +348,6 @@
         var oldOverlay = document.getElementById('pkg-auth-overlay');
         if (oldOverlay) oldOverlay.remove();
         renderLoginScreen();
-      });
-    }
-
-    var linkAdmin = document.getElementById('link-to-admin');
-    if (linkAdmin) {
-      linkAdmin.addEventListener('click', function () {
-        var oldOverlay = document.getElementById('pkg-auth-overlay');
-        if (oldOverlay) oldOverlay.remove();
-        window.location.hash = '#/kelola-aktivasi';
       });
     }
 
@@ -565,6 +554,8 @@
         <button class="btn-auth-submit" id="btn-login">Masuk</button>\
         <div style="text-align:center; margin-top:1rem; font-size:.85rem;">\
           <a id="link-to-activation" style="color:#1f5d3a; cursor:pointer; text-decoration:none; font-weight:600;">Belum Punya Akun? Aktivasi di sini</a>\
+          <span style="margin:0 .5rem; color:#ccc;">|</span>\
+          <a id="link-to-admin-from-login" style="color:#1e40af; cursor:pointer; text-decoration:none; font-weight:600; font-size:.85rem;">Login Admin</a>\
         </div>\
         <div style="text-align:center; margin-top:1.25rem; padding-top:1rem; border-top:1px dashed #ddd;">\
           <button id="btn-login-trial" type="button" style="width:100%; background:#6c757d; color:white; border:0; padding:.65rem; border-radius:8px; font-weight:600; cursor:pointer; font-size:.95rem;">\
@@ -616,6 +607,15 @@
       linkAct.addEventListener('click', function () {
         localStorage.setItem('pkg_v1_force_activation', 'true');
         location.reload();
+      });
+    }
+
+    var linkAdminLogin = document.getElementById('link-to-admin-from-login');
+    if (linkAdminLogin) {
+      linkAdminLogin.addEventListener('click', function () {
+        var oldOverlay = document.getElementById('pkg-auth-overlay');
+        if (oldOverlay) oldOverlay.remove();
+        window.location.hash = '#/kelola-aktivasi';
       });
     }
 
