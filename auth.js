@@ -26,6 +26,11 @@
 
   var KEY_LOGGED_IN = 'pkg_v1_logged_in';
 
+  // Trial keys & config
+  var KEY_TRIAL_START = 'pkg_v1_trial_start';
+  var KEY_TRIAL_MODE = 'pkg_v1_trial_mode';
+  var TRIAL_DAYS = 3; // sesuai permintaan Pak Yanto: 3 hari
+
   // Admin session keys
   var KEY_ADMIN_LOGGED_IN = 'pkg_admin_session';
   var KEY_ADMIN_USERNAME = 'pkg_admin_username';
@@ -153,6 +158,66 @@
     };
   }
 
+  // --- TRIAL ENGINE ---
+  // Mode trial aktif jika role = 'trial' atau penanda trial_mode = '1'.
+  function isTrial() {
+    var role = (localStorage.getItem(KEY_USER_ROLE) || '').toLowerCase();
+    var trialFlag = localStorage.getItem(KEY_TRIAL_MODE) === '1';
+    return trialFlag || role === 'trial';
+  }
+
+  function getTrialStartMs() {
+    var s = localStorage.getItem(KEY_TRIAL_START);
+    if (!s) {
+      var now = Date.now();
+      localStorage.setItem(KEY_TRIAL_START, String(now));
+      return now;
+    }
+    return parseInt(s, 10) || Date.now();
+  }
+
+  function getTrialDaysLeft() {
+    if (!isTrial()) return -1;
+    var startMs = getTrialStartMs();
+    var endMs = startMs + TRIAL_DAYS * 24 * 3600 * 1000;
+    var diffMs = endMs - Date.now();
+    if (diffMs <= 0) return 0;
+    return Math.max(1, Math.ceil(diffMs / (24 * 3600 * 1000)));
+  }
+
+  function isTrialExpired() {
+    if (!isTrial()) return false;
+    var startMs = getTrialStartMs();
+    var endMs = startMs + TRIAL_DAYS * 24 * 3600 * 1000;
+    return Date.now() >= endMs;
+  }
+
+  // Mulai trial: set role = 'trial' + tandai mode & tanggal mulai.
+  // opts (opsional): { username, fullname, madrasah, kabupaten, password }
+  function startTrial(opts) {
+    opts = opts || {};
+    localStorage.setItem(KEY_TRIAL_MODE, '1');
+    localStorage.setItem(KEY_TRIAL_START, String(Date.now()));
+    localStorage.setItem(KEY_USER_ROLE, 'trial');
+    // Trial dianggap teraktivasi agar lolos gate aktivasi (role 'trial' yg menentukan perilaku).
+    localStorage.setItem(KEY_ACTIVATED, 'true');
+    // Gunakan data dari form kalau ada, kalau tidak fallback ke akun demo.
+    var uname = (opts.username || '').trim().toLowerCase();
+    var pass = (opts.password || '').trim();
+    if (uname) localStorage.setItem(KEY_USER_USERNAME, uname);
+    if (opts.fullname) localStorage.setItem(KEY_USER_FULLNAME, opts.fullname);
+    if (opts.madrasah) localStorage.setItem(KEY_USER_MADRASAH, opts.madrasah);
+    if (opts.kabupaten) localStorage.setItem(KEY_USER_KABUPATEN, opts.kabupaten);
+    if (pass) localStorage.setItem(KEY_USER_PASSWORD_HASH, fnv1aHash(pass));
+    // Kalau masih kosong (belum ada akun), beri default demo.
+    if (!localStorage.getItem(KEY_USER_USERNAME)) {
+      localStorage.setItem(KEY_USER_USERNAME, 'trial');
+      localStorage.setItem(KEY_USER_FULLNAME, 'Pengguna Trial');
+      localStorage.setItem(KEY_USER_PASSWORD_HASH, fnv1aHash('trial123'));
+    }
+    return true;
+  }
+
   // --- VIEWS & RENDER OVERLAYS ---
 
   // 1. Screen Aktivasi & Registrasi (kode divalidasi via Supabase)
@@ -218,6 +283,7 @@
           <select id="reg-role">\
             <option value="pengawas">Pengawas - Pembina</option>\
             <option value="kamad">Kepala Madrasah (Kamad) - Penilai</option>\
+            <option value="trial">Trial (3 Hari)</option>\
           </select>\
         </div>\
         \
@@ -252,6 +318,9 @@
         </div>\
         \
         <button class="btn-auth-submit" id="btn-reg-submit">Aktifkan & Daftar Akun</button>\
+        <div style="text-align:center; margin-top:.75rem; font-size:.85rem;">\
+          <a id="link-to-trial" style="color:#c0392b; cursor:pointer; text-decoration:none; font-weight:600;">Belum punya kode? Coba versi Trial 3 hari</a>\
+        </div>\
         \
         <div class="device-info-text">\
           Device ID: ' + getDeviceId() + '<br>\
@@ -281,6 +350,18 @@
         var oldOverlay = document.getElementById('pkg-auth-overlay');
         if (oldOverlay) oldOverlay.remove();
         window.location.hash = '#/kelola-aktivasi';
+      });
+    }
+
+    var linkTrial = document.getElementById('link-to-trial');
+    if (linkTrial) {
+      linkTrial.addEventListener('click', function () {
+        if (confirm('Ya, saya ingin mencoba versi Trial 3 hari?\n\nSelama masa trial:\n- Semua dokumen cetak/PDF/DOCX diberi watermark "TRIAL"\n- Berfungsi penuh selama 3 hari\n- Setelah habis, hubungi Admin untuk kode aktivasi penuh')) {
+          startTrial();
+          alert('Mode Trial 3 hari diaktifkan!\n\nUsername: trial\nPassword: trial123\n\nSemua dokumen cetak akan diberi watermark TRIAL selama masa trial.');
+          location.hash = '#/';
+          location.reload();
+        }
       });
     }
 
@@ -321,6 +402,15 @@
       }
       if (password !== confirm) {
         errEl.textContent = 'Konfirmasi password tidak cocok!';
+        return;
+      }
+
+      // Kalau role = 'trial', langsung mulai trial tanpa perlu kode aktivasi.
+      if (role === 'trial') {
+        startTrial({ username: username, fullname: fullname, madrasah: madrasah, kabupaten: kabupaten, password: password });
+        alert('Mode Trial 3 hari diaktifkan!\n\nSilakan login dengan akun yang barusan dibuat.\n\nSemua dokumen cetak/PDF/DOCX akan diberi watermark TRIAL selama masa trial.');
+        location.hash = '#/';
+        location.reload();
         return;
       }
 
@@ -867,6 +957,11 @@
     escapeHtml: escapeHtml,
     getDeviceId: getDeviceId,
     validateCodeFormat: validateCodeFormat,
+    // Trial
+    isTrial: isTrial,
+    getTrialDaysLeft: getTrialDaysLeft,
+    isTrialExpired: isTrialExpired,
+    startTrial: startTrial,
     // Admin
     isAdminLoggedIn: isAdminLoggedIn,
     getAdminInfo: getAdminInfo,
