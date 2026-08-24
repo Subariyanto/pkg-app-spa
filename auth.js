@@ -35,8 +35,6 @@
   var KEY_ADMIN_LOGGED_IN = 'pkg_admin_session';
   var KEY_ADMIN_USERNAME = 'pkg_admin_username';
   var KEY_ADMIN_NAMA = 'pkg_admin_nama';
-  var KEY_TRIAL_START = 'pkg_v1_trial_start';
-  var TRIAL_DURATION_DAYS = 3;
 
   // --- CRYPTO UTILS (simple) ---
   function fnv1aHash(str) {
@@ -913,61 +911,9 @@
     localStorage.removeItem(KEY_ADMIN_NAMA);
   }
 
-  // --- TRIAL MODE (3 hari) ---
-  function isTrial() {
-    return localStorage.getItem(KEY_USER_ROLE) === 'trial' &&
-           !!localStorage.getItem(KEY_TRIAL_START);
-  }
-
-  function getTrialDaysLeft() {
-    var start = parseInt(localStorage.getItem(KEY_TRIAL_START), 10);
-    if (!start) return 0;
-    var elapsed = Date.now() - start;
-    var msPerDay = 24 * 60 * 60 * 1000;
-    var daysLeft = TRIAL_DURATION_DAYS - Math.floor(elapsed / msPerDay);
-    return Math.max(0, daysLeft);
-  }
-
-  function isTrialExpired() {
-    return isTrial() && getTrialDaysLeft() <= 0;
-  }
-
-  function startTrial() {
-    // Cegah restart trial (aktif maupun expired)
-    var prevStart = localStorage.getItem(KEY_TRIAL_START);
-    if (prevStart) {
-      var elapsed = Date.now() - parseInt(prevStart, 10);
-      var msPerDay = 24 * 60 * 60 * 1000;
-      if (elapsed >= TRIAL_DURATION_DAYS * msPerDay) {
-        alert('Masa Trial sebelumnya sudah berakhir. Silakan aktivasi dengan kode resmi dari Admin/Ketua Pokjawas.');
-      } else {
-        alert('Trial masih aktif. Silakan login dengan akun Trial Anda.');
-      }
-      return;
-    }
-    var existingRole = localStorage.getItem(KEY_USER_ROLE);
-    if (existingRole && existingRole !== 'trial') {
-      var nama = localStorage.getItem(KEY_USER_FULLNAME) || 'Pengguna';
-      if (!confirm('Akun "' + nama + '" (' + existingRole + ') sudah terdaftar. Mulai Trial akan mengganti akun ini. Anda harus aktivasi ulang dengan kode resmi. Lanjutkan?')) {
-        return;
-      }
-    }
-    var now = Date.now();
-    localStorage.setItem(KEY_ACTIVATED, 'true');
-    localStorage.setItem(KEY_USER_ROLE, 'trial');
-    localStorage.setItem(KEY_USER_USERNAME, 'trial');
-    localStorage.setItem(KEY_USER_PASSWORD_HASH, fnv1aHash('trial123'));
-    localStorage.setItem(KEY_USER_FULLNAME, 'Pengguna Trial');
-    localStorage.setItem(KEY_USER_MADRASAH, '');
-    localStorage.setItem(KEY_USER_KABUPATEN, 'Kabupaten Jember');
-    localStorage.setItem(KEY_TRIAL_START, String(now));
-    sessionStorage.setItem(KEY_LOGGED_IN, 'true');
-    location.hash = '#/';
-    location.reload();
-  }
-
   function clearTrial() {
     localStorage.removeItem(KEY_TRIAL_START);
+    localStorage.removeItem(KEY_TRIAL_MODE);
     localStorage.removeItem(KEY_USER_ROLE);
     localStorage.removeItem(KEY_USER_USERNAME);
     localStorage.removeItem(KEY_USER_PASSWORD_HASH);
@@ -1087,16 +1033,12 @@
     getTrialDaysLeft: getTrialDaysLeft,
     isTrialExpired: isTrialExpired,
     startTrial: startTrial,
+    clearTrial: clearTrial,
     // Admin
     isAdminLoggedIn: isAdminLoggedIn,
     getAdminInfo: getAdminInfo,
     adminLogin: adminLogin,
     adminLogout: adminLogout,
-    isTrial: isTrial,
-    getTrialDaysLeft: getTrialDaysLeft,
-    isTrialExpired: isTrialExpired,
-    startTrial: startTrial,
-    clearTrial: clearTrial,
   };
 
   // Auto boot sequence
