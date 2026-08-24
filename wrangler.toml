@@ -1,0 +1,8 @@
+name = "pkg-backend"
+main = "cloudflare-worker.js"
+compatibility_date = "2024-01-01"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "pkg-backend"
+database_id = "e42fc249-b5bc-4848-90e6-dac2c2801454"
