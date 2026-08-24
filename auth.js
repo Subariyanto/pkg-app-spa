@@ -234,9 +234,9 @@
         #pkg-auth-overlay {\
           position: fixed; inset: 0; z-index: 3000;\
           background: linear-gradient(135deg, #1e40af 0%, #1f5d3a 100%);\
-          display: flex; align-items: center; justify-content: center;\
+          display: flex; align-items: flex-start; justify-content: center; overflow-y: auto;\
           font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;\
-          padding: 1rem; overflow-y: auto;\
+          padding: 1rem;\
         }\
         .auth-card {\
           background: #fff; border-radius: 12px; padding: 2rem;\
@@ -519,7 +519,7 @@
         #pkg-auth-overlay {\
           position: fixed; inset: 0; z-index: 3000;\
           background: linear-gradient(135deg, #1f5d3a 0%, #1e40af 100%);\
-          display: flex; align-items: center; justify-content: center;\
+          display: flex; align-items: flex-start; justify-content: center; overflow-y: auto;\
           font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;\
           padding: 1rem;\
         }\
@@ -642,7 +642,7 @@
         #pkg-lock-overlay {\
           position: fixed; inset: 0; z-index: 3000;\
           background: linear-gradient(135deg, #1f5d3a 0%, #06a04c 100%);\
-          display: flex; align-items: center; justify-content: center;\
+          display: flex; align-items: flex-start; justify-content: center; overflow-y: auto;\
           font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;\
         }\
         #pkg-lock-card {\
@@ -748,7 +748,7 @@
           #pkg-pin-setup-overlay {\
             position: fixed; inset: 0; z-index: 3000;\
             background: rgba(0,0,0,.5);\
-            display: flex; align-items: center; justify-content: center;\
+            display: flex; align-items: flex-start; justify-content: center; overflow-y: auto; padding: 1rem;\
           }\
           #pkg-pin-setup-card {\
             background: #fff; border-radius: 12px; padding: 1.75rem;\
@@ -1005,6 +1005,14 @@
   }
 
   function logout() {
+    // Kalau trial user, hapus state trial supaya tidak auto-login ulang
+    if (isTrial()) {
+      if (!confirm('Keluar dari mode Trial?\n\nAnda akan kembali ke halaman aktivasi.\nData PKG yang sudah diinput tetap tersimpan di browser.')) return;
+      clearTrial();
+      location.hash = '#/';
+      location.reload();
+      return;
+    }
     sessionStorage.removeItem(KEY_LOGGED_IN);
     lock();
     location.reload();
