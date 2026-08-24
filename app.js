@@ -4494,20 +4494,19 @@ function viewKelolaAktivasi(view) {
       }
       btn.disabled = true;
       btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Cek...';
-      // Coba local admin dulu (cepat)
-      var localAdminUser = localStorage.getItem('pkg_v1_local_admin_user') || 'admin';
-      var localAdminHash = localStorage.getItem('pkg_v1_local_admin_hash');
-      // FNV1a hash function dari auth.js
-      function _fnv1a(str) {
-        var hash = 0x811c9dc5;
-        for (var i = 0; i < str.length; i++) {
-          hash ^= str.charCodeAt(i);
-          hash = (hash + ((hash << 1) + (hash << 4) + (hash << 7) + (hash << 8) + (hash << 24))) >>> 0;
-        }
-        return hash.toString(16);
+      // SHA-256 hash via Web Crypto API
+      async function _sha256(str) {
+        var buf = new TextEncoder().encode(str);
+        var hash = await crypto.subtle.digest('SHA-256', buf);
+        return Array.from(new Uint8Array(hash)).map(function (b) { return b.toString(16).padStart(2, '0'); }).join('');
       }
-      if (!localAdminHash) localAdminHash = _fnv1a('admin123');
-      if (username === localAdminUser && _fnv1a(pass) === localAdminHash) {
+      // Default admin hash (SHA-256, sama dengan di auth.js)
+      var DEFAULT_HASH = '1fe822ee3c970bb86b48d7519a9bc25eef1d31fa5267a6cf41892d818eb1ef40';
+      // Coba local admin dulu (cepat, tidak butuh internet)
+      var localAdminUser = localStorage.getItem('pkg_v1_local_admin_user') || 'admin';
+      var localAdminHash = localStorage.getItem('pkg_v1_local_admin_hash') || DEFAULT_HASH;
+      var pwdHash = await _sha256(pass);
+      if (username === localAdminUser && pwdHash === localAdminHash) {
         localStorage.setItem(KEY_ADMIN_LOGGED_IN, 'true');
         localStorage.setItem('pkg_admin_username', localAdminUser);
         localStorage.setItem('pkg_admin_nama', localAdminUser);
@@ -4528,9 +4527,9 @@ function viewKelolaAktivasi(view) {
           localStorage.setItem(KEY_ADMIN_LOGGED_IN, 'true');
           localStorage.setItem('pkg_admin_username', result.username || username);
           localStorage.setItem('pkg_admin_nama', result.nama || username);
-          // Simpan sebagai local admin fallback
+          // Simpan sebagai local admin fallback (SHA-256)
           localStorage.setItem('pkg_v1_local_admin_user', result.username || username);
-          localStorage.setItem('pkg_v1_local_admin_hash', _fnv1a(pass));
+          localStorage.setItem('pkg_v1_local_admin_hash', pwdHash);
           state.adminLoggedIn = true;
           state.adminUsername = result.username || username;
         } else {

@@ -38,7 +38,18 @@
   var KEY_LOCAL_ADMIN_HASH = 'pkg_v1_local_admin_hash';
   var KEY_LOCAL_ADMIN_USER = 'pkg_v1_local_admin_user';
 
-  // --- CRYPTO UTILS (simple) ---
+  // Default admin credentials (SHA-256 hash, bukan plain text — aman untuk repo public)
+  var DEFAULT_ADMIN_USER = 'admin';
+  var DEFAULT_ADMIN_HASH = '1fe822ee3c970bb86b48d7519a9bc25eef1d31fa5267a6cf41892d818eb1ef40';
+
+  // --- CRYPTO UTILS ---
+  // SHA-256 via Web Crypto API (async, returns hex string)
+  async function sha256(str) {
+    var buf = new TextEncoder().encode(str);
+    var hash = await crypto.subtle.digest('SHA-256', buf);
+    return Array.from(new Uint8Array(hash)).map(function (b) { return b.toString(16).padStart(2, '0'); }).join('');
+  }
+
   function fnv1aHash(str) {
     var h = 0x811c9dc5;
     for (var i = 0; i < str.length; i++) {
@@ -573,7 +584,7 @@
     var userInput = document.getElementById('login-username');
     var passInput = document.getElementById('login-password');
 
-    function doLogin() {
+    async function doLogin() {
       var username = userInput.value.trim().toLowerCase();
       var password = passInput.value;
       errEl.textContent = '';
@@ -583,8 +594,8 @@
         return;
       }
 
-      // 1. Coba local admin fallback terlebih dahulu (cepat, tidak butuh internet)
-      if (tryLocalAdminLogin(username, password)) return;
+      // 1. Coba local admin fallback (SHA-256, cepat, tidak butuh internet)
+      if (await tryLocalAdminLogin(username, password)) return;
 
       // 2. Coba login admin via Supabase (dengan timeout 5 detik)
       if (window.SupabaseSync && window.SupabaseSync.hasConfig && window.SupabaseSync.hasConfig()) {
@@ -592,25 +603,25 @@
         var timeout = new Promise(function (_, reject) {
           setTimeout(function () { reject(new Error('timeout')); }, 5000);
         });
-        Promise.race([adminLogin(username, password), timeout]).then(function (res) {
+        try {
+          var res = await Promise.race([adminLogin(username, password), timeout]);
           if (res && res.ok) {
             localStorage.setItem(KEY_ADMIN_LOGGED_IN, 'true');
             localStorage.setItem(KEY_ADMIN_USERNAME, res.username || username);
             localStorage.setItem(KEY_ADMIN_NAMA, res.nama || username);
-            // Simpan juga sebagai local admin fallback untuk login berikutnya
+            // Simpan hash lokal untuk login offline berikutnya
+            var pwdHash = await sha256(password);
             localStorage.setItem(KEY_LOCAL_ADMIN_USER, res.username || username);
-            localStorage.setItem(KEY_LOCAL_ADMIN_HASH, fnv1aHash(password));
+            localStorage.setItem(KEY_LOCAL_ADMIN_HASH, pwdHash);
             var ov = document.getElementById('pkg-auth-overlay');
             if (ov) ov.remove();
             window.location.hash = '#/kelola-aktivasi';
             if (typeof window.render === 'function') window.render();
             return;
           }
-          // 3. Supabase gagal → coba login lokal (localStorage)
-          tryLocalLogin(username, password);
-        }).catch(function () {
-          tryLocalLogin(username, password);
-        });
+        } catch (e) { /* timeout atau error, lanjut ke local */ }
+        // 3. Supabase gagal → coba login lokal (localStorage)
+        tryLocalLogin(username, password);
         return;
       }
 
@@ -618,11 +629,12 @@
       tryLocalLogin(username, password);
     }
 
-    function tryLocalAdminLogin(username, password) {
-      // Default local admin (kalau belum diset, pakai default)
-      var localAdminUser = localStorage.getItem(KEY_LOCAL_ADMIN_USER) || 'admin';
-      var localAdminHash = localStorage.getItem(KEY_LOCAL_ADMIN_HASH) || fnv1aHash('admin123');
-      if (username === localAdminUser && fnv1aHash(password) === localAdminHash) {
+    async function tryLocalAdminLogin(username, password) {
+      // Cek default admin atau local admin yang sudah diset
+      var localAdminUser = localStorage.getItem(KEY_LOCAL_ADMIN_USER) || DEFAULT_ADMIN_USER;
+      var localAdminHash = localStorage.getItem(KEY_LOCAL_ADMIN_HASH) || DEFAULT_ADMIN_HASH;
+      var pwdHash = await sha256(password);
+      if (username === localAdminUser && pwdHash === localAdminHash) {
         localStorage.setItem(KEY_ADMIN_LOGGED_IN, 'true');
         localStorage.setItem(KEY_ADMIN_USERNAME, localAdminUser);
         localStorage.setItem(KEY_ADMIN_NAMA, localAdminUser);
@@ -952,10 +964,11 @@
 
   // --- ADMIN LOGIN via Supabase ---
   async function adminLogin(username, password) {
-    // Coba local admin dulu (cepat, tidak butuh internet)
-    var localAdminUser = localStorage.getItem(KEY_LOCAL_ADMIN_USER) || 'admin';
-    var localAdminHash = localStorage.getItem(KEY_LOCAL_ADMIN_HASH) || fnv1aHash('admin123');
-    if (username === localAdminUser && fnv1aHash(password) === localAdminHash) {
+    // Coba local admin dulu (SHA-256, cepat, tidak butuh internet)
+    var localAdminUser = localStorage.getItem(KEY_LOCAL_ADMIN_USER) || DEFAULT_ADMIN_USER;
+    var localAdminHash = localStorage.getItem(KEY_LOCAL_ADMIN_HASH) || DEFAULT_ADMIN_HASH;
+    var pwdHash = await sha256(password);
+    if (username === localAdminUser && pwdHash === localAdminHash) {
       return { ok: true, username: localAdminUser, nama: localAdminUser, local: true };
     }
     // Coba Supabase
