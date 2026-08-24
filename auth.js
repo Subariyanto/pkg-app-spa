@@ -35,6 +35,8 @@
   var KEY_ADMIN_LOGGED_IN = 'pkg_admin_session';
   var KEY_ADMIN_USERNAME = 'pkg_admin_username';
   var KEY_ADMIN_NAMA = 'pkg_admin_nama';
+  var KEY_LOCAL_ADMIN_HASH = 'pkg_v1_local_admin_hash';
+  var KEY_LOCAL_ADMIN_USER = 'pkg_v1_local_admin_user';
 
   // --- CRYPTO UTILS (simple) ---
   function fnv1aHash(str) {
@@ -557,8 +559,6 @@
         <button class="btn-auth-submit" id="btn-login">Masuk</button>\
         <div style="text-align:center; margin-top:1rem; font-size:.85rem;">\
           <a id="link-to-activation" style="color:#1f5d3a; cursor:pointer; text-decoration:none; font-weight:600;">Belum Punya Akun? Aktivasi di sini</a>\
-          <span style="margin:0 .5rem; color:#ccc;">|</span>\
-          <a id="link-to-admin-from-login" style="color:#1e40af; cursor:pointer; text-decoration:none; font-weight:600; font-size:.85rem;">Login Admin</a>\
         </div>\
         <div style="text-align:center; margin-top:1.25rem; padding-top:1rem; border-top:1px dashed #ddd;">\
           <button id="btn-login-trial" type="button" style="width:100%; background:#6c757d; color:white; border:0; padding:.65rem; border-radius:8px; font-weight:600; cursor:pointer; font-size:.95rem;">\
@@ -583,21 +583,30 @@
         return;
       }
 
-      // 1. Coba login admin via Supabase
+      // 1. Coba local admin fallback terlebih dahulu (cepat, tidak butuh internet)
+      if (tryLocalAdminLogin(username, password)) return;
+
+      // 2. Coba login admin via Supabase (dengan timeout 5 detik)
       if (window.SupabaseSync && window.SupabaseSync.hasConfig && window.SupabaseSync.hasConfig()) {
         errEl.textContent = 'Memeriksa akun...';
-        adminLogin(username, password).then(function (res) {
+        var timeout = new Promise(function (_, reject) {
+          setTimeout(function () { reject(new Error('timeout')); }, 5000);
+        });
+        Promise.race([adminLogin(username, password), timeout]).then(function (res) {
           if (res && res.ok) {
             localStorage.setItem(KEY_ADMIN_LOGGED_IN, 'true');
             localStorage.setItem(KEY_ADMIN_USERNAME, res.username || username);
             localStorage.setItem(KEY_ADMIN_NAMA, res.nama || username);
+            // Simpan juga sebagai local admin fallback untuk login berikutnya
+            localStorage.setItem(KEY_LOCAL_ADMIN_USER, res.username || username);
+            localStorage.setItem(KEY_LOCAL_ADMIN_HASH, fnv1aHash(password));
             var ov = document.getElementById('pkg-auth-overlay');
             if (ov) ov.remove();
             window.location.hash = '#/kelola-aktivasi';
             if (typeof window.render === 'function') window.render();
             return;
           }
-          // 2. Admin gagal → coba login lokal (localStorage)
+          // 3. Supabase gagal → coba login lokal (localStorage)
           tryLocalLogin(username, password);
         }).catch(function () {
           tryLocalLogin(username, password);
@@ -607,6 +616,23 @@
 
       // Tidak ada Supabase → langsung login lokal
       tryLocalLogin(username, password);
+    }
+
+    function tryLocalAdminLogin(username, password) {
+      // Default local admin (kalau belum diset, pakai default)
+      var localAdminUser = localStorage.getItem(KEY_LOCAL_ADMIN_USER) || 'admin';
+      var localAdminHash = localStorage.getItem(KEY_LOCAL_ADMIN_HASH) || fnv1aHash('admin123');
+      if (username === localAdminUser && fnv1aHash(password) === localAdminHash) {
+        localStorage.setItem(KEY_ADMIN_LOGGED_IN, 'true');
+        localStorage.setItem(KEY_ADMIN_USERNAME, localAdminUser);
+        localStorage.setItem(KEY_ADMIN_NAMA, localAdminUser);
+        var ov = document.getElementById('pkg-auth-overlay');
+        if (ov) ov.remove();
+        window.location.hash = '#/kelola-aktivasi';
+        if (typeof window.render === 'function') window.render();
+        return true;
+      }
+      return false;
     }
 
     function tryLocalLogin(username, password) {
@@ -643,15 +669,6 @@
       linkAct.addEventListener('click', function () {
         localStorage.setItem('pkg_v1_force_activation', 'true');
         location.reload();
-      });
-    }
-
-    var linkAdminLogin = document.getElementById('link-to-admin-from-login');
-    if (linkAdminLogin) {
-      linkAdminLogin.addEventListener('click', function () {
-        var oldOverlay = document.getElementById('pkg-auth-overlay');
-        if (oldOverlay) oldOverlay.remove();
-        window.location.hash = '#/kelola-aktivasi';
       });
     }
 
@@ -935,8 +952,15 @@
 
   // --- ADMIN LOGIN via Supabase ---
   async function adminLogin(username, password) {
+    // Coba local admin dulu (cepat, tidak butuh internet)
+    var localAdminUser = localStorage.getItem(KEY_LOCAL_ADMIN_USER) || 'admin';
+    var localAdminHash = localStorage.getItem(KEY_LOCAL_ADMIN_HASH) || fnv1aHash('admin123');
+    if (username === localAdminUser && fnv1aHash(password) === localAdminHash) {
+      return { ok: true, username: localAdminUser, nama: localAdminUser, local: true };
+    }
+    // Coba Supabase
     if (!window.SupabaseSync || !window.SupabaseSync.hasConfig()) {
-      return { ok: false, message: 'Server tidak terkonfigurasi' };
+      return { ok: false, message: 'Username/password salah.' };
     }
     return window.SupabaseSync.adminLogin(username, password);
   }
