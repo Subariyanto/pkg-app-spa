@@ -2758,7 +2758,7 @@ function printRekapTab(title, html) {
   if (!w) { toast('Pop-up diblokir. Izinkan pop-up untuk cetak.', 'danger'); return; }
   const today = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
   const isTrialMode = window.PKGAuth && window.PKGAuth.isTrial && window.PKGAuth.isTrial();
-  const trialWM = isTrialMode ? `<div class="trial-watermark" style="position:fixed;inset:0;z-index:9999;pointer-events:none;display:flex;flex-wrap:wrap;align-content:flex-start;justify-content:center;overflow:hidden;">${Array.from({length:50},()=>'<span style="display:inline-block;transform:rotate(-45deg);font-size:16pt;font-weight:900;color:rgba(200,0,0,0.13);margin:28px 36px;font-family:sans-serif;letter-spacing:4px;white-space:nowrap;">TRIAL</span>').join('')}</div><style>.trial-watermark{display:block!important;}@media print{.trial-watermark{display:flex!important;position:fixed!important;}}</style>` : '';
+  const trialWM = isTrialMode ? `<div class="trial-watermark" style="position:fixed;inset:0;z-index:9999;pointer-events:none;display:flex;align-items:center;justify-content:center;overflow:hidden;"><span style="transform:rotate(-30deg);font-size:120pt;font-weight:900;color:rgba(200,0,0,0.15);font-family:sans-serif;letter-spacing:12px;white-space:nowrap;">TRIAL</span></div><style>.trial-watermark{display:flex!important;}@media print{.trial-watermark{display:flex!important;position:fixed!important;}}</style>` : '';
   w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${title}</title>
   <style>
     body{font-family:'Times New Roman',serif;font-size:10pt;color:#000;margin:1.2cm;}
@@ -4283,7 +4283,7 @@ function viewCetak(view, guruId, role, jenis) {
   const nilai = PKGDB.hitungNilai(pen.id, role);
 
   const _isTrial = window.PKGAuth && window.PKGAuth.isTrial && window.PKGAuth.isTrial();
-  const _trialWM = _isTrial ? `<div class="trial-wm-overlay" style="position:fixed;inset:0;z-index:1;pointer-events:none;display:flex;flex-wrap:wrap;align-content:flex-start;justify-content:center;overflow:hidden;">${Array.from({length:40},()=>'<span style="display:inline-block;transform:rotate(-45deg);font-size:22pt;font-weight:900;color:rgba(200,0,0,0.12);margin:40px 50px;font-family:sans-serif;letter-spacing:6px;white-space:nowrap;">TRIAL</span>').join('')}</div>` : '';
+  const _trialWM = _isTrial ? `<div class="trial-wm-overlay" style="position:fixed;inset:0;z-index:1;pointer-events:none;display:flex;align-items:center;justify-content:center;overflow:hidden;"><span style="transform:rotate(-30deg);font-size:100pt;font-weight:900;color:rgba(200,0,0,0.15);font-family:sans-serif;letter-spacing:10px;white-space:nowrap;">TRIAL</span></div>` : '';
   view.innerHTML = `
   <style>@media print{.trial-wm-overlay{display:flex!important;position:fixed!important;}}</style>
   <div class="no-print" style="text-align:right; padding:8px;">

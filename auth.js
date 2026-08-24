@@ -35,6 +35,8 @@
   var KEY_ADMIN_LOGGED_IN = 'pkg_admin_session';
   var KEY_ADMIN_USERNAME = 'pkg_admin_username';
   var KEY_ADMIN_NAMA = 'pkg_admin_nama';
+  var KEY_TRIAL_START = 'pkg_v1_trial_start';
+  var TRIAL_DURATION_DAYS = 3;
 
   // --- CRYPTO UTILS (simple) ---
   function fnv1aHash(str) {
@@ -332,6 +334,15 @@
           <span style="margin:0 .5rem; color:#ccc;">|</span>\
           <a id="link-to-admin" style="color:#1e40af; cursor:pointer; text-decoration:none; font-weight:600;">Login Admin</a>\
         </div>\
+        <div style="text-align:center; margin-top:1.25rem; padding-top:1rem; border-top:1px dashed #ddd;">\
+          <div id="trial-expired-msg" style="display:none; color:#c0392b; font-size:.85rem; margin-bottom:.75rem; font-weight:600;">\
+            <i class="bi bi-exclamation-triangle"></i> Masa Trial (3 hari) sudah berakhir. Silakan aktivasi dengan kode resmi.\
+          </div>\
+          <button id="btn-start-trial" type="button" style="width:100%; background:#6c757d; color:white; border:0; padding:.65rem; border-radius:8px; font-weight:600; cursor:pointer; font-size:.95rem;">\
+            <i class="bi bi-clock-history"></i> Coba Trial (3 Hari)\
+          </button>\
+          <div style="font-size:.75rem; color:#888; margin-top:.5rem;">Akses penuh 3 hari. Dokumen cetak berwatermark "TRIAL".</div>\
+        </div>\
       </div>';
 
     var roleSel = document.getElementById('reg-role');
@@ -363,6 +374,21 @@
           location.reload();
         }
       });
+    }
+
+    var btnTrial = document.getElementById('btn-start-trial');
+    if (btnTrial) {
+      btnTrial.addEventListener('click', function () {
+        if (confirm('Mulai mode Trial? Akses penuh 3 hari, dokumen cetak ada watermark TRIAL. Setelah 3 hari harus aktivasi dengan kode resmi. Lanjutkan?')) {
+          startTrial();
+        }
+      });
+    }
+
+    if (sessionStorage.getItem('pkg_trial_just_expired') === '1') {
+      sessionStorage.removeItem('pkg_trial_just_expired');
+      var _trialMsg = document.getElementById('trial-expired-msg');
+      if (_trialMsg) _trialMsg.style.display = 'block';
     }
 
     var groupMadrasah = document.getElementById('group-madrasah');
@@ -542,6 +568,12 @@
         <div style="text-align:center; margin-top:1rem; font-size:.85rem;">\
           <a id="link-to-activation" style="color:#1f5d3a; cursor:pointer; text-decoration:none; font-weight:600;">Belum Punya Akun? Aktivasi di sini</a>\
         </div>\
+        <div style="text-align:center; margin-top:1.25rem; padding-top:1rem; border-top:1px dashed #ddd;">\
+          <button id="btn-login-trial" type="button" style="width:100%; background:#6c757d; color:white; border:0; padding:.65rem; border-radius:8px; font-weight:600; cursor:pointer; font-size:.95rem;">\
+            <i class="bi bi-clock-history"></i> Coba Trial (3 Hari)\
+          </button>\
+          <div style="font-size:.75rem; color:#888; margin-top:.5rem;">Akses penuh 3 hari dengan watermark "TRIAL" pada dokumen.</div>\
+        </div>\
       </div>';
 
     var btn = document.getElementById('btn-login');
@@ -586,6 +618,15 @@
       linkAct.addEventListener('click', function () {
         localStorage.setItem('pkg_v1_force_activation', 'true');
         location.reload();
+      });
+    }
+
+    var btnLoginTrial = document.getElementById('btn-login-trial');
+    if (btnLoginTrial) {
+      btnLoginTrial.addEventListener('click', function () {
+        if (confirm('Mulai mode Trial? Akses penuh 3 hari, dokumen cetak ada watermark TRIAL. Setelah 3 hari harus aktivasi dengan kode resmi. Lanjutkan?')) {
+          startTrial();
+        }
       });
     }
 
@@ -872,6 +913,69 @@
     localStorage.removeItem(KEY_ADMIN_NAMA);
   }
 
+  // --- TRIAL MODE (3 hari) ---
+  function isTrial() {
+    return localStorage.getItem(KEY_USER_ROLE) === 'trial' &&
+           !!localStorage.getItem(KEY_TRIAL_START);
+  }
+
+  function getTrialDaysLeft() {
+    var start = parseInt(localStorage.getItem(KEY_TRIAL_START), 10);
+    if (!start) return 0;
+    var elapsed = Date.now() - start;
+    var msPerDay = 24 * 60 * 60 * 1000;
+    var daysLeft = TRIAL_DURATION_DAYS - Math.floor(elapsed / msPerDay);
+    return Math.max(0, daysLeft);
+  }
+
+  function isTrialExpired() {
+    return isTrial() && getTrialDaysLeft() <= 0;
+  }
+
+  function startTrial() {
+    // Cegah restart trial (aktif maupun expired)
+    var prevStart = localStorage.getItem(KEY_TRIAL_START);
+    if (prevStart) {
+      var elapsed = Date.now() - parseInt(prevStart, 10);
+      var msPerDay = 24 * 60 * 60 * 1000;
+      if (elapsed >= TRIAL_DURATION_DAYS * msPerDay) {
+        alert('Masa Trial sebelumnya sudah berakhir. Silakan aktivasi dengan kode resmi dari Admin/Ketua Pokjawas.');
+      } else {
+        alert('Trial masih aktif. Silakan login dengan akun Trial Anda.');
+      }
+      return;
+    }
+    var existingRole = localStorage.getItem(KEY_USER_ROLE);
+    if (existingRole && existingRole !== 'trial') {
+      var nama = localStorage.getItem(KEY_USER_FULLNAME) || 'Pengguna';
+      if (!confirm('Akun "' + nama + '" (' + existingRole + ') sudah terdaftar. Mulai Trial akan mengganti akun ini. Anda harus aktivasi ulang dengan kode resmi. Lanjutkan?')) {
+        return;
+      }
+    }
+    var now = Date.now();
+    localStorage.setItem(KEY_ACTIVATED, 'true');
+    localStorage.setItem(KEY_USER_ROLE, 'trial');
+    localStorage.setItem(KEY_USER_USERNAME, 'trial');
+    localStorage.setItem(KEY_USER_PASSWORD_HASH, fnv1aHash('trial123'));
+    localStorage.setItem(KEY_USER_FULLNAME, 'Pengguna Trial');
+    localStorage.setItem(KEY_USER_MADRASAH, '');
+    localStorage.setItem(KEY_USER_KABUPATEN, 'Kabupaten Jember');
+    localStorage.setItem(KEY_TRIAL_START, String(now));
+    sessionStorage.setItem(KEY_LOGGED_IN, 'true');
+    location.hash = '#/';
+    location.reload();
+  }
+
+  function clearTrial() {
+    localStorage.removeItem(KEY_TRIAL_START);
+    localStorage.removeItem(KEY_USER_ROLE);
+    localStorage.removeItem(KEY_USER_USERNAME);
+    localStorage.removeItem(KEY_USER_PASSWORD_HASH);
+    localStorage.removeItem(KEY_USER_FULLNAME);
+    localStorage.removeItem(KEY_ACTIVATED);
+    sessionStorage.removeItem(KEY_LOGGED_IN);
+  }
+
   // --- INITIALIZATION ---
   async function init() {
     // 0. Bypass aktivasi kalau admin akses #/kelola-aktivasi (chicken-and-egg fix)
@@ -892,14 +996,35 @@
       return new Promise(function () {});
     }
 
+    // 0t. Trial mode check — jika trial sudah expired, bersihkan & paksa aktivasi
+    var _isTrialUser = localStorage.getItem(KEY_USER_ROLE) === 'trial';
+    if (_isTrialUser && isTrialExpired()) {
+      localStorage.removeItem(KEY_ACTIVATED);
+      localStorage.removeItem(KEY_USER_ROLE);
+      localStorage.removeItem(KEY_USER_USERNAME);
+      localStorage.removeItem(KEY_USER_PASSWORD_HASH);
+      localStorage.removeItem(KEY_USER_FULLNAME);
+      localStorage.removeItem(KEY_USER_MADRASAH);
+      localStorage.removeItem(KEY_USER_KABUPATEN);
+      sessionStorage.removeItem(KEY_LOGGED_IN);
+      sessionStorage.setItem('pkg_trial_just_expired', '1');
+      renderActivationScreen();
+      return new Promise(function () {});
+    }
+
     // 0b. Kalau sudah punya akun terdaftar tapi belum aktivasi di device ini → langsung ke login
     var hasAccount = localStorage.getItem(KEY_USER_USERNAME);
     var skipActivation = localStorage.getItem('pkg_v1_skip_activation') === 'true';
     if (skipActivation || hasAccount) {
       localStorage.removeItem('pkg_v1_skip_activation');
       if (!isLoggedIn()) {
-        renderLoginScreen();
-        return new Promise(function () {});
+        // Trial user masih aktif → auto-login (tanpa input username/password)
+        if (_isTrialUser && !isTrialExpired()) {
+          sessionStorage.setItem(KEY_LOGGED_IN, 'true');
+        } else {
+          renderLoginScreen();
+          return new Promise(function () {});
+        }
       }
     }
 
@@ -967,6 +1092,11 @@
     getAdminInfo: getAdminInfo,
     adminLogin: adminLogin,
     adminLogout: adminLogout,
+    isTrial: isTrial,
+    getTrialDaysLeft: getTrialDaysLeft,
+    isTrialExpired: isTrialExpired,
+    startTrial: startTrial,
+    clearTrial: clearTrial,
   };
 
   // Auto boot sequence

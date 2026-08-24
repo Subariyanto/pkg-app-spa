@@ -694,11 +694,11 @@ Laporan ini disusun sebagai dokumentasi resmi pelaksanaan PKG pada ${obj} untuk 
   function wrapHTMLPrintable(body, title) {
     const isTrialMode = window.PKGAuth && window.PKGAuth.isTrial && window.PKGAuth.isTrial();
     const trialWM = isTrialMode ? `
-      <div class="trial-watermark" style="position:fixed; inset:0; z-index:9999; pointer-events:none; display:flex; flex-wrap:wrap; align-content:flex-start; justify-content:center; overflow:hidden;">
-        ${Array.from({length: 60}, () => '<span style="display:inline-block; transform:rotate(-45deg); font-size:18pt; font-weight:900; color:rgba(200,0,0,0.13); margin:30px 40px; font-family:sans-serif; letter-spacing:4px; white-space:nowrap;">TRIAL</span>').join('')}
+      <div class="trial-watermark" style="position:fixed; inset:0; z-index:9999; pointer-events:none; display:flex; align-items:center; justify-content:center; overflow:hidden;">
+        <span style="transform:rotate(-30deg); font-size:120pt; font-weight:900; color:rgba(200,0,0,0.15); font-family:sans-serif; letter-spacing:12px; white-space:nowrap;">TRIAL</span>
       </div>
       <style>
-        .trial-watermark { display: block !important; }
+        .trial-watermark { display: flex !important; }
         @media print { .trial-watermark { display: flex !important; position: fixed !important; } }
       </style>` : '';
     return `<!doctype html><html lang="id"><head><meta charset="utf-8"><title>${e(title)}</title>
