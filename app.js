@@ -55,6 +55,7 @@ function renderShell() {
   const namaKabupaten = getNamaKabupaten(userInfo);
   const isAdmin = userInfo.role === 'admin' || (window.PKGAuth && window.PKGAuth.isAdminLoggedIn()); // Ketua Pokjawas atau admin Supabase
   const isPengawas = userInfo.role === 'admin' || userInfo.role === 'pengawas' || userInfo.role === 'trial'; // admin, pengawas & trial
+  const isTrialUser = userInfo.role === 'trial';
   const html = `
   <nav class="navbar navbar-expand-xl navbar-dark bg-primary mb-3 no-print">
     <div class="container-fluid">
@@ -103,7 +104,7 @@ function renderShell() {
             <a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown"><i class="bi bi-person-circle"></i> Akun</a>
             <ul class="dropdown-menu dropdown-menu-end">
               <li><a class="dropdown-item" href="#/pengaturan-pin"><i class="bi bi-shield-lock"></i> Pengaturan PIN / Akun</a></li>
-              <li><a class="dropdown-item" href="#/kelola-aktivasi"><i class="bi bi-key-fill"></i> Kelola Kode Aktivasi</a></li>
+              ${!isTrialUser ? '<li><a class="dropdown-item" href="#/kelola-aktivasi"><i class="bi bi-key-fill"></i> Kelola Kode Aktivasi</a></li>' : ''}
               <li><hr class="dropdown-divider"></li>
               <li><a class="dropdown-item text-danger" href="#" id="nav-logout"><i class="bi bi-box-arrow-right"></i> Logout</a></li>
             </ul>
@@ -191,7 +192,11 @@ function render() {
   if (s0 === 'instrumen') return viewInstrumen(view);
   if (s0 === 'panduan') return viewPanduan(view);
   if (s0 === 'pengaturan-pin') return window.PKGAuth.viewPengaturanPIN(view);
-  if (s0 === 'kelola-aktivasi') return viewKelolaAktivasi(view);
+  if (s0 === 'kelola-aktivasi') {
+    var _ui = window.PKGAuth ? window.PKGAuth.getUserInfo() : { role: '' };
+    if (_ui.role === 'trial') return viewForbidden(view);
+    return viewKelolaAktivasi(view);
+  }
   if (s0 === 'periode') return viewPeriode(view);
   if (s0 === 'import') return viewImport(view);
   if (s0 === 'laporan-madrasah') return viewLaporanMadrasahPicker(view);
@@ -3334,6 +3339,15 @@ function exportKBCCSV(tab, guruKBC, indikatorRows, madrasahRows, fvs) {
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob); a.download = `monitoring-kbc-${tab}.csv`; a.click();
   URL.revokeObjectURL(a.href);
+}
+
+function viewForbidden(view) {
+  view.innerHTML = `<div class="alert alert-warning text-center py-5">
+    <i class="bi bi-exclamation-triangle" style="font-size:2rem;"></i>
+    <h4 class="mt-2">Akses Ditolak</h4>
+    <p>Fitur ini tidak tersedia dalam mode Trial.</p>
+    <a href="#/" class="btn btn-success">Kembali ke Beranda</a>
+  </div>`;
 }
 
 function viewPanduan(view) {
