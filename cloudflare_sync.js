@@ -83,7 +83,30 @@
   // --- ADMIN LIST CODES ---
   async function adminListCodes(adminUsername) {
     var result = await getJson('admin/list-codes');
-    if (result && result.ok && Array.isArray(result.data)) return result.data;
+    if (result && result.ok && Array.isArray(result.data)) {
+      // Map field names D1 → format yang diharapkan app.js
+      return result.data.map(function (row) {
+        var status = 'unused';
+        if (row.revoked) status = 'revoked';
+        else if (row.activated) status = 'activated';
+        return {
+          id: row.id,
+          code: row.code,
+          code_full: row.code,
+          code_hint: row.code,
+          nama_pengguna: row.nama || '',
+          nama: row.nama || '',
+          madrasah: row.madrasah || '',
+          kabupaten: row.kabupaten || '',
+          role: row.role || '',
+          catatan: row.catatan || '',
+          status: status,
+          device_id: row.device_id || '',
+          created_at: row.created_at || '',
+          created_by: row.created_by || ''
+        };
+      });
+    }
     if (Array.isArray(result)) return result;
     return [];
   }

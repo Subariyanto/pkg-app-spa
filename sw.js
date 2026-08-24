@@ -1,6 +1,6 @@
 // sw.js - Service worker for PKG app
 // V6 Supabase (2026-08-20): Aktivasi via Supabase, data PKG di localStorage.
-const CACHE_VERSION = 'pkg-v20-2026-08-24-cloudflare-backend';
+const CACHE_VERSION = 'pkg-v21-2026-08-24-field-mapping';
 
 const NETWORK_FIRST = [
   'index.html',
