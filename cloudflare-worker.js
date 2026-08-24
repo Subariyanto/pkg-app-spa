@@ -106,8 +106,15 @@ export default {
       if (path === 'admin/create-code' && request.method === 'POST') {
         const { nama, madrasah, kabupaten, role, catatan, admin_username } = await request.json();
         // Generate random 16-char hex code
-        const code = Array.from(crypto.getRandomValues(new Uint8Array(8)))
-          .map(b => b.toString(16).padStart(2, '0')).join('');
+        // Generate random code: PKG-XXXXXXXX (8 alphanumeric uppercase)
+        const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no confusing chars (0,O,1,I)
+        let randomPart = '';
+        const arr = new Uint8Array(8);
+        crypto.getRandomValues(arr);
+        for (let i = 0; i < 8; i++) {
+          randomPart += chars[arr[i] % chars.length];
+        }
+        const code = 'PKG-' + randomPart;
         const result = await env.DB.prepare(
           'INSERT INTO pkg_activation_codes (code, nama, madrasah, kabupaten, role, catatan, created_by) VALUES (?, ?, ?, ?, ?, ?, ?)'
         ).bind(code, nama || null, madrasah || null, kabupaten || null, role || null, catatan || null, admin_username || null).run();
