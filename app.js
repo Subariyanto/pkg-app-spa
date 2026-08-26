@@ -966,7 +966,7 @@ function viewGuruForm(view, editId) {
         <div class="col-md-4">${field('tempat_lahir', 'Tempat Lahir', 'text')}</div>
         <div class="col-md-4">${field('tanggal_lahir', 'Tanggal Lahir', 'date')}</div>
         <div class="col-md-6">${field('pendidikan', 'Pendidikan Terakhir', 'text')}</div>
-        <div class="col-md-3">${field('pangkat_gol', 'Pangkat/Golongan', 'select', { options: ['Juru Muda (I/a)', 'Juru Muda Tingkat I (I/b)', 'Juru (I/c)', 'Juru Tingkat I (I/d)', 'Pengatur Muda (II/a)', 'Pengatur Muda Tingkat I (II/b)', 'Pengatur (II/c)', 'Pengatur Tingkat I (II/d)', 'Penata Muda (III/a)', 'Penata Muda Tingkat I (III/b)', 'Penata (III/c)', 'Penata Tingkat I (III/d)', 'Pembina (IV/a)', 'Pembina Tingkat I (IV/b)', 'Pembina Utama Muda (IV/c)', 'Pembina Utama Madya (IV/d)', 'Pembina Utama (IV/e)'] })}</div>
+        <div class="col-md-3">${field('pangkat_gol', 'Pangkat/Golongan', 'select', { options: ['Penata Muda (III/a)', 'Penata Muda Tingkat I (III/b)', 'Penata (III/c)', 'Penata Tingkat I (III/d)', 'Pembina (IV/a)', 'Pembina Tingkat I (IV/b)', 'Pembina Utama Muda (IV/c)', 'Pembina Utama Madya (IV/d)', 'Pembina Utama (IV/e)'] })}</div>
         <div class="col-md-3">${field('tmt_gol', 'TMT Golongan', 'date')}</div>
         <div class="col-md-3">${field('tmt_guru', 'TMT Sebagai Guru', 'date')}</div>
       </div>
