@@ -1,6 +1,6 @@
 // sw.js - Service worker for PKG app
 // V7 SECURED (2026-08-26): Session token admin, rate-limit, CORS ketat, format kode PKG-XXXX-XXXX, password admin tak bocor.
-const CACHE_VERSION = 'pkg-v26-2026-08-26-seed-before-init';
+const CACHE_VERSION = 'pkg-v27-2026-08-26-monitoring-kbc-fix';
 
 const NETWORK_FIRST = [
   'index.html',

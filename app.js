@@ -2966,7 +2966,7 @@ function viewMonitoringKBC(view) {
         if (skorMap[i.id] != null) filled++;
         sum += s;
         count++;
-        return { id: i.id, indikator: i.indikator, kompetensi_no: i.kompetensi_no, kompetensi_nama: i.kompetensi_nama, skor: s, max, pct: max ? (s / max) * 100 : 0 };
+        return { id: i.id, indikator: i.indikator, kompetensi_no: i.kompetensi_no, kompetensi_nama: i.kompetensi_nama, role_code: p.role_code, role_label: p.role_label, skor: s, max, pct: max ? (s / max) * 100 : 0 };
       });
       const maksTotal = count * max;
       const pct = maksTotal ? (sum / maksTotal) * 100 : 0;
@@ -2991,7 +2991,7 @@ function viewMonitoringKBC(view) {
   }
   const indikatorRows = Object.values(perIndikator).map(r => ({
     ...r, avgSkor: r.countGuru ? r.sumSkor / r.countGuru : 0, avgPct: r.max ? (r.countGuru ? (r.sumSkor / r.countGuru) / r.max : 0) * 100 : 0
-  })).sort((a, b) => a.role_code.localeCompare(b.role_code) || a.kompetensi_no - b.kompetensi_no);
+  })).sort((a, b) => String(a.role_code || '').localeCompare(String(b.role_code || '')) || (a.kompetensi_no || 0) - (b.kompetensi_no || 0));
 
   // Aggregate per madrasah
   const perMadrasah = {};
