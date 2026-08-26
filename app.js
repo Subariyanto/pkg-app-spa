@@ -4500,24 +4500,25 @@ function viewKelolaAktivasi(view) {
         var hash = await crypto.subtle.digest('SHA-256', buf);
         return Array.from(new Uint8Array(hash)).map(function (b) { return b.toString(16).padStart(2, '0'); }).join('');
       }
-      // Default admin hash (SHA-256, sama dengan di auth.js)
-      var DEFAULT_HASH = '1fe822ee3c970bb86b48d7519a9bc25eef1d31fa5267a6cf41892d818eb1ef40';
-      // Coba local admin dulu (cepat, tidak butuh internet)
-      var localAdminUser = localStorage.getItem('pkg_v1_local_admin_user') || 'admin';
-      var localAdminHash = localStorage.getItem('pkg_v1_local_admin_hash') || DEFAULT_HASH;
-      var pwdHash = await _sha256(pass);
-      if (username === localAdminUser && pwdHash === localAdminHash) {
-        localStorage.setItem(KEY_ADMIN_LOGGED_IN, 'true');
-        localStorage.setItem('pkg_admin_username', localAdminUser);
-        localStorage.setItem('pkg_admin_nama', localAdminUser);
-        state.adminLoggedIn = true;
-        state.adminUsername = localAdminUser;
-        btn.disabled = false;
-        btn.innerHTML = '<i class="bi bi-box-arrow-in-right"></i> Login';
-        render();
-        return;
+      // Login admin MURNI lewat server (Worker). Tidak ada credential default hardcoded.
+      // Hanya melayani local admin yang sudah pernah login sukses melalui server sebelumnya.
+      var localAdminUser = localStorage.getItem('pkg_v1_local_admin_user');
+      var localAdminHash = localStorage.getItem('pkg_v1_local_admin_hash');
+      if (username === localAdminUser && localAdminHash) {
+        var pwdHash = await _sha256(pass);
+        if (pwdHash === localAdminHash) {
+          localStorage.setItem(KEY_ADMIN_LOGGED_IN, 'true');
+          localStorage.setItem('pkg_admin_username', localAdminUser);
+          localStorage.setItem('pkg_admin_nama', localAdminUser);
+          state.adminLoggedIn = true;
+          state.adminUsername = localAdminUser;
+          btn.disabled = false;
+          btn.innerHTML = '<i class="bi bi-box-arrow-in-right"></i> Login';
+          render();
+          return;
+        }
       }
-      // Coba Supabase dengan timeout 5 detik
+      // Coba login via server (Worker) dengan timeout 5 detik
       try {
         var timeout = new Promise(function (_, reject) {
           setTimeout(function () { reject(new Error('timeout')); }, 5000);
@@ -4527,7 +4528,8 @@ function viewKelolaAktivasi(view) {
           localStorage.setItem(KEY_ADMIN_LOGGED_IN, 'true');
           localStorage.setItem('pkg_admin_username', result.username || username);
           localStorage.setItem('pkg_admin_nama', result.nama || username);
-          // Simpan sebagai local admin fallback (SHA-256)
+          // Selesai login server → simpan hash lokal utk offline fallback (password terbaru)
+          var pwdHash = await _sha256(pass);
           localStorage.setItem('pkg_v1_local_admin_user', result.username || username);
           localStorage.setItem('pkg_v1_local_admin_hash', pwdHash);
           state.adminLoggedIn = true;

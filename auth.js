@@ -38,9 +38,8 @@
   var KEY_LOCAL_ADMIN_HASH = 'pkg_v1_local_admin_hash';
   var KEY_LOCAL_ADMIN_USER = 'pkg_v1_local_admin_user';
 
-  // Default admin credentials (SHA-256 hash, bukan plain text — aman untuk repo public)
-  var DEFAULT_ADMIN_USER = 'admin';
-  var DEFAULT_ADMIN_HASH = '1fe822ee3c970bb86b48d7519a9bc25eef1d31fa5267a6cf41892d818eb1ef40';
+  // Admin login sekarang hanya lewat server (Cloudflare Worker) dengan session token.
+  // TIDAK ada credential default hardcoded di client. Ini mencegah bocornya password admin ke repo public.
 
   // --- CRYPTO UTILS ---
   // SHA-256 via Web Crypto API (async, returns hex string)
@@ -630,9 +629,11 @@
     }
 
     async function tryLocalAdminLogin(username, password) {
-      // Cek default admin atau local admin yang sudah diset
-      var localAdminUser = localStorage.getItem(KEY_LOCAL_ADMIN_USER) || DEFAULT_ADMIN_USER;
-      var localAdminHash = localStorage.getItem(KEY_LOCAL_ADMIN_HASH) || DEFAULT_ADMIN_HASH;
+      // TIDAK ADA fallback hardcoded. Admin login harus lewat server (Worker).
+      // Fungsi ini sekarang hanya melayani admin yang sudah pernah login & tersimpan local session.
+      var localAdminUser = localStorage.getItem(KEY_LOCAL_ADMIN_USER);
+      var localAdminHash = localStorage.getItem(KEY_LOCAL_ADMIN_HASH);
+      if (!localAdminUser || !localAdminHash) return false;
       var pwdHash = await sha256(password);
       if (username === localAdminUser && pwdHash === localAdminHash) {
         localStorage.setItem(KEY_ADMIN_LOGGED_IN, 'true');
@@ -962,16 +963,10 @@
     }
   }
 
-  // --- ADMIN LOGIN via Supabase ---
+  // --- ADMIN LOGIN via server (Cloudflare Worker) ---
+  // Admin login MURNI lewat server. Worker mengembalikan session token.
+  // Tidak ada fallback credential default di client.
   async function adminLogin(username, password) {
-    // Coba local admin dulu (SHA-256, cepat, tidak butuh internet)
-    var localAdminUser = localStorage.getItem(KEY_LOCAL_ADMIN_USER) || DEFAULT_ADMIN_USER;
-    var localAdminHash = localStorage.getItem(KEY_LOCAL_ADMIN_HASH) || DEFAULT_ADMIN_HASH;
-    var pwdHash = await sha256(password);
-    if (username === localAdminUser && pwdHash === localAdminHash) {
-      return { ok: true, username: localAdminUser, nama: localAdminUser, local: true };
-    }
-    // Coba Supabase
     if (!window.SupabaseSync || !window.SupabaseSync.hasConfig()) {
       return { ok: false, message: 'Username/password salah.' };
     }
@@ -982,6 +977,9 @@
     localStorage.removeItem(KEY_ADMIN_LOGGED_IN);
     localStorage.removeItem(KEY_ADMIN_USERNAME);
     localStorage.removeItem(KEY_ADMIN_NAMA);
+    if (window.SupabaseSync && window.SupabaseSync.adminLogout) {
+      window.SupabaseSync.adminLogout(); // hapus session token juga
+    }
   }
 
   function clearTrial() {

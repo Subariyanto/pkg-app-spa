@@ -1,22 +1,30 @@
-// cloudflare_sync.js — Sistem Aktivasi via Cloudflare Workers + D1
+// cloudflare_sync.js — Sistem Aktivasi via Cloudflare Workers + D1 (SECURED)
 // Pengganti supabase_sync.js — API sama, backend beda
-// V1 (2026-08-24): Migrasi dari Supabase ke Cloudflare Workers
+// V2 (2026-08-26): Session token admin, bukan token statis.
+//   - adminLogin() mengembalikan token sesi (dari Worker) dan menyimpannya.
+//   - Semua panggilan /admin/* menyertakan token via header X-Admin-Token.
+//   - Tanpa token, Worker menolak dengan 401. Hanya admin login yang bisa menerbitkan kode.
 
 (function () {
   'use strict';
 
   // Ganti URL ini setelah deploy Worker
   var WORKER_URL = 'https://pkg-backend.subariyantoss2.workers.dev';
-  // Optional: admin token (set di Worker env ADMIN_TOKEN)
-  var ADMIN_TOKEN = '';
+
+  var ADMIN_TOKEN_KEY = 'pkg_admin_token';
 
   function hasConfig() {
     return !!WORKER_URL && WORKER_URL.indexOf('YOUR-SUBDOMAIN') === -1;
   }
 
+  function getToken() {
+    return localStorage.getItem(ADMIN_TOKEN_KEY) || '';
+  }
+
   function headers() {
     var h = { 'Content-Type': 'application/json' };
-    if (ADMIN_TOKEN) h['X-Admin-Token'] = ADMIN_TOKEN;
+    var t = getToken();
+    if (t) h['X-Admin-Token'] = t;
     return h;
   }
 
@@ -64,8 +72,18 @@
   }
 
   // --- ADMIN LOGIN ---
+  // Mengembalikan { ok, username, nama, role, token }. Simpan token untuk panggilan berikutnya.
   async function adminLogin(username, password) {
-    return postJson('admin-login', { username, password });
+    var result = await postJson('admin-login', { username: username, password: password });
+    if (result && result.ok && result.token) {
+      localStorage.setItem(ADMIN_TOKEN_KEY, result.token);
+    }
+    return result;
+  }
+
+  // --- ADMIN LOGOUT ---
+  function adminLogout() {
+    localStorage.removeItem(ADMIN_TOKEN_KEY);
   }
 
   // --- ADMIN CREATE CODE ---
@@ -75,8 +93,7 @@
       madrasah: madrasah || null,
       kabupaten: kabupaten || null,
       role: role || null,
-      catatan: catatan || null,
-      admin_username: adminUsername || null
+      catatan: catatan || null
     });
   }
 
@@ -84,13 +101,12 @@
   async function adminListCodes(adminUsername) {
     var result = await getJson('admin/list-codes');
     if (result && result.ok && Array.isArray(result.data)) {
-      // Map field names D1 → format yang diharapkan app.js
       return result.data.map(function (row) {
         var status = 'unused';
         if (row.revoked) status = 'revoked';
         else if (row.activated) status = 'activated';
         return {
-          id: row.id,
+          id: String(row.id),
           code: row.code,
           code_full: row.code,
           code_hint: row.code,
@@ -113,7 +129,10 @@
 
   // --- ADMIN REVOKE CODE ---
   async function adminRevokeCode(codeId, adminUsername) {
-    return postJson('admin/revoke-code', { id: codeId });
+    var result = await postJson('admin/revoke-code', { id: codeId });
+    if (result && result.ok) return 'REVOKED';
+    if (result && result.message) return result.message;
+    return 'FAILED';
   }
 
   // --- ADMIN EDIT CODE ---
@@ -130,7 +149,10 @@
 
   // --- ADMIN DELETE CODE ---
   async function adminDeleteCode(codeId, adminUsername) {
-    return postJson('admin/delete-code', { id: codeId });
+    var result = await postJson('admin/delete-code', { id: codeId });
+    if (result && result.ok) return 'DELETED';
+    if (result && result.message) return result.message;
+    return 'FAILED';
   }
 
   // --- ADMIN DELETE ALL CODES ---
@@ -149,7 +171,6 @@
       code: code,
       device_id: deviceId
     });
-    // Return format sama dengan supabase_sync.js
     if (typeof result === 'string') return result;
     if (result && typeof result === 'object') {
       if (result.ok) return 'ACTIVATED';
@@ -160,13 +181,18 @@
 
   // --- CHECK CODE STATUS (without activating) ---
   async function checkCodeStatus(code) {
-    return getJson('check-code?code=' + encodeURIComponent(code));
+    var result = await getJson('check-code?code=' + encodeURIComponent(code));
+    if (result && result.ok) return result.status;
+    if (typeof result === 'string') return result;
+    if (result && result.message) return result.message;
+    return 'INVALID_CODE';
   }
 
   // --- EXPORT: expose (same API as SupabaseSync) ---
   window.SupabaseSync = {
     hasConfig: hasConfig,
     adminLogin: adminLogin,
+    adminLogout: adminLogout,
     adminCreateCode: adminCreateCode,
     adminListCodes: adminListCodes,
     adminRevokeCode: adminRevokeCode,

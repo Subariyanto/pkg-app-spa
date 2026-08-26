@@ -1,6 +1,8 @@
 -- ============================================================
--- D1 Schema — PKG App SPA Backend (Cloudflare Workers + D1)
+-- D1 Schema — PKG App SPA Backend (Cloudflare Workers + D1)  [SECURED]
 -- Jalankan di: Cloudflare Dashboard > D1 > query console
+-- PENTING: Password admin TIDAK lagi ditulis di file ini.
+--          Set password lewat Cloudflare Dashboard / perintah UPDATE di bawah.
 -- ============================================================
 
 -- 1. Tabel admin
@@ -30,19 +32,18 @@ CREATE TABLE IF NOT EXISTS pkg_activation_codes (
   created_at TEXT DEFAULT (datetime('now'))
 );
 
--- 3. Insert admin default
---    Password: @riyant1970
---    SHA-256: 1fe822ee3c970bb86b48d7519a9bc25eef1d31fa5267a6cf41892d818eb1ef40
-INSERT INTO pkg_admins (username, password_hash, nama, role)
-VALUES (
-  'admin',
-  '1fe822ee3c970bb86b48d7519a9bc25eef1d31fa5267a6cf41892d818eb1ef40',
-  'Subariyanto',
-  'admin'
-)
-ON CONFLICT(username) DO UPDATE SET
-  password_hash = excluded.password_hash,
-  nama = excluded.nama;
+-- 3. Tabel rate limiting (proteksi brute-force login & aktivasi)
+CREATE TABLE IF NOT EXISTS pkg_rate_limit (
+  rkey TEXT PRIMARY KEY,
+  cnt INTEGER DEFAULT 0,
+  reset_at INTEGER NOT NULL
+);
 
--- 4. Cek hasil
+-- 4. (OPSIONAL) Ganti password admin.
+--    Ganti <USERNAME> dan <SHA256_HASH_PASSWORD> dengan nilai yang kamu inginkan.
+--    Daftar admin yang ada: username "admin".
+--    Contoh cek hash:  echo -n "passwordbaru" | shasum -a 256
+-- UPDATE pkg_admins SET password_hash = '<SHA256_HASH_PASSWORD>' WHERE username = '<USERNAME>';
+
+-- 5. Cek hasil
 SELECT * FROM pkg_admins;

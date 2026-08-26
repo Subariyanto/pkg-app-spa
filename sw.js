@@ -1,6 +1,6 @@
 // sw.js - Service worker for PKG app
-// V6 Supabase (2026-08-20): Aktivasi via Supabase, data PKG di localStorage.
-const CACHE_VERSION = 'pkg-v21-2026-08-24-field-mapping';
+// V7 SECURED (2026-08-26): Session token admin, rate-limit, CORS ketat, format kode PKG-XXXX-XXXX, password admin tak bocor.
+const CACHE_VERSION = 'pkg-v23-2026-08-26-security';
 
 const NETWORK_FIRST = [
   'index.html',
