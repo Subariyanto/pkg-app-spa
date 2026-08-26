@@ -14,3 +14,8 @@ DEPLOY-SECURITY.md
 supabase-setup.txt
 supabase-setup.sql
 sql/pkg_activation.sql
+
+.cf-secret.env
+cf-secret*.env
+.env
+*.env

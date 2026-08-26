@@ -182,12 +182,14 @@ export default {
       }
 
       // === ADMIN PROTECTED ROUTES ===
+      // session dideklarasikan di sini agar terlihat oleh semua route admin/ di bawah
+      let session = null;
       if (path.startsWith('admin/')) {
         if (!getAuthSecret(env)) {
           return json({ ok: false, message: 'Admin auth belum dikonfigurasi' }, 500, headers);
         }
         const token = request.headers.get('X-Admin-Token');
-        const session = await verifySessionToken(env, token);
+        session = await verifySessionToken(env, token);
         if (!session) {
           return json({ ok: false, message: 'Sesi admin tidak valid atau kedaluwarsa. Silakan login ulang.' }, 401, headers);
         }
@@ -213,7 +215,7 @@ export default {
         const code = 'PKG-' + seg() + '-' + seg();
         const result = await env.DB.prepare(
           'INSERT INTO pkg_activation_codes (code, nama, madrasah, kabupaten, role, catatan, created_by) VALUES (?, ?, ?, ?, ?, ?, ?)'
-        ).bind(code, nama || null, madrasah || null, kabupaten || null, role || null, catatan || null, session.username).run();
+        ).bind(code, nama || null, madrasah || null, kabupaten || null, role || null, catatan || null, session.u).run();
         return json({ ok: true, code, id: result.meta.last_row_id }, 200, headers);
       }
 
