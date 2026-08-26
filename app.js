@@ -4396,13 +4396,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     if (window.PKGAuth) window.PKGAuth.logout();
   });
 
-  // PIN gate: kalau PIN aktif tapi belum unlock, tampilkan lock screen.
-  // PKGAuth.init() resolve setelah unlocked.
-  if (window.PKGAuth) {
-    await window.PKGAuth.init();
-  }
-
-  // Seed 3 data guru contoh jika belum ada
+  // Seed 3 data guru contoh jika belum ada (HARUS sebelum init(), karena init() bisa tidak resolve)
   try {
     if (PKGDB.listGuru().length === 0) {
       var samples = [
@@ -4532,6 +4526,12 @@ window.addEventListener('DOMContentLoaded', async () => {
       console.log('Seed: 3 data kamad contoh ditambahkan');
     }
   } catch (e) { console.error('Seed kamad error:', e); }
+
+  // PIN gate: kalau PIN aktif tapi belum unlock, tampilkan lock screen.
+  // PKGAuth.init() resolve setelah unlocked.
+  if (window.PKGAuth) {
+    await window.PKGAuth.init();
+  }
 
   render();
 
