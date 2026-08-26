@@ -194,7 +194,11 @@ function render() {
   if (s0 === 'pengaturan-pin') return window.PKGAuth.viewPengaturanPIN(view);
   if (s0 === 'kelola-aktivasi') {
     var _ui = window.PKGAuth ? window.PKGAuth.getUserInfo() : { role: '' };
-    if (_ui.role !== 'admin') return viewForbidden(view);
+    var _adminLoggedIn = window.PKGAuth && window.PKGAuth.isAdminLoggedIn();
+    // Block: trial & activated non-admin (pengawas/kamad yang sudah punya akun)
+    if (_ui.role === 'trial') return viewForbidden(view);
+    if (_ui.role && _ui.role !== 'admin' && !_adminLoggedIn) return viewForbidden(view);
+    // Allow: admin (role atau sudah login) DAN user yang belum aktivasi (chicken-and-egg fix)
     return viewKelolaAktivasi(view);
   }
   if (s0 === 'periode') return viewPeriode(view);
