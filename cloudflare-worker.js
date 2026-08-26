@@ -67,7 +67,7 @@ async function verifySessionToken(env, token) {
 
 // --- CORS terbatas ---
 function allowedOrigins(env) {
-  return (env.ALLOWED_ORIGIN || 'https://subariyanto.github.io,https://pkg.pokjawasjember.com')
+  return (env.ALLOWED_ORIGIN || 'https://subariyanto.github.io,https://pkg.pokjawasjember.com,http://pkg.pokjawasjember.com')
     .split(',').map(s => s.trim()).filter(Boolean);
 }
 function corsHeaders(request, env) {

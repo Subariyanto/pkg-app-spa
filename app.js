@@ -104,7 +104,7 @@ function renderShell() {
             <a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown"><i class="bi bi-person-circle"></i> Akun</a>
             <ul class="dropdown-menu dropdown-menu-end">
               <li><a class="dropdown-item" href="#/pengaturan-pin"><i class="bi bi-shield-lock"></i> Pengaturan PIN / Akun</a></li>
-              ${!isTrialUser ? '<li><a class="dropdown-item" href="#/kelola-aktivasi"><i class="bi bi-key-fill"></i> Kelola Kode Aktivasi</a></li>' : ''}
+              ${isAdmin ? '<li><a class="dropdown-item" href="#/kelola-aktivasi"><i class="bi bi-key-fill"></i> Kelola Kode Aktivasi</a></li>' : ''}
               <li><hr class="dropdown-divider"></li>
               <li><a class="dropdown-item text-danger" href="#" id="nav-logout"><i class="bi bi-box-arrow-right"></i> Logout</a></li>
             </ul>
@@ -194,7 +194,7 @@ function render() {
   if (s0 === 'pengaturan-pin') return window.PKGAuth.viewPengaturanPIN(view);
   if (s0 === 'kelola-aktivasi') {
     var _ui = window.PKGAuth ? window.PKGAuth.getUserInfo() : { role: '' };
-    if (_ui.role === 'trial') return viewForbidden(view);
+    if (_ui.role !== 'admin') return viewForbidden(view);
     return viewKelolaAktivasi(view);
   }
   if (s0 === 'periode') return viewPeriode(view);
