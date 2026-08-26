@@ -78,9 +78,9 @@ function renderShell() {
             <ul class="dropdown-menu">
               <li><a class="dropdown-item" href="#/penilaian"><i class="bi bi-clipboard-check"></i> Penilaian</a></li>
               <li><a class="dropdown-item" href="#/instrumen"><i class="bi bi-list-check"></i> Instrumen</a></li>
-              <li><a class="dropdown-item" href="#/rekap"><i class="bi bi-table"></i> Rekap</a></li>
             </ul>
           </li>
+          <li class="nav-item"><a class="nav-link" href="#/rekap"><i class="bi bi-table"></i> Rekap</a></li>
           <li class="nav-item"><a class="nav-link" href="#/monitoring-kbc"><i class="bi bi-graph-up-arrow"></i> Monitoring KBC</a></li>
           <li class="nav-item"><a class="nav-link" href="#/import"><i class="bi bi-cloud-upload"></i> Import</a></li>
           <li class="nav-item dropdown">
