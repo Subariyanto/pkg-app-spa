@@ -4402,6 +4402,64 @@ window.addEventListener('DOMContentLoaded', async () => {
     await window.PKGAuth.init();
   }
 
+  // Seed 3 data guru contoh jika belum ada
+  try {
+    if (PKGDB.listGuru().length === 0) {
+      var samples = [
+        {
+          nama: 'Ahmad Fauzi, S.Pd.',
+          jenis_kelamin: 'L',
+          nip: '198501012010011001',
+          nuptk: '64417012345',
+          pendidikan: 'S1 Pendidikan Bahasa Indonesia',
+          mapel_kelas: 'Bahasa Indonesia',
+          jjm: 24,
+          nama_madrasah: 'MTs Negeri 1 Jember',
+          alamat_madrasah: 'Jl. Gajah Mada No. 45, Jember',
+          kkm: 'KKMA 04 Jember',
+          kabupaten: 'Kabupaten Jember',
+          nama_kamad: 'Drs. H. Sutrisno, M.Pd.',
+          tahun_pelajaran: '2025/2026',
+          semester: 'Ganjil'
+        },
+        {
+          nama: 'Siti Nur Aisyah, S.Pd.I.',
+          jenis_kelamin: 'P',
+          nip: '199003152011012005',
+          nuptk: '64417056789',
+          pendidikan: 'S1 Pendidikan Agama Islam',
+          mapel_kelas: 'Akidah Akhlak',
+          jjm: 20,
+          nama_madrasah: 'MTs Negeri 1 Jember',
+          alamat_madrasah: 'Jl. Gajah Mada No. 45, Jember',
+          kkm: 'KKMA 04 Jember',
+          kabupaten: 'Kabupaten Jember',
+          nama_kamad: 'Drs. H. Sutrisno, M.Pd.',
+          tahun_pelajaran: '2025/2026',
+          semester: 'Ganjil'
+        },
+        {
+          nama: 'Muhammad Rizki, S.Pd.',
+          jenis_kelamin: 'L',
+          nip: '198811052009011002',
+          nuptk: '64417034567',
+          pendidikan: 'S1 Pendidikan Matematika',
+          mapel_kelas: 'Matematika',
+          jjm: 22,
+          nama_madrasah: 'MTs Negeri 2 Jember',
+          alamat_madrasah: 'Jl. Imam Bonjol No. 10, Jember',
+          kkm: 'KKMA 04 Jember',
+          kabupaten: 'Kabupaten Jember',
+          nama_kamad: 'H. Abdul Rahman, S.Pd., M.Pd.',
+          tahun_pelajaran: '2025/2026',
+          semester: 'Ganjil'
+        }
+      ];
+      samples.forEach(function(s) { PKGDB.saveGuru(s, null); });
+      console.log('Seed: 3 data guru contoh ditambahkan');
+    }
+  } catch (e) { console.error('Seed guru error:', e); }
+
   render();
 
   // Service worker (PWA) with auto-update
