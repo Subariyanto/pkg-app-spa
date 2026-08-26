@@ -648,6 +648,7 @@
         localStorage.setItem(KEY_USER_ROLE, 'admin');
         localStorage.setItem(KEY_USER_USERNAME, localAdminUser);
         localStorage.setItem(KEY_USER_FULLNAME, localAdminUser);
+        localStorage.setItem(KEY_ACTIVATED, 'true');
         sessionStorage.setItem(KEY_LOGGED_IN, 'true');
         var ov = document.getElementById('pkg-auth-overlay');
         if (ov) ov.remove();
