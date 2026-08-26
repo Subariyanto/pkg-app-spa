@@ -608,6 +608,11 @@
             localStorage.setItem(KEY_ADMIN_LOGGED_IN, 'true');
             localStorage.setItem(KEY_ADMIN_USERNAME, res.username || username);
             localStorage.setItem(KEY_ADMIN_NAMA, res.nama || username);
+            // Sinkronkan user session ke admin supaya navigasi tetap konsisten
+            localStorage.setItem(KEY_USER_ROLE, 'admin');
+            localStorage.setItem(KEY_USER_USERNAME, res.username || username);
+            localStorage.setItem(KEY_USER_FULLNAME, res.nama || username);
+            sessionStorage.setItem(KEY_LOGGED_IN, 'true');
             // Simpan hash lokal untuk login offline berikutnya
             var pwdHash = await sha256(password);
             localStorage.setItem(KEY_LOCAL_ADMIN_USER, res.username || username);
@@ -639,6 +644,11 @@
         localStorage.setItem(KEY_ADMIN_LOGGED_IN, 'true');
         localStorage.setItem(KEY_ADMIN_USERNAME, localAdminUser);
         localStorage.setItem(KEY_ADMIN_NAMA, localAdminUser);
+        // Sinkronkan user session ke admin supaya navigasi tetap konsisten
+        localStorage.setItem(KEY_USER_ROLE, 'admin');
+        localStorage.setItem(KEY_USER_USERNAME, localAdminUser);
+        localStorage.setItem(KEY_USER_FULLNAME, localAdminUser);
+        sessionStorage.setItem(KEY_LOGGED_IN, 'true');
         var ov = document.getElementById('pkg-auth-overlay');
         if (ov) ov.remove();
         window.location.hash = '#/kelola-aktivasi';
@@ -977,6 +987,11 @@
     localStorage.removeItem(KEY_ADMIN_LOGGED_IN);
     localStorage.removeItem(KEY_ADMIN_USERNAME);
     localStorage.removeItem(KEY_ADMIN_NAMA);
+    // Hapus juga user session yang disinkron saat login admin
+    localStorage.removeItem(KEY_USER_ROLE);
+    localStorage.removeItem(KEY_USER_USERNAME);
+    localStorage.removeItem(KEY_USER_FULLNAME);
+    sessionStorage.removeItem(KEY_LOGGED_IN);
     if (window.SupabaseSync && window.SupabaseSync.adminLogout) {
       window.SupabaseSync.adminLogout(); // hapus session token juga
     }
