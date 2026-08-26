@@ -4593,7 +4593,7 @@ function viewKelolaAktivasi(view) {
         <button id="btn-buat-5" class="btn btn-sm btn-primary" ' + (state.creating ? 'disabled' : '') + '><i class="bi bi-plus-circle"></i> Buat 5 Kode</button>\
         <button id="btn-buat-10" class="btn btn-sm btn-primary" ' + (state.creating ? 'disabled' : '') + '><i class="bi bi-plus-circle"></i> Buat 10 Kode</button>\
         <button id="btn-refresh" class="btn btn-sm btn-outline-secondary"><i class="bi bi-arrow-clockwise"></i> Refresh</button>\
-        <button id="btn-export-csv" class="btn btn-sm btn-success"><i class="bi bi-download"></i> Export CSV</button>\
+        <button id="btn-export-xlsx" class="btn btn-sm btn-success"><i class="bi bi-file-earmark-excel"></i> Export Excel</button>\
         <button id="btn-hapus-semua" class="btn btn-sm btn-outline-danger"><i class="bi bi-trash3"></i> Hapus Semua Kode</button>\
         <button id="btn-admin-logout" class="btn btn-sm btn-outline-danger"><i class="bi bi-box-arrow-right"></i> Logout</button>\
       </div>\
@@ -4930,26 +4930,63 @@ function viewKelolaAktivasi(view) {
       renderPanel();
     });
 
-    var btnExport = document.getElementById('btn-export-csv');
-    if (btnExport) btnExport.addEventListener('click', function() {
+    var btnExport = document.getElementById('btn-export-xlsx');
+    if (btnExport) btnExport.addEventListener('click', async function() {
       if (!state.kodes || state.kodes.length === 0) { toast('Tidak ada kode untuk diekspor.', 'warning'); return; }
-      var headers = ['code_hint', 'status', 'nama_pengguna', 'username', 'madrasah', 'kabupaten', 'role', 'device_id', 'created_by', 'created_at', 'activated_at', 'revoked_at', 'catatan'];
-      var csv = headers.join(',') + '\n';
-      state.kodes.forEach(function(k) {
-        var vals = headers.map(function(h) {
-          var v = k[h] || '';
-          v = String(v).replace(/"/g, '""');
-          if (v.indexOf(',') >= 0 || v.indexOf('"') >= 0 || v.indexOf('\n') >= 0) v = '"' + v + '"';
-          return v;
+      btnExport.disabled = true;
+      try {
+        var wb = new ExcelJS.Workbook();
+        var ws = wb.addWorksheet('Kode Aktivasi');
+        ws.columns = [
+          { header: 'Kode', key: 'code_hint', width: 20 },
+          { header: 'Status', key: 'status', width: 15 },
+          { header: 'Nama Penerima', key: 'nama', width: 25 },
+          { header: 'Username', key: 'username', width: 20 },
+          { header: 'Madrasah', key: 'madrasah', width: 25 },
+          { header: 'Kabupaten', key: 'kabupaten', width: 20 },
+          { header: 'Role', key: 'role', width: 15 },
+          { header: 'Device ID', key: 'device_id', width: 25 },
+          { header: 'Dibuat Oleh', key: 'created_by', width: 15 },
+          { header: 'Dibuat', key: 'created_at', width: 22 },
+          { header: 'Diaktivasi', key: 'activated_at', width: 22 },
+          { header: 'Dicabut', key: 'revoked_at', width: 22 },
+          { header: 'Catatan', key: 'catatan', width: 30 }
+        ];
+        state.kodes.forEach(function(k) {
+          var status = k.revoked ? 'Dicabut' : (k.activated ? 'Diaktivasi' : 'Belum Dipakai');
+          ws.addRow({
+            code_hint: k.code_hint || k.code || '',
+            status: status,
+            nama: k.nama || '',
+            username: k.username || '',
+            madrasah: k.madrasah || '',
+            kabupaten: k.kabupaten || '',
+            role: k.role || '',
+            device_id: k.device_id || '',
+            created_by: k.created_by || '',
+            created_at: k.created_at || '',
+            activated_at: k.activated_at || '',
+            revoked_at: k.revoked_at || '',
+            catatan: k.catatan || ''
+          });
         });
-        csv += vals.join(',') + '\n';
-      });
-      var blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
-      var a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = 'kode-aktivasi-pkg-' + new Date().toISOString().slice(0,10) + '.csv';
-      a.click();
-      URL.revokeObjectURL(a.href);
+        ws.getRow(1).font = { bold: true };
+        ws.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E40AF' } };
+        ws.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+        var buf = await wb.xlsx.writeBuffer();
+        var blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+        var a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'kode-aktivasi-pkg-' + new Date().toISOString().slice(0,10) + '.xlsx';
+        a.click();
+        URL.revokeObjectURL(a.href);
+        toast('Excel terdownload');
+      } catch (err) {
+        console.error(err);
+        toast('Gagal export Excel: ' + err.message, 'danger');
+      } finally {
+        btnExport.disabled = false;
+      }
     });
 
     var btnLogout = document.getElementById('btn-admin-logout');
