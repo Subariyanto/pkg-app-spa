@@ -4460,6 +4460,79 @@ window.addEventListener('DOMContentLoaded', async () => {
     }
   } catch (e) { console.error('Seed guru error:', e); }
 
+  // Seed 3 data kamad contoh jika belum ada
+  try {
+    if (PKGDB.listKamad().length === 0) {
+      var kamadSamples = [
+        {
+          nama: 'Drs. H. Sutrisno, M.Pd.',
+          gelar: 'M.Pd.',
+          nip: '196505121019980311',
+          nuptk: '64417011111',
+          jenis_kelamin: 'L',
+          tempat_lahir: 'Jember',
+          tanggal_lahir: '1965-05-12',
+          pendidikan: 'S2 Manajemen Pendidikan',
+          pangkat_gol: 'Pembina IV/c',
+          tmt_kamad: '2018-07-01',
+          periode: '2024-2028',
+          nama_madrasah: 'MTs Negeri 1 Jember',
+          jenjang: 'MTs',
+          alamat_madrasah: 'Jl. Gajah Mada No. 45, Jember',
+          kkm: 'KKMA 04 Jember',
+          kabupaten: 'Kabupaten Jember',
+          nsm: '121132100001',
+          npsn: '20503123',
+          akreditasi: 'A'
+        },
+        {
+          nama: 'H. Abdul Rahman, S.Pd., M.Pd.',
+          gelar: 'M.Pd.',
+          nip: '197003201020051012',
+          nuptk: '64417022222',
+          jenis_kelamin: 'L',
+          tempat_lahir: 'Jember',
+          tanggal_lahir: '1970-03-20',
+          pendidikan: 'S2 Pendidikan Matematika',
+          pangkat_gol: 'Pembina IV/b',
+          tmt_kamad: '2020-07-01',
+          periode: '2024-2028',
+          nama_madrasah: 'MTs Negeri 2 Jember',
+          jenjang: 'MTs',
+          alamat_madrasah: 'Jl. Imam Bonjol No. 10, Jember',
+          kkm: 'KKMA 04 Jember',
+          kabupaten: 'Kabupaten Jember',
+          nsm: '121132100002',
+          npsn: '20503124',
+          akreditasi: 'A'
+        },
+        {
+          nama: 'Hj. Nur Halimah, S.Pd., M.Pd.I.',
+          gelar: 'M.Pd.I.',
+          nip: '197510052010012003',
+          nuptk: '64417033333',
+          jenis_kelamin: 'P',
+          tempat_lahir: 'Banyuwangi',
+          tanggal_lahir: '1975-10-05',
+          pendidikan: 'S2 Pendidikan Agama Islam',
+          pangkat_gol: 'Penata Muda III/d',
+          tmt_kamad: '2022-07-01',
+          periode: '2024-2028',
+          nama_madrasah: 'MI Mathlabul Ulum',
+          jenjang: 'MI',
+          alamat_madrasah: 'Jl. Raya Sukowono No. 8, Jember',
+          kkm: 'KKMA 04 Jember',
+          kabupaten: 'Kabupaten Jember',
+          nsm: '111232100003',
+          npsn: '20503125',
+          akreditasi: 'B'
+        }
+      ];
+      kamadSamples.forEach(function(s) { PKGDB.saveKamad(s, null); });
+      console.log('Seed: 3 data kamad contoh ditambahkan');
+    }
+  } catch (e) { console.error('Seed kamad error:', e); }
+
   render();
 
   // Service worker (PWA) with auto-update
