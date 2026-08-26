@@ -8,3 +8,9 @@ Thumbs.db
 .gmp-indikator.txt
 
 .other-indikator.txt
+
+# --- RAHASIA — JANGAN PERNAH COMMIT ---
+DEPLOY-SECURITY.md
+supabase-setup.txt
+supabase-setup.sql
+sql/pkg_activation.sql
