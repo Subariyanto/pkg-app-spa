@@ -4572,6 +4572,40 @@ function viewKelolaAktivasi(view) {
   // === SISTEM AKTIVASI VIA SUPABASE ===
   var KEY_ADMIN_LOGGED_IN = 'pkg_admin_session';
 
+  // Salin teks ke clipboard. navigator.clipboard hanya ada di HTTPS (secure context);
+  // di HTTP (mis. http://pkg.pokjawasjember.com) pakai fallback textarea + execCommand.
+  function copyToClipboard(text) {
+    return new Promise(function (resolve) {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(function () { resolve(true); }).catch(function () {
+          resolve(legacyCopy(text));
+        });
+      } else {
+        resolve(legacyCopy(text));
+      }
+    });
+  }
+  function legacyCopy(text) {
+    try {
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.setAttribute('readonly', '');
+      ta.style.position = 'fixed';
+      ta.style.top = '0';
+      ta.style.left = '-9999px';
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      ta.setSelectionRange(0, text.length);
+      var ok = document.execCommand('copy');
+      document.body.removeChild(ta);
+      return ok;
+    } catch (e) {
+      console.error('legacyCopy error:', e);
+      return false;
+    }
+  }
+
   var state = {
     adminLoggedIn: localStorage.getItem(KEY_ADMIN_LOGGED_IN) === 'true',
     adminUsername: localStorage.getItem('pkg_admin_username') || '',
@@ -4966,8 +5000,12 @@ function viewKelolaAktivasi(view) {
     document.querySelectorAll('.btn-copy-code').forEach(function (btn) {
       btn.addEventListener('click', function () {
         var code = btn.dataset.code;
-        navigator.clipboard.writeText(code).then(function () {
-          toast('Kode disalin: ' + code, 'success');
+        copyToClipboard(code).then(function (ok) {
+          if (ok) {
+            toast('Kode disalin: ' + code, 'success');
+          } else {
+            prompt('Salin kode ini (Ctrl+C):', code);
+          }
         });
       });
     });
@@ -4975,8 +5013,12 @@ function viewKelolaAktivasi(view) {
     var btnCopyAll = document.getElementById('btn-copy-all');
     if (btnCopyAll) btnCopyAll.addEventListener('click', function () {
       var allCodes = codes.join('\n');
-      navigator.clipboard.writeText(allCodes).then(function () {
-        toast('Semua kode disalin', 'success');
+      copyToClipboard(allCodes).then(function (ok) {
+        if (ok) {
+          toast('Semua kode disalin', 'success');
+        } else {
+          prompt('Salin semua kode ini (Ctrl+C):', allCodes);
+        }
       });
     });
   }
@@ -5173,15 +5215,13 @@ function viewKelolaAktivasi(view) {
       btn.addEventListener('click', function() {
         var code = btn.dataset.code || '';
         if (!code) { toast('Kode tidak tersedia.', 'warning'); return; }
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-          navigator.clipboard.writeText(code).then(function() {
+        copyToClipboard(code).then(function (ok) {
+          if (ok) {
             toast('Kode disalin: ' + code, 'success');
-          }).catch(function() {
-            prompt('Salin kode ini:', code);
-          });
-        } else {
-          prompt('Salin kode ini:', code);
-        }
+          } else {
+            prompt('Salin kode ini (Ctrl+C):', code);
+          }
+        });
       });
     });
 
