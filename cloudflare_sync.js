@@ -13,6 +13,10 @@
 
   var ADMIN_TOKEN_KEY = 'pkg_admin_token';
 
+  // Flag: true kalau panggilan API terakhir ditolak 401 (sesi admin mati/kedaluwarsa)
+  var lastAuthExpired = false;
+  function wasAuthExpired() { return lastAuthExpired; }
+
   function hasConfig() {
     return !!WORKER_URL && WORKER_URL.indexOf('YOUR-SUBDOMAIN') === -1;
   }
@@ -38,6 +42,7 @@
         headers: headers(),
         body: JSON.stringify(params || {})
       });
+      lastAuthExpired = (r.status === 401);
       var ct = r.headers.get('content-type') || '';
       if (ct.indexOf('application/json') >= 0) {
         return await r.json();
@@ -59,6 +64,7 @@
         method: 'GET',
         headers: headers()
       });
+      lastAuthExpired = (r.status === 401);
       var ct = r.headers.get('content-type') || '';
       if (ct.indexOf('application/json') >= 0) {
         return await r.json();
@@ -191,6 +197,7 @@
   // --- EXPORT: expose (same API as SupabaseSync) ---
   window.SupabaseSync = {
     hasConfig: hasConfig,
+    wasAuthExpired: wasAuthExpired,
     adminLogin: adminLogin,
     adminLogout: adminLogout,
     adminCreateCode: adminCreateCode,

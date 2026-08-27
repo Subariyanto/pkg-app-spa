@@ -593,71 +593,49 @@
         return;
       }
 
-      // 1. Coba local admin fallback (SHA-256, cepat, tidak butuh internet)
-      if (await tryLocalAdminLogin(username, password)) return;
-
-      // 2. Coba login admin via Supabase (dengan timeout 5 detik)
-      if (window.SupabaseSync && window.SupabaseSync.hasConfig && window.SupabaseSync.hasConfig()) {
-        errEl.textContent = 'Memeriksa akun...';
+      // Login admin SELALU via server (Worker) — tidak ada login offline/cache.
+      errEl.textContent = 'Memeriksa akun...';
+      var res = null;
+      try {
         var timeout = new Promise(function (_, reject) {
-          setTimeout(function () { reject(new Error('timeout')); }, 5000);
+          setTimeout(function () { reject(new Error('timeout')); }, 8000);
         });
-        try {
-          var res = await Promise.race([adminLogin(username, password), timeout]);
-          if (res && res.ok) {
-            localStorage.setItem(KEY_ADMIN_LOGGED_IN, 'true');
-            localStorage.setItem(KEY_ADMIN_USERNAME, res.username || username);
-            localStorage.setItem(KEY_ADMIN_NAMA, res.nama || username);
-            // Sinkronkan user session ke admin supaya navigasi tetap konsisten
-            localStorage.setItem(KEY_USER_ROLE, 'admin');
-            localStorage.setItem(KEY_USER_USERNAME, res.username || username);
-            localStorage.setItem(KEY_USER_FULLNAME, res.nama || username);
-            sessionStorage.setItem(KEY_LOGGED_IN, 'true');
-            // Simpan hash lokal untuk login offline berikutnya
-            var pwdHash = await sha256(password);
-            localStorage.setItem(KEY_LOCAL_ADMIN_USER, res.username || username);
-            localStorage.setItem(KEY_LOCAL_ADMIN_HASH, pwdHash);
-            var ov = document.getElementById('pkg-auth-overlay');
-            if (ov) ov.remove();
-            window.location.hash = '#/kelola-aktivasi';
-            if (typeof window.render === 'function') window.render();
-            return;
-          }
-        } catch (e) { /* timeout atau error, lanjut ke local */ }
-        // 3. Supabase gagal → coba login lokal (localStorage)
-        tryLocalLogin(username, password);
-        return;
-      }
+        res = await Promise.race([adminLogin(username, password), timeout]);
+      } catch (e) { res = null; }
 
-      // Tidak ada Supabase → langsung login lokal
-      tryLocalLogin(username, password);
-    }
-
-    async function tryLocalAdminLogin(username, password) {
-      // TIDAK ADA fallback hardcoded. Admin login harus lewat server (Worker).
-      // Fungsi ini sekarang hanya melayani admin yang sudah pernah login & tersimpan local session.
-      var localAdminUser = localStorage.getItem(KEY_LOCAL_ADMIN_USER);
-      var localAdminHash = localStorage.getItem(KEY_LOCAL_ADMIN_HASH);
-      if (!localAdminUser || !localAdminHash) return false;
-      var pwdHash = await sha256(password);
-      if (username === localAdminUser && pwdHash === localAdminHash) {
+      if (res && res.ok) {
         localStorage.setItem(KEY_ADMIN_LOGGED_IN, 'true');
-        localStorage.setItem(KEY_ADMIN_USERNAME, localAdminUser);
-        localStorage.setItem(KEY_ADMIN_NAMA, localAdminUser);
+        localStorage.setItem(KEY_ADMIN_USERNAME, res.username || username);
+        localStorage.setItem(KEY_ADMIN_NAMA, res.nama || username);
         // Sinkronkan user session ke admin supaya navigasi tetap konsisten
         localStorage.setItem(KEY_USER_ROLE, 'admin');
-        localStorage.setItem(KEY_USER_USERNAME, localAdminUser);
-        localStorage.setItem(KEY_USER_FULLNAME, localAdminUser);
-        localStorage.setItem(KEY_ACTIVATED, 'true');
+        localStorage.setItem(KEY_USER_USERNAME, res.username || username);
+        localStorage.setItem(KEY_USER_FULLNAME, res.nama || username);
         sessionStorage.setItem(KEY_LOGGED_IN, 'true');
         var ov = document.getElementById('pkg-auth-overlay');
         if (ov) ov.remove();
         window.location.hash = '#/kelola-aktivasi';
         if (typeof window.render === 'function') window.render();
-        return true;
+        return;
       }
-      return false;
+
+      if (res === null || res === undefined) {
+        // Server tidak terjangkau (timeout/jaringan). Jangan fallback diam-diam ke lokal.
+        errEl.textContent = 'Server tidak terjangkau. Periksa koneksi internet, lalu coba lagi.';
+        return;
+      }
+
+      if (res.message && res.message.indexOf('Terlalu banyak') >= 0) {
+        errEl.textContent = res.message;
+        return;
+      }
+
+      // Server menjawab tapi kredensial bukan admin valid → mungkin akun pengguna biasa.
+      tryLocalLogin(username, password);
     }
+
+    // (Dihapus) tryLocalAdminLogin — login offline admin sudah tidak diizinkan.
+    // Admin wajib login via server setiap kali sesi (8 jam) berakhir.
 
     function tryLocalLogin(username, password) {
       errEl.textContent = '';
@@ -988,6 +966,9 @@
     localStorage.removeItem(KEY_ADMIN_LOGGED_IN);
     localStorage.removeItem(KEY_ADMIN_USERNAME);
     localStorage.removeItem(KEY_ADMIN_NAMA);
+    // Bersihkan sisa cache login offline lama (legacy)
+    localStorage.removeItem(KEY_LOCAL_ADMIN_HASH);
+    localStorage.removeItem(KEY_LOCAL_ADMIN_USER);
     // Hapus juga user session yang disinkron saat login admin
     localStorage.removeItem(KEY_USER_ROLE);
     localStorage.removeItem(KEY_USER_USERNAME);

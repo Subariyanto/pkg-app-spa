@@ -4575,6 +4575,7 @@ function viewKelolaAktivasi(view) {
   var state = {
     adminLoggedIn: localStorage.getItem(KEY_ADMIN_LOGGED_IN) === 'true',
     adminUsername: localStorage.getItem('pkg_admin_username') || '',
+    sessionExpired: false, // true kalau token 8 jam kedaluwarsa → tampilkan info di layar login
     kodes: [],
     stats: { total: 0, unused: 0, activated: 0, revoked: 0 },
     search: '',
@@ -4582,6 +4583,17 @@ function viewKelolaAktivasi(view) {
     loading: false,
     creating: false,
   };
+
+  // Deteksi sesi admin mati (token 401) → paksa logout + tampilkan layar login dgn pesan jelas
+  function handleAuthExpired() {
+    if (state.adminLoggedIn) {
+      window.PKGAuth.adminLogout();
+      localStorage.setItem(KEY_ADMIN_LOGGED_IN, 'false');
+      state.adminLoggedIn = false;
+      state.sessionExpired = true;
+      render();
+    }
+  }
 
   function render() {
     if (!state.adminLoggedIn) {
@@ -4598,8 +4610,11 @@ function viewKelolaAktivasi(view) {
       <div class="card-body">\
         <div class="border rounded p-4 bg-light text-center" style="max-width: 480px; margin: 0 auto;">\
           <i class="bi bi-shield-lock" style="font-size: 2.5rem; color: #1e40af;"></i>\
-          <h5 class="mt-2 mb-3">Login Admin</h5>\
-          <p class="small text-muted mb-3">Login via Supabase. Username: Subariyanto.</p>\
+          <h5 class="mt-2 mb-1">Login Admin</h5>\
+          <p class="small text-muted mb-1">Login via server (butuh internet). Sesi berlaku 8 jam.</p>\
+          ' + (state.sessionExpired
+            ? '<div class="alert alert-warning py-2 small mb-3"><i class="bi bi-exclamation-triangle"></i> Sesi admin sudah berakhir. Silakan login ulang.</div>'
+            : '<p class="small text-muted mb-3">Masukkan kredensial admin untuk menerbitkan kode.</p>') + '\
           <div class="form-group text-start mb-2">\
             <label class="form-label small fw-bold">Username Admin</label>\
             <input id="admin-username" type="text" class="form-control form-control-sm" placeholder="Username Admin" autocomplete="off">\
@@ -4629,51 +4644,25 @@ function viewKelolaAktivasi(view) {
       }
       btn.disabled = true;
       btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Cek...';
-      // SHA-256 hash via Web Crypto API
-      async function _sha256(str) {
-        var buf = new TextEncoder().encode(str);
-        var hash = await crypto.subtle.digest('SHA-256', buf);
-        return Array.from(new Uint8Array(hash)).map(function (b) { return b.toString(16).padStart(2, '0'); }).join('');
-      }
-      // Login admin MURNI lewat server (Worker). Tidak ada credential default hardcoded.
-      // Hanya melayani local admin yang sudah pernah login sukses melalui server sebelumnya.
-      var localAdminUser = localStorage.getItem('pkg_v1_local_admin_user');
-      var localAdminHash = localStorage.getItem('pkg_v1_local_admin_hash');
-      if (username === localAdminUser && localAdminHash) {
-        var pwdHash = await _sha256(pass);
-        if (pwdHash === localAdminHash) {
-          localStorage.setItem(KEY_ADMIN_LOGGED_IN, 'true');
-          localStorage.setItem('pkg_admin_username', localAdminUser);
-          localStorage.setItem('pkg_admin_nama', localAdminUser);
-          state.adminLoggedIn = true;
-          state.adminUsername = localAdminUser;
-          btn.disabled = false;
-          btn.innerHTML = '<i class="bi bi-box-arrow-in-right"></i> Login';
-          render();
-          return;
-        }
-      }
-      // Coba login via server (Worker) dengan timeout 5 detik
+      // Login admin MURNI lewat server (Worker). Tidak ada login offline/cache hash.
       try {
         var timeout = new Promise(function (_, reject) {
-          setTimeout(function () { reject(new Error('timeout')); }, 5000);
+          setTimeout(function () { reject(new Error('timeout')); }, 8000);
         });
         var result = await Promise.race([window.PKGAuth.adminLogin(username, pass), timeout]);
-        if (result && result.ok) {
-          localStorage.setItem(KEY_ADMIN_LOGGED_IN, 'true');
-          localStorage.setItem('pkg_admin_username', result.username || username);
-          localStorage.setItem('pkg_admin_nama', result.nama || username);
-          // Selesai login server → simpan hash lokal utk offline fallback (password terbaru)
-          var pwdHash = await _sha256(pass);
-          localStorage.setItem('pkg_v1_local_admin_user', result.username || username);
-          localStorage.setItem('pkg_v1_local_admin_hash', pwdHash);
-          state.adminLoggedIn = true;
-          state.adminUsername = result.username || username;
-        } else {
-          errEl.textContent = (result && result.message) || 'Login gagal.';
-        }
-      } catch (e) {
-        errEl.textContent = 'Server tidak merespon. Coba lagi.';
+      } catch (e) { result = null; }
+
+      if (result && result.ok) {
+        localStorage.setItem(KEY_ADMIN_LOGGED_IN, 'true');
+        localStorage.setItem('pkg_admin_username', result.username || username);
+        localStorage.setItem('pkg_admin_nama', result.nama || username);
+        state.adminLoggedIn = true;
+        state.adminUsername = result.username || username;
+        state.sessionExpired = false;
+      } else if (result === null || result === undefined) {
+        errEl.textContent = 'Server tidak terjangkau. Periksa koneksi internet, lalu coba lagi.';
+      } else {
+        errEl.textContent = (result && result.message) || 'Login gagal.';
       }
       btn.disabled = false;
       btn.innerHTML = '<i class="bi bi-box-arrow-in-right"></i> Login';
@@ -4693,12 +4682,21 @@ function viewKelolaAktivasi(view) {
   async function loadCodes() {
     state.loading = true;
     var codes = await window.SupabaseSync.adminListCodes(state.adminUsername);
+    if (window.SupabaseSync.wasAuthExpired && window.SupabaseSync.wasAuthExpired()) {
+      state.loading = false;
+      handleAuthExpired();
+      return;
+    }
     state.kodes = Array.isArray(codes) ? codes : [];
     state.loading = false;
   }
 
   async function loadStats() {
     var stats = await window.SupabaseSync.adminStats(state.adminUsername);
+    if (window.SupabaseSync.wasAuthExpired && window.SupabaseSync.wasAuthExpired()) {
+      handleAuthExpired();
+      return;
+    }
     if (stats && stats.ok) {
       state.stats = stats;
     }
@@ -4882,6 +4880,7 @@ function viewKelolaAktivasi(view) {
       var results = [];
       var success = 0;
       var fail = 0;
+      var failMsg = '';
       for (var i = 0; i < jumlah; i++) {
         var result = await window.SupabaseSync.adminCreateCode(
           nama || null,
@@ -4896,11 +4895,23 @@ function viewKelolaAktivasi(view) {
           success++;
         } else {
           fail++;
+          if (result && result.message) failMsg = result.message;
         }
       }
 
       // Hide create modal
       modal.hide();
+
+      if (fail > 0 && success === 0) {
+        // Semua gagal → tampilkan sebab sebenarnya (sesi habis / server / lainnya)
+        if (window.SupabaseSync.wasAuthExpired && window.SupabaseSync.wasAuthExpired()) {
+          toast('Sesi admin berakhir. Silakan login ulang.', 'warning');
+          handleAuthExpired();
+          return;
+        }
+        toast('Gagal membuat kode: ' + (failMsg || 'server tidak terjangkau, periksa koneksi internet'), 'danger');
+        return;
+      }
 
       // Show results modal
       showResultsModal(success, fail, results);
