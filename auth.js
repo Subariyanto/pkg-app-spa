@@ -558,6 +558,7 @@
           <p>' + escapeHtml(regName ? 'Selamat datang, ' + regName : 'PKG Pokjawasmad Kab. Jember') + '</p>\
         </div>\
         <div class="auth-err" id="auth-login-err"></div>\
+        <div id="auth-login-hint" style="display:none; background:#fff8e1; border:1px solid #ffe082; border-radius:8px; padding:.6rem .75rem; font-size:.8rem; color:#7a5c00; margin-bottom:.9rem; line-height:1.4;"></div>\
         <div class="form-group">\
           <label>Username</label>\
           <input id="login-username" type="text" placeholder="Username" autocomplete="off">\
@@ -582,6 +583,24 @@
     var errEl = document.getElementById('auth-login-err');
     var userInput = document.getElementById('login-username');
     var passInput = document.getElementById('login-password');
+
+    // Petunjuk: tampilkan username yang terdaftar di perangkat ini supaya tidak tertukar
+    // dengan nama madrasah / nama lengkap.
+    var hintEl = document.getElementById('auth-login-hint');
+    var storedUserHint = localStorage.getItem(KEY_USER_USERNAME);
+    if (hintEl && storedUserHint) {
+      hintEl.style.display = 'block';
+      hintEl.innerHTML = 'Username akun di perangkat ini: <b>' + escapeHtml(storedUserHint) + '</b><br>' +
+        'Isi kolom di bawah dengan username itu ya, Pak. Nama madrasah / nama lengkap tidak bisa dipakai sebagai username. ' +
+        '<a id="fill-username" style="color:#7a5c00; font-weight:700; text-decoration:underline; cursor:pointer;">Isi otomatis</a>';
+      var fillLink = document.getElementById('fill-username');
+      if (fillLink) {
+        fillLink.addEventListener('click', function () {
+          userInput.value = storedUserHint;
+          passInput.focus();
+        });
+      }
+    }
 
     async function doLogin() {
       var username = userInput.value.trim().toLowerCase();
@@ -647,7 +666,7 @@
         return;
       }
       if (username !== storedUsername) {
-        errEl.textContent = 'Username tidak ditemukan.';
+        errEl.innerHTML = 'Username tidak ditemukan. Username yang terdaftar di perangkat ini: <b>' + escapeHtml(storedUsername) + '</b>.';
         return;
       }
       if (fnv1aHash(password) !== storedHash) {
